@@ -118,7 +118,7 @@ export function ChannelDropdownMenu({
       {dialog === "routingFee" && <RoutingFeeDialogContent channel={channel} />}
       {dialog === "rebalance" && (
         <RebalanceChannelDialogContent
-          receiveThroughNodePubkey={channel.remotePubkey}
+          incomingChannel={channel}
           closeDialog={() => setDialog(undefined)}
         />
       )}
