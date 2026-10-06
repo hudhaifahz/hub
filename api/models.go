@@ -35,6 +35,8 @@ type API interface {
 	DisconnectPeer(ctx context.Context, peerId string) error
 	OpenChannel(ctx context.Context, openChannelRequest *OpenChannelRequest) (*OpenChannelResponse, error)
 	RebalanceChannel(ctx context.Context, rebalanceChannelRequest *RebalanceChannelRequest) (*RebalanceChannelResponse, error)
+	QuoteRebalance(ctx context.Context, request *QuoteRebalanceRequest) (*RebalanceQuoteResponse, error)
+	ExecuteRebalance(ctx context.Context, request *ExecuteRebalanceRequest) (*RebalanceChannelResponse, error)
 	CloseChannel(ctx context.Context, peerId, channelId string, force bool) (*CloseChannelResponse, error)
 	UpdateChannel(ctx context.Context, updateChannelRequest *UpdateChannelRequest) error
 	MakeOffer(ctx context.Context, description string) (string, error)
@@ -438,6 +440,38 @@ type RebalanceChannelRequest struct {
 type RebalanceChannelResponse struct {
 	TotalFeeSat  uint64 `json:"totalFeeSat"`
 	TotalFeeMsat uint64 `json:"totalFeeMsat"`
+}
+
+type QuoteRebalanceRequest struct {
+	OutgoingChannelId  string `json:"outgoingChannelId"`
+	OutgoingNodePubkey string `json:"outgoingNodePubkey"`
+	IncomingChannelId  string `json:"incomingChannelId"`
+	IncomingNodePubkey string `json:"incomingNodePubkey"`
+	AmountMsat         uint64 `json:"amountMsat"`
+	MaxProviderFeeMsat uint64 `json:"maxProviderFeeMsat"`
+	MaxRoutingFeeMsat  uint64 `json:"maxRoutingFeeMsat"`
+}
+
+type RebalanceQuoteResponse struct {
+	QuoteId                        string    `json:"quoteId"`
+	AmountMsat                     uint64    `json:"amountMsat"`
+	ProviderFeeMsat                uint64    `json:"providerFeeMsat"`
+	MaxProviderFeeMsat             uint64    `json:"maxProviderFeeMsat"`
+	MaxRoutingFeeMsat              uint64    `json:"maxRoutingFeeMsat"`
+	MaxTotalDebitMsat              uint64    `json:"maxTotalDebitMsat"`
+	OutgoingChannelId              string    `json:"outgoingChannelId"`
+	OutgoingNodePubkey             string    `json:"outgoingNodePubkey"`
+	IncomingChannelId              string    `json:"incomingChannelId"`
+	IncomingNodePubkey             string    `json:"incomingNodePubkey"`
+	OutgoingSpendableSnapshotMsat  uint64    `json:"outgoingSpendableSnapshotMsat"`
+	IncomingReceivableSnapshotMsat uint64    `json:"incomingReceivableSnapshotMsat"`
+	ExpiresAt                      time.Time `json:"expiresAt"`
+	ExecutionEnabled               bool      `json:"executionEnabled"`
+	BlockedReason                  string    `json:"blockedReason,omitempty"`
+}
+
+type ExecuteRebalanceRequest struct {
+	QuoteId string `json:"quoteId"`
 }
 
 type RedeemOnchainFundsRequest struct {
