@@ -182,6 +182,8 @@ func (httpSvc *HttpService) RegisterSharedRoutes(e *echo.Echo) {
 	fullAccessApiGroup.PATCH("/backup-reminder", httpSvc.backupReminderHandler)
 	fullAccessApiGroup.POST("/channels", httpSvc.openChannelHandler)
 	fullAccessApiGroup.POST("/channels/rebalance", httpSvc.rebalanceChannelHandler)
+	fullAccessApiGroup.POST("/channels/rebalance/quote", httpSvc.quoteRebalanceHandler)
+	fullAccessApiGroup.POST("/channels/rebalance/execute", httpSvc.executeRebalanceHandler)
 	fullAccessApiGroup.POST("/lsp-orders", httpSvc.newInstantChannelInvoiceHandler)
 	fullAccessApiGroup.POST("/node/migrate-storage", httpSvc.migrateNodeStorageHandler)
 	fullAccessApiGroup.POST("/peers", httpSvc.connectPeerHandler)
@@ -929,6 +931,30 @@ func (httpSvc *HttpService) rebalanceChannelHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, rebalanceChannelResponse)
+}
+
+func (httpSvc *HttpService) quoteRebalanceHandler(c echo.Context) error {
+	var request api.QuoteRebalanceRequest
+	if err := c.Bind(&request); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Bad request: %s", err.Error())})
+	}
+	response, err := httpSvc.api.QuoteRebalance(c.Request().Context(), &request)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Failed to quote rebalance: %s", err.Error())})
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+func (httpSvc *HttpService) executeRebalanceHandler(c echo.Context) error {
+	var request api.ExecuteRebalanceRequest
+	if err := c.Bind(&request); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Bad request: %s", err.Error())})
+	}
+	response, err := httpSvc.api.ExecuteRebalance(c.Request().Context(), &request)
+	if err != nil {
+		return c.JSON(http.StatusConflict, ErrorResponse{Message: fmt.Sprintf("Rebalance not executed: %s", err.Error())})
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 func (httpSvc *HttpService) disconnectPeerHandler(c echo.Context) error {
