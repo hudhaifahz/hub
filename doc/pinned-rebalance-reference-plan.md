@@ -271,7 +271,8 @@ Observed:
 - With `GOWORK=off`, focused Hub LDK, API, database, and HTTP tests pass against exact pseudo-version `v0.0.0-20261006232835-e7dd77fda90e`.
 - Frontend ESLint, TypeScript, and production HTTP build pass. The existing Lottie `eval`, large-chunk, stale Browserslist, and Bark macOS deployment-target warnings remain warnings rather than test failures.
 - A universal Wails desktop bundle builds in staging, embeds the upgraded library, contains only the portable `@executable_path/../Frameworks` LDK runtime path, and passes deep signature verification after ad-hoc signing.
-- The installed app was not replaced or restarted. Its process and port `21420` were present, but a five-second HTTP root probe timed out, so live continuity was not proven.
+- The exact staged build source is Hub commit `4129cc80e1cdc3eb3d7130ed21831b1b498c0270`. The archived bundle is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-4129cc80.zip` with SHA-256 `a8b1bd150e989afe3791f5a5b44ce88702c83d92139677c3ec89fb23b1a068c3`.
+- The installed app was not replaced or restarted. Its process and port `21420` were present, but root, `/api/health`, and `/api/node/status` probes all timed out. The running process had loaded the old `af22e238c194` LDK library from the local Go module cache, so live continuity and portable dependency loading were not proven.
 
 Consequence:
 
