@@ -123,6 +123,32 @@ type Forward struct {
 	UpdatedAt                   time.Time
 }
 
+type RebalanceQuote struct {
+	ID                             string `gorm:"primaryKey"`
+	State                          string
+	RequestHash                    string
+	OrderId                        string
+	ReceivePaymentRequest          string
+	ReceivePaymentHash             string
+	PaymentRequest                 string
+	PaymentHash                    string
+	AmountMsat                     uint64
+	ProviderFeeMsat                uint64
+	MaxProviderFeeMsat             uint64
+	MaxRoutingFeeMsat              uint64
+	OutgoingChannelId              string
+	OutgoingNodePubkey             string
+	IncomingChannelId              string
+	IncomingNodePubkey             string
+	OutgoingSpendableSnapshotMsat  uint64
+	IncomingReceivableSnapshotMsat uint64
+	ExpiresAt                      time.Time
+	CreatedAt                      time.Time
+	UpdatedAt                      time.Time
+	ExecutedAt                     *time.Time
+	FailureReason                  string
+}
+
 const (
 	REQUEST_EVENT_STATE_HANDLER_EXECUTING = "executing"
 	REQUEST_EVENT_STATE_HANDLER_EXECUTED  = "executed"

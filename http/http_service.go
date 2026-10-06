@@ -64,8 +64,8 @@ func (httpSvc *HttpService) RegisterSharedRoutes(e *echo.Echo) {
 	e.HideBanner = true
 
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
 		// when making changes here, also update the CSP in frontend/vite.config.ts
 		ContentSecurityPolicy: "default-src 'self'; img-src 'self' https://uploads.getalby-assets.com https://cdn.getalby-assets.com https://getalby.com; connect-src 'self' https://api.getalby.com https://getalby.com https://zapplanner.albylabs.com wss://relay.getalby.com wss://relay2.getalby.com; frame-src https://www.youtube-nocookie.com",
 		ReferrerPolicy:        "no-referrer",
@@ -181,6 +181,8 @@ func (httpSvc *HttpService) RegisterSharedRoutes(e *echo.Echo) {
 	fullAccessApiGroup.PATCH("/backup-reminder", httpSvc.backupReminderHandler)
 	fullAccessApiGroup.POST("/channels", httpSvc.openChannelHandler)
 	fullAccessApiGroup.POST("/channels/rebalance", httpSvc.rebalanceChannelHandler)
+	fullAccessApiGroup.POST("/channels/rebalance/quote", httpSvc.quoteRebalanceHandler)
+	fullAccessApiGroup.POST("/channels/rebalance/execute", httpSvc.executeRebalanceHandler)
 	fullAccessApiGroup.POST("/lsp-orders", httpSvc.newInstantChannelInvoiceHandler)
 	fullAccessApiGroup.POST("/node/migrate-storage", httpSvc.migrateNodeStorageHandler)
 	fullAccessApiGroup.POST("/peers", httpSvc.connectPeerHandler)
@@ -917,6 +919,30 @@ func (httpSvc *HttpService) rebalanceChannelHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, rebalanceChannelResponse)
+}
+
+func (httpSvc *HttpService) quoteRebalanceHandler(c echo.Context) error {
+	var request api.QuoteRebalanceRequest
+	if err := c.Bind(&request); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Bad request: %s", err.Error())})
+	}
+	response, err := httpSvc.api.QuoteRebalance(c.Request().Context(), &request)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Failed to quote rebalance: %s", err.Error())})
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+func (httpSvc *HttpService) executeRebalanceHandler(c echo.Context) error {
+	var request api.ExecuteRebalanceRequest
+	if err := c.Bind(&request); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Bad request: %s", err.Error())})
+	}
+	response, err := httpSvc.api.ExecuteRebalance(c.Request().Context(), &request)
+	if err != nil {
+		return c.JSON(http.StatusConflict, ErrorResponse{Message: fmt.Sprintf("Rebalance not executed: %s", err.Error())})
+	}
+	return c.JSON(http.StatusOK, response)
 }
 
 func (httpSvc *HttpService) disconnectPeerHandler(c echo.Context) error {
