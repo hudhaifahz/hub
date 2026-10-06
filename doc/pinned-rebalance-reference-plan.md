@@ -238,6 +238,7 @@ Consequence:
 Observed:
 
 - Hub commit `9aebc8e1` adds the optional pinned-payment capability and exact LDK call.
+- Hub commit `8e672e4c` carries exact receiving channel IDs into the Hub hold-invoice event model.
 - Hub commit `fe3f92cf` adds persisted five-minute quotes, exact channel-plus-pubkey validation, separated fee limits, legacy-flow rejection, and a hard-locked execute endpoint.
 - Hub commit `47782062` adds the exact-channel quote/review UI and visibly locked execution state.
 - Focused LDK, API, database, frontend lint, and TypeScript checks pass.
