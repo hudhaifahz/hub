@@ -19,6 +19,7 @@ var expectedTables = []string{
 	"user_configs",
 	"migrations",
 	"forwards",
+	"rebalance_quotes",
 }
 
 // MigrateDB copies all rows from one database to another. Both databases
@@ -94,6 +95,11 @@ func MigrateDB(from, to *gorm.DB) error {
 	logger.Logger.Info("migrating forwards...")
 	if err := migrateTable[Forward](from, tx); err != nil {
 		return fmt.Errorf("failed to migrate forwards: %w", err)
+	}
+
+	logger.Logger.Info("migrating rebalance quotes...")
+	if err := migrateTable[RebalanceQuote](from, tx); err != nil {
+		return fmt.Errorf("failed to migrate rebalance quotes: %w", err)
 	}
 
 	logger.Logger.Info("migrating user_configs...")
