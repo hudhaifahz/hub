@@ -66,6 +66,8 @@ type LDKService struct {
 	eventHandlingMutex                 sync.Mutex
 }
 
+var _ lnclient.PinnedPaymentClient = (*LDKService)(nil)
+
 const resetRouterKey = "ResetRouter"
 const maxInvoiceExpiry = 24 * time.Hour
 const lsps2InfoCacheTTL = 60 * time.Minute
@@ -698,6 +700,102 @@ func (ls *LDKService) SendPaymentSync(invoice string, amountMsat *uint64) (*lncl
 					}).Error("Received payment failed event")
 					return nil, fmt.Errorf("received payment failed event: %s", failureReasonMessage)
 				}
+			}
+		}
+	}
+}
+
+// SendPaymentSyncWithFirstHop pays a fixed-amount BOLT11 invoice through exactly one local
+// channel. LDK route construction receives only the requested first hop and submits a fixed route
+// with automatic retries disabled, so failure cannot fall back to a different local channel.
+func (ls *LDKService) SendPaymentSyncWithFirstHop(invoice string, firstHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.PayInvoiceResponse, error) {
+	paymentRequest, err := decodepay.Decodepay(invoice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode pinned payment invoice: %w", err)
+	}
+	if paymentRequest.MSatoshi <= 0 {
+		return nil, errors.New("pinned payments require a fixed positive invoice amount")
+	}
+	if firstHopChannelID == "" {
+		return nil, errors.New("pinned payments require a first-hop channel ID")
+	}
+
+	var selectedChannel *ldk_node.ChannelDetails
+	for _, channel := range ls.node.ListChannels() {
+		if channel.UserChannelId != firstHopChannelID {
+			continue
+		}
+		if selectedChannel != nil {
+			return nil, fmt.Errorf("first-hop channel ID %s is ambiguous", firstHopChannelID)
+		}
+		channelCopy := channel
+		selectedChannel = &channelCopy
+	}
+	if selectedChannel == nil {
+		return nil, fmt.Errorf("first-hop channel %s was not found", firstHopChannelID)
+	}
+	if !selectedChannel.IsUsable {
+		return nil, fmt.Errorf("first-hop channel %s is not usable", firstHopChannelID)
+	}
+	if uint64(paymentRequest.MSatoshi)+maxRoutingFeeMsat > selectedChannel.OutboundCapacityMsat {
+		return nil, fmt.Errorf("first-hop channel %s has insufficient spendable capacity", firstHopChannelID)
+	}
+
+	paymentStart := time.Now()
+	ldkEventSubscription := ls.ldkEventBroadcaster.Subscribe()
+	defer ls.ldkEventBroadcaster.CancelSubscription(ldkEventSubscription)
+
+	routeParameters := &ldk_node.RouteParametersConfig{
+		MaxTotalRoutingFeeMsat:          &maxRoutingFeeMsat,
+		MaxChannelSaturationPowerOfHalf: ls.cfg.GetEnv().LDKMaxChannelSaturationPowerOfHalf,
+		MaxPathCount:                    ls.cfg.GetEnv().LDKMaxPathCount,
+		MaxTotalCltvExpiryDelta:         1008,
+	}
+	invoiceObj, err := ldk_node.Bolt11InvoiceFromStr(invoice)
+	if err != nil {
+		return nil, fmt.Errorf("ldk failed to parse pinned payment invoice: %w", err)
+	}
+	paymentHash, err := ls.node.Bolt11Payment().SendWithFirstHop(
+		invoiceObj,
+		firstHopChannelID,
+		routeParameters,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("pinned payment failed to start: %w", err)
+	}
+
+	for {
+		select {
+		case <-ls.ctx.Done():
+			return nil, ls.ctx.Err()
+		case ev := <-ldkEventSubscription:
+			switch event := (*ev).(type) {
+			case ldk_node.EventPaymentSuccessful:
+				if event.PaymentHash != paymentHash {
+					continue
+				}
+				if event.PaymentPreimage == nil {
+					return nil, errors.New("pinned payment succeeded without a payment preimage")
+				}
+				feeMsat := uint64(0)
+				if event.FeePaidMsat != nil {
+					feeMsat = *event.FeePaidMsat
+				}
+				if feeMsat > maxRoutingFeeMsat {
+					return nil, fmt.Errorf("pinned payment routing fee %d exceeded limit %d", feeMsat, maxRoutingFeeMsat)
+				}
+				logger.Logger.WithFields(logrus.Fields{
+					"duration":             time.Since(paymentStart).Milliseconds(),
+					"fee_msat":             feeMsat,
+					"payment_hash":         event.PaymentHash,
+					"first_hop_channel_id": firstHopChannelID,
+				}).Info("Successful pinned first-hop payment")
+				return &lnclient.PayInvoiceResponse{Preimage: *event.PaymentPreimage, FeeMsat: feeMsat}, nil
+			case ldk_node.EventPaymentFailed:
+				if event.PaymentHash == nil || *event.PaymentHash != paymentHash {
+					continue
+				}
+				return nil, fmt.Errorf("pinned payment failed: %s", ls.getPaymentFailReason(&event))
 			}
 		}
 	}
