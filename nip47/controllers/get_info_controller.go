@@ -54,7 +54,10 @@ func (controller *nip47Controller) HandleGetInfoEvent(ctx context.Context, nip47
 			metadata["name"] = app.Name
 		}
 		if !app.Isolated {
-			lightningAddress, _ := controller.albyOAuthService.GetLightningAddress()
+			lightningAddress, _ := controller.cfg.Get(constants.NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY, "")
+			if lightningAddress == "" {
+				lightningAddress, _ = controller.albyOAuthService.GetLightningAddress()
+			}
 			responsePayload.LightningAddress = &lightningAddress
 		} else if metadata[constants.METADATA_APPSTORE_APP_ID_KEY] == constants.SUBWALLET_APPSTORE_APP_ID && metadata["lud16"] != nil {
 			lightningAddress := metadata["lud16"].(string)
@@ -92,7 +95,14 @@ func (controller *nip47Controller) HandleGetInfoEvent(ctx context.Context, nip47
 			network = "mainnet"
 		}
 
-		responsePayload.Alias = &info.Alias
+		alias := info.Alias
+		if app != nil && !app.Isolated {
+			aliasOverride, _ := controller.cfg.Get(constants.NWC_METADATA_ALIAS_CONFIG_KEY, "")
+			if aliasOverride != "" {
+				alias = aliasOverride
+			}
+		}
+		responsePayload.Alias = &alias
 		responsePayload.Color = &info.Color
 		responsePayload.Pubkey = &info.Pubkey
 		responsePayload.Network = &network

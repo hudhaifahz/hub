@@ -196,6 +196,43 @@ func TestHandleGetInfoEvent_WithPermission(t *testing.T) {
 	assert.Equal(t, []string{}, infoResponse.Notifications)
 }
 
+func TestHandleGetInfoEvent_WithMetadataOverrides(t *testing.T) {
+	ctx := context.TODO()
+	svc, err := tests.CreateTestService(t)
+	require.NoError(t, err)
+	defer svc.Remove()
+
+	const alias = "Kode · Frontier Crown"
+	const lightningAddress = "kode@frontiercrown.com"
+	require.NoError(t, svc.Cfg.SetUpdate(constants.NWC_METADATA_ALIAS_CONFIG_KEY, alias, ""))
+	require.NoError(t, svc.Cfg.SetUpdate(constants.NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY, lightningAddress, ""))
+	require.NoError(t, svc.Cfg.SetUpdate("AlbyLightningAddress", "legacy@getalby.com", ""))
+
+	app, _, err := tests.CreateApp(svc)
+	require.NoError(t, err)
+
+	nip47Request := &models.Request{}
+	require.NoError(t, json.Unmarshal([]byte(nip47GetInfoJson), nip47Request))
+
+	dbRequestEvent := &db.RequestEvent{}
+	require.NoError(t, svc.DB.Create(&dbRequestEvent).Error)
+
+	var publishedResponse *models.Response
+	publishResponse := func(response *models.Response, tags nostr.Tags) {
+		publishedResponse = response
+	}
+
+	NewTestNip47Controller(svc).
+		HandleGetInfoEvent(ctx, nip47Request, dbRequestEvent.ID, app, publishResponse)
+
+	require.Nil(t, publishedResponse.Error)
+	infoResponse := publishedResponse.Result.(*getInfoResponse)
+	require.NotNil(t, infoResponse.Alias)
+	assert.Equal(t, alias, *infoResponse.Alias)
+	require.NotNil(t, infoResponse.LightningAddress)
+	assert.Equal(t, lightningAddress, *infoResponse.LightningAddress)
+}
+
 func TestHandleGetInfoEvent_WithMetadata(t *testing.T) {
 	ctx := context.TODO()
 	svc, err := tests.CreateTestService(t)

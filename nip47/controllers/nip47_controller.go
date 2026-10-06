@@ -3,6 +3,7 @@ package controllers
 import (
 	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/apps"
+	"github.com/getAlby/hub/config"
 	"github.com/getAlby/hub/events"
 	"github.com/getAlby/hub/lnclient"
 	"github.com/getAlby/hub/nip47/permissions"
@@ -18,6 +19,7 @@ type nip47Controller struct {
 	transactionsService transactions.TransactionsService
 	appsService         apps.AppsService
 	albyOAuthService    alby.AlbyOAuthService
+	cfg                 config.Config
 }
 
 func NewNip47Controller(
@@ -27,7 +29,8 @@ func NewNip47Controller(
 	permissionsService permissions.PermissionsService,
 	transactionsService transactions.TransactionsService,
 	appsService apps.AppsService,
-	albyOAuthService alby.AlbyOAuthService) *nip47Controller {
+	albyOAuthService alby.AlbyOAuthService,
+	cfg config.Config) *nip47Controller {
 	return &nip47Controller{
 		lnClient:            lnClient,
 		db:                  db,
@@ -36,5 +39,6 @@ func NewNip47Controller(
 		transactionsService: transactionsService,
 		appsService:         appsService,
 		albyOAuthService:    albyOAuthService,
+		cfg:                 cfg,
 	}
 }
