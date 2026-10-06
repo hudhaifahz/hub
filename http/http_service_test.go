@@ -546,6 +546,7 @@ func TestCreateApp_FullPermission(t *testing.T) {
 	mockConfig.On("CheckUnlockPassword", "123").Return(true)
 	mockConfig.On("GetJWTSecret").Return("dummy secret", nil)
 	mockConfig.On("GetRelayUrls").Return([]string{})
+	mockConfig.On("Get", constants.NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY, "").Return("", nil)
 
 	mockKeys := mocks.NewMockKeys(t)
 	mockKeys.On("GetAppWalletKey", uint(1)).Return("", nil)
