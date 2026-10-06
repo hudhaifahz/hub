@@ -44,6 +44,15 @@ Allow an owner to request a circular rebalance with:
 - [x] Lower-level LDK routing supports restricting route finding to a supplied `first_hops` list.
 - [x] Lower-level LDK claimable-payment events expose receiving channel IDs, but the current Go binding omits them.
 
+## Current upgrade baseline
+
+- [x] Official Alby Hub release `v1.24.1` is tag commit `7b4488571c5717939d17b199cdd69e93c2a671e8`.
+- [x] Official `v1.24.1` updates `github.com/getAlby/ldk-node-go` from `af22e238c194` to `5ba434093284`; the older custom binding must not replace that security-update baseline.
+- [x] Custom Rust routing enforcement is replayed on `getAlby/ldk-node` commit `74daaf9` as owner-fork commit `057b73d`.
+- [x] Generated Go bindings and a release-mode arm64/x86_64 macOS library are replayed on `getAlby/ldk-node-go` commit `5ba434093284` as owner-fork commit `e7dd77f`.
+- [x] Hub resolves the upgraded owner-fork binding as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261006232835-e7dd77fda90e`.
+- [x] The obsolete `v1.24.0` frontend lockfile snapshot was intentionally skipped so it cannot overwrite `v1.24.1` dependency/security updates.
+
 ## Version-control checklist
 
 - [x] Preserve the existing customization as its own reviewed commit before routing work.
@@ -142,7 +151,7 @@ Allow an owner to request a circular rebalance with:
 - [ ] Prove downstream MPP remains allowed while the first hop stays pinned.
 - [ ] Interrupt and restart during a pending attempt; prove no unrestricted retry occurs.
 - [ ] Deliver an inbound test payment through the wrong channel; prove it is not claimed.
-- [ ] Run Go tests, frontend lint/type checks, production build, and desktop build checks.
+- [x] Run Go tests, frontend lint/type checks, production build, and desktop build checks.
 
 ### Live rollout gates
 
@@ -159,11 +168,12 @@ Allow an owner to request a circular rebalance with:
 1. Fetch the new official Alby release into `upstream`.
 2. Create an upgrade branch from the new exact tag.
 3. Replay the metadata customization commit.
-4. Replay the pinned-rebalance commits and the exact compatible LDK dependency commit.
-5. Resolve conflicts without weakening any safety invariant.
-6. Run the complete deterministic test matrix.
-7. Build and record the source commit.
-8. Install only after review; perform no live rebalance without separate approval.
+4. If the official release changes its LDK binding commit, first replay the custom Rust and generated-binding commits on the new official LDK baselines; never point the upgraded Hub back to an older custom binary.
+5. Replay the pinned-rebalance Hub commits and pin the exact upgraded owner-fork binding pseudo-version.
+6. Resolve conflicts without weakening any safety invariant. Drop obsolete lockfile snapshots instead of overwriting the new release lockfiles.
+7. Run the complete deterministic test matrix.
+8. Build and record the source commit.
+9. Install only after review; perform no live rebalance without separate approval.
 
 ## Decision log
 
@@ -248,6 +258,25 @@ Consequence:
 
 - The three-repository implementation is remotely durable and a fresh Hub checkout can resolve the matching custom Go/native binding without relying on this workstation's ignored `go.work`.
 - The former `aya-skaur` forks were not deleted; they are retained only as recoverable backup remotes. Official Alby remains the upgrade source through `upstream`.
+
+### 2026-10-06 — `v1.24.1` security-update rehearsal
+
+Observed:
+
+- Official release `v1.24.1` is based on Hub commit `7b4488571c5717939d17b199cdd69e93c2a671e8` and includes security and dependency updates.
+- Metadata override and icon commits replay cleanly. The old lockfile snapshot conflicts with and is superseded by the official `v1.24.1` lockfile, so that snapshot was skipped.
+- `v1.24.1` advances the official Go/LDK binary from `af22e238c194` to `5ba434093284`; retaining the previous owner-fork pseudo-version would silently discard the updated native binaries.
+- Custom LDK routing enforcement compiles on Rust base `74daaf9` as commit `057b73d`. The receiving-channel persistence test passes against the updated dependency lockfile.
+- Custom Go binding commit `baa90a2` and release-mode universal macOS library commit `e7dd77f` are based on official binding commit `5ba434093284`. The library is 50,621,744 bytes, contains arm64 and x86_64 slices, and exports the pinned first-hop symbol on both architectures.
+- With `GOWORK=off`, focused Hub LDK, API, database, and HTTP tests pass against exact pseudo-version `v0.0.0-20261006232835-e7dd77fda90e`.
+- Frontend ESLint, TypeScript, and production HTTP build pass. The existing Lottie `eval`, large-chunk, stale Browserslist, and Bark macOS deployment-target warnings remain warnings rather than test failures.
+- A universal Wails desktop bundle builds in staging, embeds the upgraded library, contains only the portable `@executable_path/../Frameworks` LDK runtime path, and passes deep signature verification after ad-hoc signing.
+- The installed app was not replaced or restarted. Its process and port `21420` were present, but a five-second HTTP root probe timed out, so live continuity was not proven.
+
+Consequence:
+
+- The source upgrade rehearsal passes, but live installation remains a separate owner-controlled quit, replace, restart, unlock, and continuity checkpoint.
+- No rebalance execution gate is opened by this upgrade. Incoming-channel atomicity and the remaining deterministic routing tests are still required before any value-moving trial.
 
 ### 2026-10-05 — Hub quote and review implementation
 
