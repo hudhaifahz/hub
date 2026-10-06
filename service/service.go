@@ -25,6 +25,7 @@ import (
 	"github.com/getAlby/hub/version"
 
 	"github.com/getAlby/hub/config"
+	"github.com/getAlby/hub/constants"
 	"github.com/getAlby/hub/db"
 	"github.com/getAlby/hub/lnclient"
 	"github.com/getAlby/hub/nip47"
@@ -100,6 +101,15 @@ func NewService(ctx context.Context) (*service, error) {
 	cfg, err := config.NewConfig(appConfig, gormDB)
 	if err != nil {
 		return nil, err
+	}
+
+	nwcMetadataAlias, _ := cfg.Get(constants.NWC_METADATA_ALIAS_CONFIG_KEY, "")
+	nwcMetadataLightningAddress, _ := cfg.Get(constants.NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY, "")
+	if nwcMetadataAlias != "" || nwcMetadataLightningAddress != "" {
+		logger.Logger.WithFields(logrus.Fields{
+			"alias": nwcMetadataAlias,
+			"lud16": nwcMetadataLightningAddress,
+		}).Info("NWC metadata override enabled")
 	}
 
 	// write auto unlock password from env to user config

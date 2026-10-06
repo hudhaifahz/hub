@@ -80,6 +80,14 @@ const METADATA_APPSTORE_APP_ID_KEY = "app_store_app_id"
 
 const SUBWALLET_APPSTORE_APP_ID = "uncle-jim"
 
+// Optional display metadata overrides for non-isolated NWC connections.
+// These are deliberately separate from the linked Alby account metadata so
+// an account refresh cannot replace a self-hosted wallet's public identity.
+const (
+	NWC_METADATA_ALIAS_CONFIG_KEY             = "NWCMetadataAlias"
+	NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY = "NWCMetadataLightningAddress"
+)
+
 const (
 	BITCOIN_DISPLAY_FORMAT_SATS   = "sats"
 	BITCOIN_DISPLAY_FORMAT_BIP177 = "bip177"

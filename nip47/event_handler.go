@@ -390,7 +390,7 @@ func (svc *nip47Service) HandleEvent(ctx context.Context, pool nostrmodels.Simpl
 		}
 	}
 
-	controller := controllers.NewNip47Controller(lnClient, svc.db, svc.eventPublisher, svc.permissionsService, svc.transactionsService, svc.appsService, svc.albyOAuthSvc)
+	controller := controllers.NewNip47Controller(lnClient, svc.db, svc.eventPublisher, svc.permissionsService, svc.transactionsService, svc.appsService, svc.albyOAuthSvc, svc.cfg)
 
 	switch nip47Request.Method {
 	case models.MULTI_PAY_INVOICE_METHOD:

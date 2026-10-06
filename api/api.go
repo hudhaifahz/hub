@@ -120,9 +120,15 @@ func (api *api) CreateApp(createAppRequest *CreateAppRequest) (*CreateAppRespons
 
 	relayUrls := api.cfg.GetRelayUrls()
 
-	lightningAddress, err := api.albyOAuthSvc.GetLightningAddress()
+	lightningAddress, err := api.cfg.Get(constants.NWC_METADATA_LIGHTNING_ADDRESS_CONFIG_KEY, "")
 	if err != nil {
 		return nil, err
+	}
+	if lightningAddress == "" {
+		lightningAddress, err = api.albyOAuthSvc.GetLightningAddress()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	responseBody := &CreateAppResponse{}
