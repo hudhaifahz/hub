@@ -242,6 +242,7 @@ Observed:
 - Hub commit `fe3f92cf` adds persisted five-minute quotes, exact channel-plus-pubkey validation, separated fee limits, legacy-flow rejection, and a hard-locked execute endpoint.
 - Hub commit `47782062` adds the exact-channel quote/review UI and visibly locked execution state.
 - Focused LDK, API, database, frontend lint, and TypeScript checks pass.
+- The HTTP frontend production build passes; it reports existing dependency warnings for Lottie `eval`, large chunks, and stale Browserslist data.
 - Hub commit `7ab500d7` adds the missing NWC metadata config expectation; the broad HTTP package test now passes.
 
 Consequence:
