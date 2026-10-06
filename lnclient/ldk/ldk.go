@@ -2020,6 +2020,7 @@ func (ls *LDKService) handleLdkEvent(event *ldk_node.Event) {
 			"claimable_amount_msats": eventType.ClaimableAmountMsat,
 			"payment_hash":           eventType.PaymentHash,
 			"claim_deadline":         *eventType.ClaimDeadline,
+			"receiving_channels":     eventType.ReceivingChannels,
 		}).Info("LDK Payment Claimable")
 
 		payment := ls.node.Payment(eventType.PaymentId)
@@ -2034,6 +2035,13 @@ func (ls *LDKService) handleLdkEvent(event *ldk_node.Event) {
 			return
 		}
 		transaction.SettleDeadline = eventType.ClaimDeadline
+		transaction.ReceivingChannels = make([]lnclient.ReceivingChannel, 0, len(eventType.ReceivingChannels))
+		for _, receivingChannel := range eventType.ReceivingChannels {
+			transaction.ReceivingChannels = append(transaction.ReceivingChannels, lnclient.ReceivingChannel{
+				ChannelId:     receivingChannel.ChannelId,
+				UserChannelId: receivingChannel.UserChannelId,
+			})
+		}
 		ls.eventPublisher.Publish(&events.Event{
 			Event:      "nwc_lnclient_hold_invoice_accepted",
 			Properties: transaction,

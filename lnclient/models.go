@@ -27,19 +27,25 @@ type NodeInfo struct {
 
 // TODO: use uint for fields that cannot be negative
 type Transaction struct {
-	Type            string
-	Invoice         string
-	Description     string
-	DescriptionHash string
-	Preimage        string
-	PaymentHash     string
-	AmountMsat      int64
-	FeesPaidMsat    int64
-	CreatedAt       int64
-	ExpiresAt       *int64
-	SettledAt       *int64
-	Metadata        Metadata
-	SettleDeadline  *uint32 // block number for accepted hold invoices
+	Type              string
+	Invoice           string
+	Description       string
+	DescriptionHash   string
+	Preimage          string
+	PaymentHash       string
+	AmountMsat        int64
+	FeesPaidMsat      int64
+	CreatedAt         int64
+	ExpiresAt         *int64
+	SettledAt         *int64
+	Metadata          Metadata
+	SettleDeadline    *uint32 // block number for accepted hold invoices
+	ReceivingChannels []ReceivingChannel
+}
+
+type ReceivingChannel struct {
+	ChannelId     string
+	UserChannelId *string
 }
 
 type OnchainTransaction struct {
