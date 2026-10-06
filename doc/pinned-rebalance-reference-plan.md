@@ -50,7 +50,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Exclude unrelated dependency-lock drift unless it is proven necessary and intentionally committed.
 - [x] Add an owner-controlled GitHub fork or repository remote without overwriting upstream history.
 - [x] Keep official Alby as `upstream` and the owner-controlled repository as `origin` or `fork`.
-- [ ] Push the preserved metadata branch and configure its upstream tracking branch.
+- [x] Push the preserved metadata branch and configure its upstream tracking branch.
 - [x] Create a separate feature branch for pinned rebalancing.
 - [x] Keep the reference plan updated and committed with each material design change.
 - [x] Record the exact Alby base commit and exact LDK dependency commit in the implementation notes.
@@ -146,7 +146,7 @@ Allow an owner to request a circular rebalance with:
 
 ### Live rollout gates
 
-- [ ] Source is committed and pushed to owner-controlled repositories.
+- [x] Source is committed and pushed to owner-controlled repositories.
 - [ ] Exact installed build commit is recorded.
 - [ ] UI controls and backend enforcement are independently verified.
 - [ ] No live-value test occurs without a fresh approval packet.
@@ -211,7 +211,7 @@ Consequence:
 Observed:
 
 - `getAlby/ldk-node` base `e10861c` is preserved on local branch `feat/pinned-first-hop`; implementation commit is `fee9e17`.
-- `getAlby/ldk-node-go` base `af22e238c194` is preserved on local branch `feat/pinned-first-hop`; generated-binding commit is `5996237` and matching universal macOS library commit is `3b54d64`.
+- `getAlby/ldk-node-go` base `af22e238c194` is preserved on local branch `feat/pinned-first-hop`; generated-binding commit is `5996237` and matching stripped universal macOS library commit is `75a041e6b777`.
 - The Rust layer compiles with UniFFI enabled, and the receiving-channel persistence test passes with `RUSTFLAGS='--cfg no_download'`.
 - The generated Go binding compiles. Alby LDK tests pass when using the matching local binding and native library.
 - Non-macOS generated libraries have not been rebuilt; CI generation is a release gate.
@@ -219,7 +219,7 @@ Observed:
 Consequence:
 
 - A source-only binding change is insufficient. Every shipped platform library must be generated from the exact Rust commit before a release is eligible.
-- Alby currently uses a local `go.work` only for development verification. The committed `go.mod` must be pinned to the pushed owner-fork binding commit before any distributable build.
+- The committed Hub `go.mod` replaces `github.com/getAlby/ldk-node-go` with exact owner-fork pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261006064620-75a041e6b777`; the local `go.work` is no longer required to reproduce the focused Hub tests.
 
 ### 2026-10-05 — Owner forks created; push credentials mismatched
 
@@ -232,6 +232,22 @@ Observed:
 Consequence:
 
 - Local commits are durable and replayable, but the remote-push checklist remains open until the owner chooses the GitHub identity or grants the intended access.
+
+### 2026-10-06 — Repositories consolidated under `hudhaifahz`
+
+Observed:
+
+- Authenticated terminal access was verified as GitHub account `hudhaifahz` without exposing the credential.
+- Proper forks now exist at `hudhaifahz/hub`, `hudhaifahz/ldk-node`, and `hudhaifahz/ldk-node-go`.
+- Each local repository uses the `hudhaifahz` fork as `origin`, retains official `getAlby` as `upstream`, and retains the former `aya-skaur` fork as non-primary remote `aya`.
+- Hub branches `fix/frontier-crown-nwc-metadata` and `feat/pinned-channel-rebalance`, plus both dependency branches named `feat/pinned-first-hop`, were pushed and their remote hashes checked.
+- The initial universal macOS library was 165,474,432 bytes and exceeded GitHub's 100 MB hard file limit. Stripping non-runtime symbols reduced the same arm64/x86_64 library to 96,563,872 bytes. The unpublished artifact-only commit was amended to `75a041e6b777`; `go test ./...` still passes in the binding repository.
+- With `GOWORK=off`, focused Hub tests pass against the exact `hudhaifahz/ldk-node-go` pseudo-version. The only output beyond passing tests is the pre-existing Bark macOS deployment-target warning.
+
+Consequence:
+
+- The three-repository implementation is remotely durable and a fresh Hub checkout can resolve the matching custom Go/native binding without relying on this workstation's ignored `go.work`.
+- The former `aya-skaur` forks were not deleted; they are retained only as recoverable backup remotes. Official Alby remains the upgrade source through `upstream`.
 
 ### 2026-10-05 — Hub quote and review implementation
 
