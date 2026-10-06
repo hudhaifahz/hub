@@ -95,6 +95,13 @@ type LNClient interface {
 	ExecuteCustomNodeCommand(ctx context.Context, command *CustomNodeCommandRequest) (*CustomNodeCommandResponse, error)
 }
 
+// PinnedPaymentClient is implemented only by backends that can fail closed when an exact local
+// first-hop channel is requested. Callers must not fall back to LNClient.SendPaymentSync when this
+// capability is unavailable.
+type PinnedPaymentClient interface {
+	SendPaymentSyncWithFirstHop(payReq string, firstHopChannelID string, maxRoutingFeeMsat uint64) (*PayInvoiceResponse, error)
+}
+
 type Channel struct {
 	LocalBalanceMsat                            int64
 	LocalSpendableBalanceMsat                   int64
