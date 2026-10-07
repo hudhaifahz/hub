@@ -512,6 +512,7 @@ type LocalRebalanceQuoteResponse struct {
 	ExpiresAt                      time.Time                `json:"expiresAt"`
 	ExecutionEnabled               bool                     `json:"executionEnabled"`
 	BlockedReason                  string                   `json:"blockedReason"`
+	routeBytes                     []byte
 }
 
 type ExecuteRebalanceRequest struct {
