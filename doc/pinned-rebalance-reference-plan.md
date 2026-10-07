@@ -65,7 +65,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Record the exact Alby base commit and exact LDK dependency commit in the implementation notes.
 - [x] Keep LDK dependency changes in a separately versioned fork/commit; do not depend on an uncommitted module-cache edit.
 - [x] Use small Conventional Commits so future Alby upgrades can replay or drop each customization independently.
-- [ ] Tag or otherwise record the exact source commit used for any installed desktop build.
+- [x] Tag or otherwise record the exact source commit used for any installed desktop build.
 
 ## Required design
 
@@ -156,7 +156,7 @@ Allow an owner to request a circular rebalance with:
 ### Live rollout gates
 
 - [x] Source is committed and pushed to owner-controlled repositories.
-- [ ] Exact installed build commit is recorded.
+- [x] Exact installed build commit is recorded.
 - [ ] UI controls and backend enforcement are independently verified.
 - [ ] No live-value test occurs without a fresh approval packet.
 - [ ] Start with the smallest useful explicitly approved test amount.
@@ -278,6 +278,26 @@ Consequence:
 
 - The source upgrade rehearsal passes, but live installation remains a separate owner-controlled quit, replace, restart, unlock, and continuity checkpoint.
 - No rebalance execution gate is opened by this upgrade. Incoming-channel atomicity and the remaining deterministic routing tests are still required before any value-moving trial.
+
+### 2026-10-06 — `v1.24.1` installed with rollback and live continuity proof
+
+Observed:
+
+- Before replacement, the running `v1.24.0` desktop process was unresponsive to both the macOS quit request and `SIGTERM`. Transaction-safe SQLite backups and a copy of the installed application were completed first; only that exact process was then force-stopped.
+- The recoverable pre-upgrade application and clean-stop data copy are stored at `/Users/kode/Development/albyhub-rollbacks/2026-10-06-before-v1.24.1`. Both live databases and both transaction-safe pre-quit snapshots returned `integrity_check = ok` before installation.
+- `/Applications/Alby Hub.app` now contains the bundle built from Hub source commit `4129cc80e1cdc3eb3d7130ed21831b1b498c0270`. Its executable SHA-256 is `9a1ddd7d49e912fd05f54e81656ad181cf1c8e062dc9f390552bf31c770d1afb`; its embedded signed LDK library SHA-256 is `6e12519aa3ebdc88399990f6f46aa1054b636d48f78d19e7978ff2f9a1e4e21d`.
+- Deep signature verification passes after installation. The executable is universal arm64/x86_64, records `version.Tag=v1.24.1`, and resolves LDK only through `@executable_path/../Frameworks`.
+- The restarted process runs from `/Applications/Alby Hub.app/Contents/MacOS/Alby Hub`, listens on port `21420`, and has `/Applications/Alby Hub.app/Contents/Frameworks/libldk_node.dylib` loaded rather than a Go module-cache library.
+- The live Settings screen reports `v1.24.1`. The Node screen reports all three channels online and shows Lightning balance `1,606,117 sats`, receive limit `2,321,902 sats`, and on-chain balance `41,883 sats` at the verification checkpoint.
+- The live Kraken channel menu exposes `Rebalance In`. Its dialog exposes exact outgoing-channel selection, the exact return peer and channel ID, separate provider and routing fee caps, `Create non-paying quote`, and a disabled `Execute locked` control with the incoming-channel atomicity warning.
+- No quote was created and no payment was attempted. Post-start checks still return `ok` for both databases, and Hub continuity counts remain `apps=12`, `app_permissions=94`, and `user_configs=16`.
+- Plain HTTP and HTTPS probes to root, `/api/health`, and `/api/node/status` still do not return ordinary HTTP responses on the desktop listener. This behavior was present before and after the upgrade; live UI state, process/library inspection, channel status, and direct database checks are the accepted evidence for this installation checkpoint, not those endpoints.
+
+Consequence:
+
+- The customized `v1.24.1` desktop bundle is installed, running, unlocked, and reading the existing wallet state with a complete local rollback path.
+- Live UI continuity is proven, but the backend value-moving route is still intentionally locked. The independent backend-enforcement checklist item remains open until incoming-channel atomicity and the remaining deterministic routing tests pass.
+- This installation does not authorize or execute a rebalance. Any future value-moving trial still requires a fresh exact-channel approval packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
