@@ -412,7 +412,9 @@ Installed verification state:
 - The archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-7cd81491.zip`, SHA-256 `eb85b59ed6bbcd3357f0d10739aef1f802a26fbb15b929a3f7c4696310061749`.
 - The recoverable pre-install app and transaction-safe copies of both SQLite databases are in `/Users/kode/Development/albyhub-rollbacks/2026-10-06-before-local-route-7cd81491`. Both database copies passed `integrity_check`.
 - Process `49724` loaded the new installed library. Live `nwc.db` passed `integrity_check`; continuity remains `apps=12`, `app_permissions=94`, `user_configs=16`, and `rebalance_quotes=0`.
-- Owner unlock is pending after the restart. No local route quote has been requested from the installed build and no sats moved.
+- Owner unlock completed after the restart. The apparent password failure was only the normal `Starting node...` interval; the existing password was accepted and no password or credential was changed.
+- At `2026-10-06 19:25 PDT`, the live channel screen showed the exact source peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c` offline with `989,340 sats` spendable and the exact Kraken channel `86157859664272214382561858939519142638` inactive with `840,498 sats` receiving capacity. LDK was actively retrying the source peer, while a TCP connection to Kraken's published address was established but the channel had not become active.
+- The `20,000-sat` local quote was not submitted because the quote contract fails closed before pathfinding when either selected local channel is inactive. This is a channel-connectivity blocker, not a `no_route_found` result. No invoice, probe, provider order, quote row, HTLC, payment, or balance movement was created.
 
 ### 2026-10-05 — Hub quote and review implementation
 
