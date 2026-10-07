@@ -404,6 +404,16 @@ Consequence:
 - A successful local quote will prove only that the current gossip graph and scorer can construct a candidate path pinned to both exact local channels. It does not prove live liquidity, settlement, or execution safety.
 - No route candidate may be converted into a payment until a separate implementation and deterministic tests prove the synthetic-terminal route can be converted to a valid self-payment route without changing either endpoint, and the owner approves one fresh exact action packet.
 
+Installed verification state:
+
+- Hub source commit `7cd8149189b74a7e2f1211f8cc61359527f6289d`, LDK source commit `c96625a4792d50123878a42db4ac3603b2e804c5`, and Go binding/library commit `77c3d0e05a0cb0cbc1763f563d46f14bb9e68f7b` are pushed to the owner's `codex/upgrade-v1.24.1` branches.
+- The installed executable SHA-256 is `c86f7d730ea50d1b5f451cfb70a2e7d592ab5fb93b7a791930e807231a95200f`; the installed signed universal LDK library SHA-256 is `9bf970eb94feb1895754e65dbbffb7181588e19a2ab05183a4dae43645e44430` and exports the quote symbol on both arm64 and x86_64.
+- The executable has only `@executable_path/../Frameworks` as its LDK runtime path. Deep signature verification passes with the existing sandbox, download/user-selected file, and client/server network entitlements.
+- The archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-7cd81491.zip`, SHA-256 `eb85b59ed6bbcd3357f0d10739aef1f802a26fbb15b929a3f7c4696310061749`.
+- The recoverable pre-install app and transaction-safe copies of both SQLite databases are in `/Users/kode/Development/albyhub-rollbacks/2026-10-06-before-local-route-7cd81491`. Both database copies passed `integrity_check`.
+- Process `49724` loaded the new installed library. Live `nwc.db` passed `integrity_check`; continuity remains `apps=12`, `app_permissions=94`, `user_configs=16`, and `rebalance_quotes=0`.
+- Owner unlock is pending after the restart. No local route quote has been requested from the installed build and no sats moved.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:
