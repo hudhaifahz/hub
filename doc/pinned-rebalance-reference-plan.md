@@ -361,13 +361,31 @@ Observed:
 - All three channels were online. Immediately before the retry, outgoing channel `255349693497905514942651862984333935477` for peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c` had `989,340 sats` spendable; incoming Kraken channel `86157859664272214382561858939519142638` for peer `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485` had `840,498 sats` receiving capacity.
 - One unchanged non-paying quote request used principal `500,000 sats`, provider-fee cap `2,500 sats`, routing-fee cap `1,000 sats`, and maximum possible debit `503,500 sats`. The `Execute locked` control remained disabled.
 - The provider returned HTTP `422` with the safely parsed exact reason `no_route_found`. The application log recorded only the status and sanitized reason; it did not log the invoice or request body.
+- At the owner's request, one bounded smaller non-paying quote used principal `250,000 sats`, the same exact channels, the same fee caps, and maximum possible debit `253,500 sats`. The provider again returned HTTP `422: no_route_found`; execution remained locked.
+- At the owner's explicit request, one further non-paying quote used principal `20,000 sats` (`0.00020000 BTC`), the same exact channels and fee caps, and maximum possible debit `23,500 sats` (`0.00023500 BTC`). The provider again returned HTTP `422: no_route_found`; the sanitized log independently preserved the reason after the short-lived UI notification disappeared.
 - After rejection, the selected channel balances remained `989,340 sats` spendable and `840,498 sats` receivable. The database returned `integrity_check = ok`, `rebalance_quotes=0`, `apps=12`, `app_permissions=94`, and `user_configs=16`. No reviewable quote was created, no provider invoice was paid, and no sats moved.
 
 Consequence:
 
 - The nested-reason parser is proven in the installed desktop application. The current provider cannot quote the exact `500,000-sat` return path through Kraken at this time.
-- This result is provider/path availability evidence, not proof that another amount, fee cap, provider, or time would succeed. Do not alter or retry any of those parameters automatically.
+- The same rejection at `250,000 sats` and `20,000 sats` shows that the original amount alone was not the limiting factor at the three observed timestamps. This remains provider/path availability evidence, not proof that another fee cap, provider, or time would succeed. Do not continue retrying or alter other parameters automatically.
 - Because no quote exists, there is no action-specific payment packet to approve. Payment execution remains hard-locked and the incoming-channel atomicity gate remains unresolved.
+
+### 2026-10-06 — `no_route_found` is provider-specific, not a global route proof
+
+Observed:
+
+- Local LDK state reports the Kraken channel online, public, and able to receive `840,498 sats`. The funding outpoint is `d6d600818fcebec415ae7cc3ed403677f6e3374bd9f59184937a43597048ab15:0`; its public short-channel ID is `969161x1096x0` (`1065603788758843392`).
+- The Kraken peer pubkey matches Kraken's currently published post-migration node pubkey. The channel opened after Kraken's August 2026 node migration, so this is not the old Kraken node identity.
+- Hub's LDK `MakeInvoice` implementation accepts `throughNodePubkey` but does not use it; it creates an ordinary public invoice. The provider separately receives only `pay_through_this_public_key` with the Kraken pubkey, not the exact Kraken channel ID or short-channel ID.
+- The current node has one Kraken channel, but the provider controls route construction for the return leg. Its `no_route_found` response therefore proves only that the provider could not build its required route at that moment. It does not prove that no route exists from this node's selected source channel through the wider network to Kraken.
+- Every provider rejection occurred after Hub created a five-minute local incoming invoice. Database rows `224` through `228` remain `PENDING` for the diagnostic attempts even though no provider order or rebalance quote was created. They are unpaid receive invoices, not payments, but expiry-state cleanup is a separate correctness item and they must not be silently deleted.
+
+Proposed next design checkpoint:
+
+- Add a quote-only local circular route builder that creates a self-invoice with a single exact Kraken last-hop hint and asks LDK to find a route using only the selected `030ef18b…` first hop. Return the complete candidate path, exact first and final channel identifiers, estimated routing fee, and failure reason without sending probes or HTLCs.
+- Accept a candidate only if every path begins with user channel `255349693497905514942651862984333935477` and ends with Kraken short-channel ID `1065603788758843392`; otherwise fail closed.
+- Treat this as a new direct self-payment architecture, not an extension of the current provider quote. Keep execution disabled until circular self-payment behavior, MPP, retry, restart, wrong-channel, fee, and settlement atomicity are proven deterministically.
 
 ### 2026-10-05 — Hub quote and review implementation
 
