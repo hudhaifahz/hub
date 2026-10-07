@@ -182,6 +182,7 @@ func (httpSvc *HttpService) RegisterSharedRoutes(e *echo.Echo) {
 	fullAccessApiGroup.POST("/channels", httpSvc.openChannelHandler)
 	fullAccessApiGroup.POST("/channels/rebalance", httpSvc.rebalanceChannelHandler)
 	fullAccessApiGroup.POST("/channels/rebalance/quote", httpSvc.quoteRebalanceHandler)
+	fullAccessApiGroup.POST("/channels/rebalance/local-quote", httpSvc.quoteLocalRebalanceHandler)
 	fullAccessApiGroup.POST("/channels/rebalance/execute", httpSvc.executeRebalanceHandler)
 	fullAccessApiGroup.POST("/lsp-orders", httpSvc.newInstantChannelInvoiceHandler)
 	fullAccessApiGroup.POST("/node/migrate-storage", httpSvc.migrateNodeStorageHandler)
@@ -929,6 +930,18 @@ func (httpSvc *HttpService) quoteRebalanceHandler(c echo.Context) error {
 	response, err := httpSvc.api.QuoteRebalance(c.Request().Context(), &request)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Failed to quote rebalance: %s", err.Error())})
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+func (httpSvc *HttpService) quoteLocalRebalanceHandler(c echo.Context) error {
+	var request api.QuoteLocalRebalanceRequest
+	if err := c.Bind(&request); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Bad request: %s", err.Error())})
+	}
+	response, err := httpSvc.api.QuoteLocalRebalance(c.Request().Context(), &request)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Message: fmt.Sprintf("Failed to quote local rebalance: %s", err.Error())})
 	}
 	return c.JSON(http.StatusOK, response)
 }

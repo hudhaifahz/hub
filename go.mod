@@ -272,4 +272,4 @@ require (
 // allows us to specify that as an option.
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.33.0-hex-display
 
-replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261006232835-e7dd77fda90e
+replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261007021108-77c3d0e05a0c

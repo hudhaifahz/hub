@@ -108,6 +108,35 @@ type PinnedPaymentClient interface {
 	SendPaymentSyncWithFirstHop(payReq string, firstHopChannelID string, maxRoutingFeeMsat uint64) (*PayInvoiceResponse, error)
 }
 
+// CircularRouteQuoter is implemented only by backends that can construct and validate a route
+// pinned to exact local first- and last-hop channels without sending a probe, HTLC, or payment.
+type CircularRouteQuoter interface {
+	QuoteCircularRoute(amountMsat uint64, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*CircularRouteQuote, error)
+}
+
+type CircularRouteHop struct {
+	NodeId          string
+	ShortChannelId  uint64
+	FeeMsat         uint64
+	CltvExpiryDelta uint32
+}
+
+type CircularRoutePath struct {
+	Hops       []CircularRouteHop
+	AmountMsat uint64
+	FeeMsat    uint64
+}
+
+type CircularRouteQuote struct {
+	AmountMsat             uint64
+	TotalRoutingFeeMsat    uint64
+	FirstHopChannelId      string
+	FirstHopShortChannelId uint64
+	LastHopChannelId       string
+	LastHopShortChannelId  uint64
+	Paths                  []CircularRoutePath
+}
+
 type Channel struct {
 	LocalBalanceMsat                            int64
 	LocalSpendableBalanceMsat                   int64

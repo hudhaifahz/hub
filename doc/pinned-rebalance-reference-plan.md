@@ -387,6 +387,23 @@ Proposed next design checkpoint:
 - Accept a candidate only if every path begins with user channel `255349693497905514942651862984333935477` and ends with Kraken short-channel ID `1065603788758843392`; otherwise fail closed.
 - Treat this as a new direct self-payment architecture, not an extension of the current provider quote. Keep execution disabled until circular self-payment behavior, MPP, retry, restart, wrong-channel, fee, and settlement atomicity are proven deterministically.
 
+### 2026-10-06 — Quote-only local circular route implementation
+
+Observed:
+
+- LDK's normal router explicitly rejects a route when payer and payee are the same node (`Cannot generate a route to ourselves`). A literal self-invoice route search therefore cannot implement the quote.
+- Owner-fork LDK commit `c96625a` adds a pathfinding-only circular quote. It searches toward a synthetic terminal behind a one-hop route hint for the exact selected inbound channel, restricts first hops to only the exact selected source channel, and then validates every returned path against both channel SCIDs before replacing the synthetic terminal with the real local node in the quote representation.
+- The final-hop routing identifier is obtained with LDK's `get_inbound_payment_scid()`. An inbound alias takes precedence when present because that is the identifier the counterparty recognizes for inbound forwarding. The exact local `user_channel_id` remains the primary binding, and the selected route SCID/alias is returned for independent review.
+- Quote construction creates no invoice, provider order, database row, probe, HTLC, payment-store entry, or payment. The returned object contains every path, hop pubkey, SCID/alias, per-path fee, and total estimated routing fee.
+- A focused Rust regression test proves validation rejects a wrong first-hop SCID or wrong final-hop SCID. The library and UniFFI surface compile. The full Rust unit suite passed; integration tests could not start because this checkout has no `BITCOIND_EXE`, which is an environment prerequisite rather than a product failure.
+- Hub now has a separate `/api/channels/rebalance/local-quote` contract. It revalidates exact channel ID plus full peer pubkey, current source spendable capacity, current destination receivable capacity, returned channel IDs, first-hop peer and SCID, penultimate Kraken peer, final-hop SCID/alias, and routing fee cap. SCIDs are serialized as decimal strings so JavaScript cannot lose 64-bit precision.
+- The desktop dialog now uses the local quote endpoint and displays the complete candidate route. Provider-fee controls are absent because no provider is involved. The execute control remains disabled and the backend contains no local execution method.
+
+Consequence:
+
+- A successful local quote will prove only that the current gossip graph and scorer can construct a candidate path pinned to both exact local channels. It does not prove live liquidity, settlement, or execution safety.
+- No route candidate may be converted into a payment until a separate implementation and deterministic tests prove the synthetic-terminal route can be converted to a valid self-payment route without changing either endpoint, and the owner approves one fresh exact action packet.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:

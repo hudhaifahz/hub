@@ -36,6 +36,7 @@ type API interface {
 	OpenChannel(ctx context.Context, openChannelRequest *OpenChannelRequest) (*OpenChannelResponse, error)
 	RebalanceChannel(ctx context.Context, rebalanceChannelRequest *RebalanceChannelRequest) (*RebalanceChannelResponse, error)
 	QuoteRebalance(ctx context.Context, request *QuoteRebalanceRequest) (*RebalanceQuoteResponse, error)
+	QuoteLocalRebalance(ctx context.Context, request *QuoteLocalRebalanceRequest) (*LocalRebalanceQuoteResponse, error)
 	ExecuteRebalance(ctx context.Context, request *ExecuteRebalanceRequest) (*RebalanceChannelResponse, error)
 	CloseChannel(ctx context.Context, peerId, channelId string, force bool) (*CloseChannelResponse, error)
 	UpdateChannel(ctx context.Context, updateChannelRequest *UpdateChannelRequest) error
@@ -468,6 +469,46 @@ type RebalanceQuoteResponse struct {
 	ExpiresAt                      time.Time `json:"expiresAt"`
 	ExecutionEnabled               bool      `json:"executionEnabled"`
 	BlockedReason                  string    `json:"blockedReason,omitempty"`
+}
+
+type QuoteLocalRebalanceRequest struct {
+	OutgoingChannelId  string `json:"outgoingChannelId"`
+	OutgoingNodePubkey string `json:"outgoingNodePubkey"`
+	IncomingChannelId  string `json:"incomingChannelId"`
+	IncomingNodePubkey string `json:"incomingNodePubkey"`
+	AmountMsat         uint64 `json:"amountMsat"`
+	MaxRoutingFeeMsat  uint64 `json:"maxRoutingFeeMsat"`
+}
+
+type LocalCircularRouteHop struct {
+	NodePubkey     string `json:"nodePubkey"`
+	ShortChannelId string `json:"shortChannelId"`
+	FeeMsat        uint64 `json:"feeMsat"`
+	CltvDelta      uint32 `json:"cltvDelta"`
+}
+
+type LocalCircularRoutePath struct {
+	Hops       []LocalCircularRouteHop `json:"hops"`
+	AmountMsat uint64                  `json:"amountMsat"`
+	FeeMsat    uint64                  `json:"feeMsat"`
+}
+
+type LocalRebalanceQuoteResponse struct {
+	AmountMsat                     uint64                   `json:"amountMsat"`
+	TotalRoutingFeeMsat            uint64                   `json:"totalRoutingFeeMsat"`
+	MaxRoutingFeeMsat              uint64                   `json:"maxRoutingFeeMsat"`
+	MaxTotalDebitMsat              uint64                   `json:"maxTotalDebitMsat"`
+	OutgoingChannelId              string                   `json:"outgoingChannelId"`
+	OutgoingNodePubkey             string                   `json:"outgoingNodePubkey"`
+	OutgoingShortChannelId         string                   `json:"outgoingShortChannelId"`
+	IncomingChannelId              string                   `json:"incomingChannelId"`
+	IncomingNodePubkey             string                   `json:"incomingNodePubkey"`
+	IncomingShortChannelId         string                   `json:"incomingShortChannelId"`
+	OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
+	IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
+	Paths                          []LocalCircularRoutePath `json:"paths"`
+	ExecutionEnabled               bool                     `json:"executionEnabled"`
+	BlockedReason                  string                   `json:"blockedReason"`
 }
 
 type ExecuteRebalanceRequest struct {

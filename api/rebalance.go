@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 const rebalanceQuoteLifetime = 5 * time.Minute
 
 var errPinnedRebalanceExecutionDisabled = errors.New("pinned rebalance execution is disabled until incoming-channel atomicity is proven")
+var errLocalRebalanceExecutionDisabled = errors.New("local circular-route execution is not implemented or authorized")
 
 type rspRebalanceCreateOrderResponse struct {
 	OrderId    string `json:"order_id"`
@@ -198,6 +200,155 @@ func (api *api) QuoteRebalance(ctx context.Context, request *QuoteRebalanceReque
 		ExpiresAt:                      quote.ExpiresAt,
 		ExecutionEnabled:               false,
 		BlockedReason:                  errPinnedRebalanceExecutionDisabled.Error(),
+	}, nil
+}
+
+// QuoteLocalRebalance constructs and validates a candidate circular route using exact local
+// first- and last-hop channels. It is deliberately side-effect free: no provider request, invoice,
+// database row, probe, HTLC, or payment is created.
+func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalRebalanceRequest) (*LocalRebalanceQuoteResponse, error) {
+	lnClient := api.svc.GetLNClient()
+	if lnClient == nil {
+		return nil, ErrLNClientNotStarted
+	}
+	quoter, ok := lnClient.(lnclient.CircularRouteQuoter)
+	if !ok {
+		return nil, errors.New("the active Lightning backend does not support local circular route quotes")
+	}
+	if request == nil || request.AmountMsat == 0 {
+		return nil, errors.New("rebalance amount must be positive")
+	}
+	if request.OutgoingChannelId == "" || request.IncomingChannelId == "" {
+		return nil, errors.New("exact outgoing and incoming channel IDs are required")
+	}
+	if request.OutgoingChannelId == request.IncomingChannelId {
+		return nil, errors.New("outgoing and incoming channels must be different")
+	}
+	if err := validateNodePubkey(request.OutgoingNodePubkey); err != nil {
+		return nil, fmt.Errorf("invalid outgoing node pubkey: %w", err)
+	}
+	if err := validateNodePubkey(request.IncomingNodePubkey); err != nil {
+		return nil, fmt.Errorf("invalid incoming node pubkey: %w", err)
+	}
+	maxTotalDebitMsat, ok := checkedAdd(request.AmountMsat, request.MaxRoutingFeeMsat)
+	if !ok || maxTotalDebitMsat > math.MaxInt64 {
+		return nil, errors.New("rebalance maximum debit is too large")
+	}
+
+	channels, err := lnClient.ListChannels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list channels: %w", err)
+	}
+	outgoing, err := findExactChannel(channels, request.OutgoingChannelId, request.OutgoingNodePubkey)
+	if err != nil {
+		return nil, fmt.Errorf("outgoing channel: %w", err)
+	}
+	incoming, err := findExactChannel(channels, request.IncomingChannelId, request.IncomingNodePubkey)
+	if err != nil {
+		return nil, fmt.Errorf("incoming channel: %w", err)
+	}
+	if !outgoing.Active {
+		return nil, errors.New("outgoing channel is not online and usable")
+	}
+	if !incoming.Active {
+		return nil, errors.New("incoming channel is not online and usable")
+	}
+	if outgoing.LocalSpendableBalanceMsat < 0 || uint64(outgoing.LocalSpendableBalanceMsat) < maxTotalDebitMsat {
+		return nil, errors.New("outgoing channel has insufficient spendable balance for the maximum debit")
+	}
+	if incoming.RemoteBalanceMsat < 0 || uint64(incoming.RemoteBalanceMsat) < request.AmountMsat {
+		return nil, errors.New("incoming channel has insufficient receiving capacity")
+	}
+
+	quote, err := quoter.QuoteCircularRoute(
+		request.AmountMsat,
+		request.OutgoingChannelId,
+		request.IncomingChannelId,
+		request.MaxRoutingFeeMsat,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if quote.AmountMsat != request.AmountMsat {
+		return nil, errors.New("local route quote amount does not match the request")
+	}
+	if quote.FirstHopChannelId != request.OutgoingChannelId || quote.LastHopChannelId != request.IncomingChannelId {
+		return nil, errors.New("local route quote did not preserve the exact selected channel IDs")
+	}
+	if quote.TotalRoutingFeeMsat > request.MaxRoutingFeeMsat {
+		return nil, fmt.Errorf("local route fee %d msat exceeds limit %d msat", quote.TotalRoutingFeeMsat, request.MaxRoutingFeeMsat)
+	}
+	if len(quote.Paths) == 0 {
+		return nil, errors.New("local route quote returned no paths")
+	}
+
+	paths := make([]LocalCircularRoutePath, 0, len(quote.Paths))
+	var quotedAmountMsat uint64
+	var quotedFeeMsat uint64
+	for _, path := range quote.Paths {
+		if len(path.Hops) < 2 {
+			return nil, errors.New("local circular route path is too short")
+		}
+		firstHop := path.Hops[0]
+		lastHop := path.Hops[len(path.Hops)-1]
+		penultimateHop := path.Hops[len(path.Hops)-2]
+		if firstHop.NodeId != request.OutgoingNodePubkey || firstHop.ShortChannelId != quote.FirstHopShortChannelId {
+			return nil, errors.New("local route path did not preserve the exact outgoing first hop")
+		}
+		if penultimateHop.NodeId != request.IncomingNodePubkey || lastHop.ShortChannelId != quote.LastHopShortChannelId {
+			return nil, errors.New("local route path did not preserve the exact incoming final hop")
+		}
+		if lastHop.NodeId != lnClient.GetPubkey() {
+			return nil, errors.New("local circular route did not terminate at this node")
+		}
+		quotedAmountMsat, ok = checkedAdd(quotedAmountMsat, path.AmountMsat)
+		if !ok {
+			return nil, errors.New("local route path amounts overflow")
+		}
+		quotedFeeMsat, ok = checkedAdd(quotedFeeMsat, path.FeeMsat)
+		if !ok {
+			return nil, errors.New("local route path fees overflow")
+		}
+
+		hops := make([]LocalCircularRouteHop, 0, len(path.Hops))
+		for _, hop := range path.Hops {
+			hops = append(hops, LocalCircularRouteHop{
+				NodePubkey:     hop.NodeId,
+				ShortChannelId: strconv.FormatUint(hop.ShortChannelId, 10),
+				FeeMsat:        hop.FeeMsat,
+				CltvDelta:      hop.CltvExpiryDelta,
+			})
+		}
+		paths = append(paths, LocalCircularRoutePath{
+			Hops:       hops,
+			AmountMsat: path.AmountMsat,
+			FeeMsat:    path.FeeMsat,
+		})
+	}
+	if quotedAmountMsat != quote.AmountMsat || quotedFeeMsat != quote.TotalRoutingFeeMsat {
+		return nil, errors.New("local route path totals do not match the quote")
+	}
+	actualTotalDebitMsat, ok := checkedAdd(quote.AmountMsat, quote.TotalRoutingFeeMsat)
+	if !ok {
+		return nil, errors.New("local route quote debit overflow")
+	}
+
+	return &LocalRebalanceQuoteResponse{
+		AmountMsat:                     quote.AmountMsat,
+		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:              request.MaxRoutingFeeMsat,
+		MaxTotalDebitMsat:              actualTotalDebitMsat,
+		OutgoingChannelId:              request.OutgoingChannelId,
+		OutgoingNodePubkey:             request.OutgoingNodePubkey,
+		OutgoingShortChannelId:         strconv.FormatUint(quote.FirstHopShortChannelId, 10),
+		IncomingChannelId:              request.IncomingChannelId,
+		IncomingNodePubkey:             request.IncomingNodePubkey,
+		IncomingShortChannelId:         strconv.FormatUint(quote.LastHopShortChannelId, 10),
+		OutgoingSpendableSnapshotMsat:  uint64(outgoing.LocalSpendableBalanceMsat),
+		IncomingReceivableSnapshotMsat: uint64(incoming.RemoteBalanceMsat),
+		Paths:                          paths,
+		ExecutionEnabled:               false,
+		BlockedReason:                  errLocalRebalanceExecutionDisabled.Error(),
 	}, nil
 }
 
