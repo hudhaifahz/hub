@@ -522,7 +522,8 @@ type LocalRebalanceQuoteResponse struct {
 }
 
 type ExecuteRebalanceRequest struct {
-	QuoteId string `json:"quoteId"`
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
 }
 
 type RedeemOnchainFundsRequest struct {
