@@ -336,6 +336,23 @@ Consequence:
 - Do not reduce the amount, change either channel, increase either fee cap, or retry automatically. Any follow-up quote must be a separately reasoned non-paying test using fresh channel state.
 - Payment execution remains hard-locked. The provider rejection does not change the unresolved incoming-channel atomicity gate and does not authorize a value-moving rebalance.
 
+### 2026-10-06 — Nested provider-reason parser installed; owner unlock pending
+
+Observed:
+
+- A universal macOS bundle was built from pushed Hub source commit `cc76beb56715a9e25483d452c1fe08df738c8231`, which includes nested provider-error parser commit `e88a9e4067c907072823d9a35b2e58d29e0e9426`.
+- The staged and installed executable SHA-256 is `bb431b3a378690ed055697704865be0039e0e56d01b545f2c6c58706ec6ea89c`. The embedded signed LDK library remains SHA-256 `6e12519aa3ebdc88399990f6f46aa1054b636d48f78d19e7978ff2f9a1e4e21d` and both artifacts are universal arm64/x86_64.
+- The executable resolves LDK only through `@executable_path/../Frameworks`. Deep signature verification passes and the app retains sandbox, download/user-selected file, and client/server network entitlements.
+- The archived bundle is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-cc76beb5.zip` with SHA-256 `7fdfd92536d80c75efa31fced2ffd1c28e703bdae30c6df9f092a54a29b84fae`.
+- Before replacement, transaction-safe snapshots of both SQLite databases and a full app rollback were created at `/Users/kode/Development/albyhub-rollbacks/2026-10-06-before-nested-provider-error-e88a9e40`. The old process again required an exact-PID force-stop after `SIGTERM` timed out; no broad process or filesystem target was used.
+- After installation, `nwc.db` returned `integrity_check = ok` and continuity remained `apps=12`, `app_permissions=94`, and `user_configs=16`.
+- The new process runs from `/Applications/Alby Hub.app/Contents/MacOS/Alby Hub` and displays `v1.24.1` at the owner password screen. It has not been unlocked, no quote has been retried, and no sats moved.
+
+Consequence:
+
+- Live parser verification is pending owner unlock. After unlock, re-read exact channel state and retry the unchanged non-paying quote once; do not execute or change any parameter.
+- The installed parser improves safe diagnostics only. It does not enable payment execution or change the incoming-channel atomicity gate.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:
