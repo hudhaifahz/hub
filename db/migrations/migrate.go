@@ -41,6 +41,7 @@ func Migrate(gormDB *gorm.DB) error {
 		_202604081200_app_last_settled_transaction,
 		_202610060100_rebalance_quotes,
 		_202610060200_local_rebalance_quotes,
+		_202610070100_single_local_rebalance_execution,
 	})
 
 	return m.Migrate()
