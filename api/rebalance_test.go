@@ -43,3 +43,18 @@ func TestValidateNodePubkey(t *testing.T) {
 	require.Error(t, validateNodePubkey("04"+strings.Repeat("11", 32)))
 	require.Error(t, validateNodePubkey("02abcd"))
 }
+
+func TestRebalanceProviderErrorIncludesStructuredReason(t *testing.T) {
+	err := rebalanceProviderError(422, []byte(`{"message":"requested route is unavailable"}`))
+	require.EqualError(t, err, "rebalance quote provider returned HTTP 422: requested route is unavailable")
+}
+
+func TestRebalanceProviderErrorRedactsInvoice(t *testing.T) {
+	err := rebalanceProviderError(422, []byte(`{"error":"failed to route lnbc1sensitiveinvoice"}`))
+	require.EqualError(t, err, "rebalance quote provider returned HTTP 422: failed to route [redacted invoice]")
+}
+
+func TestRebalanceProviderErrorIgnoresUnstructuredBody(t *testing.T) {
+	err := rebalanceProviderError(422, []byte(`provider rejected lnbc1sensitiveinvoice`))
+	require.EqualError(t, err, "rebalance quote provider returned HTTP 422")
+}
