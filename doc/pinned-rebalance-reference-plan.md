@@ -120,6 +120,8 @@ Allow an owner to request a circular rebalance with:
 ### 5. Incoming-channel enforcement and atomicity gate
 
 - [x] Expose `receiving_channel_ids` through the LDK language binding and Alby event model.
+- [x] Add a backward-compatible, persisted exact receiving-channel constraint to an inbound BOLT 11 payment record.
+- [x] Add a fail-closed claim decision that requires pending state, exact amount, a persisted preimage, and a nonempty set of MPP parts all reporting the exact selected channel.
 - [ ] Determine whether the rebalance provider supports a compatible hold/claim or shared-preimage atomic flow.
 - [ ] Prove that rejecting a misrouted inbound HTLC cannot leave the provider invoice settled without the principal returning.
 - [ ] If atomicity is proven, claim only when every incoming MPP part uses the selected channel.
@@ -151,6 +153,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
 - [ ] Duplicate execution is rejected. (No execution is currently permitted.)
 - [ ] Wrong inbound channel is rejected before claim when atomic mode is enabled.
+- [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 
 ### Deterministic integration tests
 
@@ -449,13 +452,15 @@ Resulting design constraint:
 - Fingerprint tests prove deterministic output and mutation detection for hop SCID, exact channels, principal, fee, and final SCID. Database migration tests prove the quote record is copied between supported databases. The complete Go test suite, frontend lint/type checks, and the Wails frontend production build pass; only the pre-existing dependency build warnings remain.
 - Owner-fork LDK source commit `45f734a8552716133b51f3310b2e2472296384c2` adds a fail-closed conversion from the synthetic quote route to a real self-payment route object. It rejects empty, blinded, wrong-first-hop, or wrong-final-hop paths; changes only the terminal pubkey to the local node; preserves every SCID and fee; and clears the synthetic route parameters so a future fixed-route send would reconstruct them from the real final hop with zero automatic retries. All 27 Rust library tests pass, including exact conversion and mismatch rejection tests.
 - Owner-fork LDK source commit `b8ff3e152226af721f7caba9fd8cb0540547fcf7` moves the existing pinned first-hop payment-store write before `send_payment_with_route`. A persistence failure therefore prevents the value-moving call; an immediate non-duplicate send failure is persisted as failed; and an LDK duplicate/in-flight result remains pending so restart recovery is not falsely marked failed. All 27 Rust library tests pass.
-- Commits `45f734a` and `b8ff3e1` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion and persistence ordering only; they do not expose a circular send method or create an invoice, payment-store record, or HTLC.
+- Owner-fork LDK source commit `eb2ebb689d022c32b23ae505c8a3f7d6f2436a0e` adds a backward-compatible optional exact receiving-channel constraint to persisted inbound BOLT 11 payment records. The claim decision is applied even if ChannelManager unexpectedly knows the preimage and returns `Fail` unless the record is still pending, the received amount exactly equals the persisted amount, the preimage is present, and every reported MPP part has the exact required local user-channel ID. A mismatch fails the HTLC backward without revealing the preimage and marks the inbound record failed, preventing a later retry from becoming claimable. Native Rust tests pass `29/29`; Rust plus UniFFI tests pass `39/39`, with only the two pre-existing binding warnings.
+- The `eb2ebb6` tests exercise the complete pure claim/fail decision and persistence compatibility, but do not yet drive a real `PaymentClaimable` event against a controlled ChannelManager to independently observe `claim_funds` versus `fail_htlc_backwards` calls.
+- Commits `45f734a`, `b8ff3e1`, and `eb2ebb6` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion, persistence ordering, and the dormant inbound decision guard only; they do not expose a circular send method or create an invoice, prepared operation, payment-store record, or HTLC.
 - These changes are source-only at this checkpoint. The installed app still uses the prior quote-only build, no local quote record has been created by this new code, execution remains unavailable, and no sats moved.
 
 Consequence:
 
 - Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Wrong-channel failure-before-claim, MPP behavior, retry, duplicate execution, and crash/restart recovery still require deterministic tests before a live executor can exist.
-- The next implementation slice is the encrypted, persisted inbound-hash/preimage state machine and its fail-before-claim tests. It must remain unreachable from the installed UI until the complete deterministic safety matrix passes and the owner receives a fresh action packet.
+- The next implementation slice is a prepared circular-operation API that creates the inbound hash/preimage inside LDK's existing persisted secret boundary, binds the actual hash and distinct outbound payment ID to the still-valid quote, and remains non-sending. After that, a real event-handler test must prove wrong-channel failure-before-claim and single-use behavior. Both must remain unreachable from the installed UI until the complete deterministic safety matrix passes and the owner receives a fresh action packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
