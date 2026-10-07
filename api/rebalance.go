@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/getAlby/hub/db"
@@ -253,8 +254,9 @@ func (api *api) createRebalanceOrder(ctx context.Context, payRequest string, inc
 		return nil, errors.New("failed to read rebalance quote response")
 	}
 	if res.StatusCode != http.StatusOK {
-		logger.Logger.WithFields(logrus.Fields{"statusCode": res.StatusCode}).Error("rebalance create_order endpoint returned non-success code")
-		return nil, fmt.Errorf("rebalance quote provider returned HTTP %d", res.StatusCode)
+		providerErr := rebalanceProviderError(res.StatusCode, body)
+		logger.Logger.WithFields(logrus.Fields{"statusCode": res.StatusCode}).WithError(providerErr).Error("rebalance create_order endpoint returned non-success code")
+		return nil, providerErr
 	}
 	var order rspRebalanceCreateOrderResponse
 	if err := json.Unmarshal(body, &order); err != nil {
@@ -264,6 +266,56 @@ func (api *api) createRebalanceOrder(ctx context.Context, payRequest string, inc
 		return nil, errors.New("rebalance quote response is missing required fields")
 	}
 	return &order, nil
+}
+
+func rebalanceProviderError(statusCode int, body []byte) error {
+	reason := safeRebalanceProviderReason(body)
+	if reason == "" {
+		return fmt.Errorf("rebalance quote provider returned HTTP %d", statusCode)
+	}
+	return fmt.Errorf("rebalance quote provider returned HTTP %d: %s", statusCode, reason)
+}
+
+func safeRebalanceProviderReason(body []byte) string {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	for _, key := range []string{"message", "error", "detail", "reason"} {
+		raw, ok := payload[key]
+		if !ok {
+			continue
+		}
+		var reason string
+		if err := json.Unmarshal(raw, &reason); err != nil {
+			continue
+		}
+		reason = strings.TrimSpace(strings.Map(func(r rune) rune {
+			if r == '\n' || r == '\r' || r == '\t' {
+				return ' '
+			}
+			if r < 0x20 || r == 0x7f {
+				return -1
+			}
+			return r
+		}, reason))
+		if reason == "" {
+			continue
+		}
+		lowerReason := strings.ToLower(reason)
+		for _, invoicePrefix := range []string{"lnbcrt", "lnbc", "lntb"} {
+			if invoiceIndex := strings.Index(lowerReason, invoicePrefix); invoiceIndex >= 0 {
+				reason = strings.TrimSpace(reason[:invoiceIndex]) + " [redacted invoice]"
+				break
+			}
+		}
+		runes := []rune(reason)
+		if len(runes) > 240 {
+			reason = string(runes[:240]) + "…"
+		}
+		return reason
+	}
+	return ""
 }
 
 func findExactChannel(channels []lnclient.Channel, channelId string, nodePubkey string) (*lnclient.Channel, error) {
