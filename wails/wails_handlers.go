@@ -571,6 +571,42 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: rebalanceChannelResponse, Error: ""}
+	case "/api/channels/rebalance/quote":
+		if method != "POST" {
+			break
+		}
+		quoteRebalanceRequest := &api.QuoteRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), quoteRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  route,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		quoteRebalanceResponse, err := app.api.QuoteRebalance(ctx, quoteRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: quoteRebalanceResponse, Error: ""}
+	case "/api/channels/rebalance/execute":
+		if method != "POST" {
+			break
+		}
+		executeRebalanceRequest := &api.ExecuteRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), executeRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  route,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		executeRebalanceResponse, err := app.api.ExecuteRebalance(ctx, executeRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: executeRebalanceResponse, Error: ""}
 	case "/api/balances":
 		balancesResponse, err := app.api.GetBalances(ctx)
 		if err != nil {
