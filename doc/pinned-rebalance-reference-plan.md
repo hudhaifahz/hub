@@ -299,6 +299,25 @@ Consequence:
 - Live UI continuity is proven, but the backend value-moving route is still intentionally locked. The independent backend-enforcement checklist item remains open until incoming-channel atomicity and the remaining deterministic routing tests pass.
 - This installation does not authorize or execute a rebalance. Any future value-moving trial still requires a fresh exact-channel approval packet.
 
+### 2026-10-06 — Desktop quote-router failure found and corrected
+
+Observed:
+
+- A live non-paying quote attempt selected outgoing peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c`, outgoing channel `255349693497905514942651862984333935477`, incoming Kraken peer `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485`, incoming channel `86157859664272214382561858939519142638`, and principal `500,000 sats` with provider-fee cap `2,500 sats` and routing-fee cap `1,000 sats`.
+- The installed desktop returned `Unhandled route: POST /api/channels/rebalance/quote`. The HTTP router contained both new endpoints, but the separate Wails desktop request router contained only the legacy one-step route. No provider order, invoice, quote row, or payment was created.
+- Hub commit `27321e2ae9a43722cfd56b8803891a32d0e74e87` adds the quote and execute routes to the Wails router. Regression tests prove quote dispatch and locked-execution error propagation. Wails, API, and HTTP test packages pass; only the pre-existing Bark deployment-target warnings remain.
+- The replacement universal bundle preserves `version.Tag=v1.24.1`, exact owner-fork binding pseudo-version `v0.0.0-20261006232835-e7dd77fda90e`, and embedded LDK library SHA-256 `6e12519aa3ebdc88399990f6f46aa1054b636d48f78d19e7978ff2f9a1e4e21d`. The installed executable SHA-256 is `9606ef5781d9707e3df348fccb4a2799677f4e468a8f7e530d156f242a252779`.
+- The first ad-hoc re-sign omitted Alby's sandbox entitlement and therefore opened the separate non-wallet path `/Users/kode/Library/Application Support/albyhub`. No onboarding or wallet action was intentionally completed. That process was stopped, and the invalid app and archive were retained only in the rollback folder.
+- The corrected bundle is signed with Alby's sandbox, download/user-selected file, and client/server network entitlements. It opens the canonical container database at `/Users/kode/Library/Containers/com.getalby.Alby-Hub/Data/Library/Application Support/albyhub/nwc.db`; integrity is `ok` and continuity remains `apps=12`, `app_permissions=94`, and `user_configs=16`.
+- The corrected archived bundle is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-27321e2a.zip` with SHA-256 `e602993f3cb331edfee9ab8c93d6b0acb1184646f42a3640eccc20480a0ae5dc`. Its rollback is `/Users/kode/Development/albyhub-rollbacks/2026-10-06-before-wails-route-fix-27321e2a`.
+- The corrected app is installed and stopped at the owner password screen after a clean restart. A fresh live quote retest is pending owner unlock. No sats moved.
+
+Consequence:
+
+- Desktop-specific route coverage is a required upgrade test; HTTP route tests alone are insufficient for a Wails build.
+- Ad-hoc post-build signing must explicitly preserve `build/darwin/entitlements.plist`; signature validity alone does not prove the app will use the existing sandbox container.
+- The quote and backend-enforcement rollout gate remains open until the owner unlocks the corrected build and the same exact-channel non-paying quote succeeds. Payment execution remains disabled independently of that pending test.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:
