@@ -1,11 +1,19 @@
 package api
 
 import (
+	"encoding/json"
 	"math"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/getAlby/hub/db"
 	"github.com/getAlby/hub/lnclient"
+	"github.com/getAlby/hub/logger"
+	test_db "github.com/getAlby/hub/tests/db"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -116,6 +124,108 @@ func TestLocalRebalanceRouteFingerprintBindsExactChannelsAndAmounts(t *testing.T
 			require.NotEqual(t, originalFingerprint, changedFingerprint)
 		})
 	}
+}
+
+func TestAcquireLocalRebalanceQuoteForExecutionIsAtomicAndSingleUse(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "atomic-quote", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&quote).Error)
+
+	const contenders = 8
+	start := make(chan struct{})
+	results := make(chan error, contenders)
+	var waitGroup sync.WaitGroup
+	for i := 0; i < contenders; i++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			<-start
+			_, acquireErr := theAPI.acquireLocalRebalanceQuoteForExecution(quote.ID, fingerprint, now)
+			results <- acquireErr
+		}()
+	}
+	close(start)
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	for acquireErr := range results {
+		if acquireErr == nil {
+			successes++
+		}
+	}
+	require.Equal(t, 1, successes)
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, "executing", persisted.State)
+	require.Nil(t, persisted.ExecutedAt)
+}
+
+func TestAcquireLocalRebalanceQuoteForExecutionRejectsMismatchExpiryAndTampering(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	mismatched, _ := testPersistedLocalRebalanceQuote(t, "mismatched-quote", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&mismatched).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(mismatched.ID, strings.Repeat("0", 64), now)
+	require.ErrorContains(t, err, "fingerprint does not match the reviewed route")
+	require.NoError(t, gormDB.First(&mismatched, "id = ?", mismatched.ID).Error)
+	require.Equal(t, "quoted", mismatched.State)
+
+	expired, expiredFingerprint := testPersistedLocalRebalanceQuote(t, "expired-quote", now)
+	require.NoError(t, gormDB.Create(&expired).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(expired.ID, expiredFingerprint, now)
+	require.ErrorContains(t, err, "expired")
+	require.NoError(t, gormDB.First(&expired, "id = ?", expired.ID).Error)
+	require.Equal(t, "expired", expired.State)
+
+	tampered, tamperedFingerprint := testPersistedLocalRebalanceQuote(t, "tampered-quote", now.Add(time.Minute))
+	tampered.AmountMsat++
+	require.NoError(t, gormDB.Create(&tampered).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(tampered.ID, tamperedFingerprint, now)
+	require.ErrorContains(t, err, "persisted route material")
+	require.NoError(t, gormDB.First(&tampered, "id = ?", tampered.ID).Error)
+	require.Equal(t, "quoted", tampered.State)
+}
+
+func testPersistedLocalRebalanceQuote(
+	t *testing.T, quoteId string, expiresAt time.Time,
+) (db.LocalRebalanceQuote, string) {
+	t.Helper()
+	response := testLocalRebalanceQuoteResponse()
+	fingerprint, err := hashLocalRebalanceRouteMaterial(response)
+	require.NoError(t, err)
+	routeJSON, err := json.Marshal(response.Paths)
+	require.NoError(t, err)
+	return db.LocalRebalanceQuote{
+		ID:                             quoteId,
+		State:                          "quoted",
+		RequestHash:                    strings.Repeat("1", 64),
+		RouteFingerprint:               fingerprint,
+		AmountMsat:                     response.AmountMsat,
+		TotalRoutingFeeMsat:            response.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:              response.MaxRoutingFeeMsat,
+		MaxTotalDebitMsat:              response.MaxTotalDebitMsat,
+		OutgoingChannelId:              response.OutgoingChannelId,
+		OutgoingNodePubkey:             response.OutgoingNodePubkey,
+		OutgoingShortChannelId:         response.OutgoingShortChannelId,
+		IncomingChannelId:              response.IncomingChannelId,
+		IncomingNodePubkey:             response.IncomingNodePubkey,
+		IncomingShortChannelId:         response.IncomingShortChannelId,
+		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
+		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
+		RouteJson:                      string(routeJSON),
+		ExpiresAt:                      expiresAt,
+	}, fingerprint
 }
 
 func testLocalRebalanceQuoteResponse() *LocalRebalanceQuoteResponse {
