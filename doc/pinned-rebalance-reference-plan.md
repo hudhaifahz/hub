@@ -27,7 +27,7 @@ Allow an owner to request a circular rebalance with:
 - [ ] Provider fees and routing fees have separate exact limits.
 - [ ] No unknown or unbounded fee is payable.
 - [ ] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic.
-- [ ] Only one rebalance operation may execute at a time.
+- [x] Only one rebalance operation may execute at a time. (A database-level partial unique index permits at most one local quote in `executing`, including races between different valid quote IDs.)
 - [ ] A live rebalance always requires a fresh, action-specific owner approval packet.
 - [ ] Tests, builds, deployment, UI presence, live execution, and economic success are reported as separate states.
 
@@ -95,14 +95,14 @@ Allow an owner to request a circular rebalance with:
 - [x] Store the complete reviewed path as JSON and verify the record survives supported database migration.
 - [x] Keep invoice, payment hash, preimage, probe, HTLC, and payment authorization material out of the quote record.
 - [x] Display quote ID, fingerprint, and expiry in the review UI while execution remains disabled.
-- [ ] Require any future executor to reload this record, reject expiry or fingerprint mismatch, and consume it at most once.
+- [x] Require any future executor to reload this record, reject expiry or fingerprint mismatch, and consume it at most once. (The dormant Hub acquisition primitive re-fingerprints persisted route material and uses an atomic `quoted` to `executing` compare-and-set.)
 
 ### 3. Fail-closed execution stage
 
 - [x] Accept only an unexpired, unused quote identifier.
 - [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (Covered by the dormant Rust executor; Hub execution remains locked.)
 - [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
-- [ ] Atomically mark the quote executing before calling the Lightning backend.
+- [x] Atomically mark the quote executing before calling the Lightning backend. (The required dormant acquisition primitive is implemented and concurrency-tested; no Lightning backend call is wired or reachable yet.)
 - [x] Prevent duplicate execution and concurrent rebalance operations. (The dormant executor shares the preparation lock and atomically persists a distinct outbound record before its one send action; duplicate submission is rejected before a second action.)
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
@@ -479,7 +479,7 @@ Resulting design constraint:
 Consequence:
 
 - Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Exact inbound decisions, real mixed-channel MPP rejection, prepared-but-unsent and in-flight restart recovery, duplicate pre-send rejection, immediate send-error handling, fixed-route single-path and pinned-MPP settlement, exact first/final channel evidence, reserved outbound-ID settlement, and distinct idempotent terminal payment-store records are now covered.
-- The executor must remain unreachable from Hub until Hub quote consumption atomically transitions the exact persisted quote before any backend send becomes reachable, the regenerated binding/build matrix passes, and a fresh installed build is independently verified. Nothing may be regenerated into Go bindings, rebuilt into Hub, installed, or used for live value before that remaining safety matrix passes and the owner receives a fresh action packet.
+- The executor must remain unreachable from Hub until the tested atomic quote-acquisition primitive is wired as the mandatory immediate predecessor of the backend send, the regenerated binding/build matrix passes, and a fresh installed build is independently verified. Nothing may be regenerated into Go bindings, rebuilt into Hub, installed, or used for live value before that remaining safety matrix passes and the owner receives a fresh action packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
@@ -489,6 +489,8 @@ Observed:
 - Hub commit `8e672e4c` carries exact receiving channel IDs into the Hub hold-invoice event model.
 - Hub commit `fe3f92cf` adds persisted five-minute quotes, exact channel-plus-pubkey validation, separated fee limits, legacy-flow rejection, and a hard-locked execute endpoint.
 - Hub commit `47782062` adds the exact-channel quote/review UI and visibly locked execution state.
+- Hub commit `47057488` adds a dormant acquisition primitive that requires the owner-reviewed route fingerprint, reloads and re-fingerprints every persisted route field, rejects missing, expired, tampered, mismatched, or non-`quoted` records, and atomically transitions exactly one matching quote from `quoted` to `executing`. Eight concurrent attempts against one quote produce exactly one success. The request model now carries the route fingerprint, but the endpoint remains hard-locked and no backend send calls this primitive.
+- Hub commit `c60e40ff` adds migration `202610070100_single_local_rebalance_execution`, whose database-level partial unique index permits at most one `executing` local quote across all quote IDs. A second eight-way concurrency test races eight distinct valid quotes and proves exactly one reaches `executing`.
 - Focused LDK, API, database, frontend lint, and TypeScript checks pass.
 - The HTTP frontend production build passes; it reports existing dependency warnings for Lottie `eval`, large chunks, and stale Browserslist data.
 - Hub commit `7ab500d7` adds the missing NWC metadata config expectation; the broad HTTP package test now passes.
@@ -496,4 +498,4 @@ Observed:
 Consequence:
 
 - The current source can be reviewed and can produce a non-paying quote, but it is intentionally not a value-moving feature.
-- The focused backend and broad HTTP package tests are clean; the complete repository test matrix remains a release gate.
+- The focused quote-acquisition tests, full API/Wails/HTTP tests, and complete Go repository suite pass. The new acquisition code is committed and pushed but has not been regenerated into bindings, connected to the dormant Rust executor, built, installed, or exercised with live value.
