@@ -353,6 +353,22 @@ Consequence:
 - Live parser verification is pending owner unlock. After unlock, re-read exact channel state and retry the unchanged non-paying quote once; do not execute or change any parameter.
 - The installed parser improves safe diagnostics only. It does not enable payment execution or change the incoming-channel atomicity gate.
 
+### 2026-10-06 — Provider route unavailability confirmed live
+
+Observed:
+
+- After owner unlock, process `36992` loaded `/Applications/Alby Hub.app/Contents/Frameworks/libldk_node.dylib`; the installed executable and library hashes remained `bb431b3a378690ed055697704865be0039e0e56d01b545f2c6c58706ec6ea89c` and `6e12519aa3ebdc88399990f6f46aa1054b636d48f78d19e7978ff2f9a1e4e21d`.
+- All three channels were online. Immediately before the retry, outgoing channel `255349693497905514942651862984333935477` for peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c` had `989,340 sats` spendable; incoming Kraken channel `86157859664272214382561858939519142638` for peer `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485` had `840,498 sats` receiving capacity.
+- One unchanged non-paying quote request used principal `500,000 sats`, provider-fee cap `2,500 sats`, routing-fee cap `1,000 sats`, and maximum possible debit `503,500 sats`. The `Execute locked` control remained disabled.
+- The provider returned HTTP `422` with the safely parsed exact reason `no_route_found`. The application log recorded only the status and sanitized reason; it did not log the invoice or request body.
+- After rejection, the selected channel balances remained `989,340 sats` spendable and `840,498 sats` receivable. The database returned `integrity_check = ok`, `rebalance_quotes=0`, `apps=12`, `app_permissions=94`, and `user_configs=16`. No reviewable quote was created, no provider invoice was paid, and no sats moved.
+
+Consequence:
+
+- The nested-reason parser is proven in the installed desktop application. The current provider cannot quote the exact `500,000-sat` return path through Kraken at this time.
+- This result is provider/path availability evidence, not proof that another amount, fee cap, provider, or time would succeed. Do not alter or retry any of those parameters automatically.
+- Because no quote exists, there is no action-specific payment packet to approve. Payment execution remains hard-locked and the incoming-channel atomicity gate remains unresolved.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:
