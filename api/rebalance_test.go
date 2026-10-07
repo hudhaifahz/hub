@@ -49,6 +49,11 @@ func TestRebalanceProviderErrorIncludesStructuredReason(t *testing.T) {
 	require.EqualError(t, err, "rebalance quote provider returned HTTP 422: requested route is unavailable")
 }
 
+func TestRebalanceProviderErrorIncludesNestedErrorMessage(t *testing.T) {
+	err := rebalanceProviderError(422, []byte(`{"error":{"name":"Error","message":"no_route_found"}}`))
+	require.EqualError(t, err, "rebalance quote provider returned HTTP 422: no_route_found")
+}
+
 func TestRebalanceProviderErrorRedactsInvoice(t *testing.T) {
 	err := rebalanceProviderError(422, []byte(`{"error":"failed to route lnbc1sensitiveinvoice"}`))
 	require.EqualError(t, err, "rebalance quote provider returned HTTP 422: failed to route [redacted invoice]")
