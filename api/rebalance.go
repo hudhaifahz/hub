@@ -288,7 +288,20 @@ func safeRebalanceProviderReason(body []byte) string {
 		}
 		var reason string
 		if err := json.Unmarshal(raw, &reason); err != nil {
-			continue
+			if key != "error" {
+				continue
+			}
+			var nested map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &nested); err != nil {
+				continue
+			}
+			for _, nestedKey := range []string{"message", "detail", "reason"} {
+				nestedRaw, ok := nested[nestedKey]
+				if !ok || json.Unmarshal(nestedRaw, &reason) != nil || reason == "" {
+					continue
+				}
+				break
+			}
 		}
 		reason = strings.TrimSpace(strings.Map(func(r rune) rune {
 			if r == '\n' || r == '\r' || r == '\t' {
