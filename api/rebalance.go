@@ -398,6 +398,92 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 	return response, nil
 }
 
+// acquireLocalRebalanceQuoteForExecution performs the durable compare-and-set that must precede
+// any future value-moving backend call. The quote's complete persisted route material is
+// re-fingerprinted first, then only the exact still-quoted, unexpired record can transition to
+// executing. A crash after this transition is fail-closed: the quote cannot be acquired again.
+func (api *api) acquireLocalRebalanceQuoteForExecution(
+	quoteId string, expectedRouteFingerprint string, now time.Time,
+) (*db.LocalRebalanceQuote, error) {
+	if quoteId == "" {
+		return nil, errors.New("quote ID is required")
+	}
+	if expectedRouteFingerprint == "" {
+		return nil, errors.New("route fingerprint is required")
+	}
+	now = now.UTC()
+
+	var quote db.LocalRebalanceQuote
+	if err := api.db.First(&quote, "id = ?", quoteId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("local rebalance quote was not found")
+		}
+		return nil, fmt.Errorf("failed to load local rebalance quote: %w", err)
+	}
+	if quote.State != "quoted" {
+		return nil, fmt.Errorf("local rebalance quote is not executable in state %s", quote.State)
+	}
+	if !now.Before(quote.ExpiresAt) {
+		result := api.db.Model(&db.LocalRebalanceQuote{}).
+			Where("id = ? AND state = ?", quote.ID, "quoted").
+			Updates(map[string]interface{}{
+				"state":          "expired",
+				"failure_reason": "quote expired",
+				"updated_at":     now,
+			})
+		if result.Error != nil {
+			return nil, fmt.Errorf("failed to expire local rebalance quote: %w", result.Error)
+		}
+		return nil, errors.New("local rebalance quote has expired")
+	}
+	if quote.RouteFingerprint != expectedRouteFingerprint {
+		return nil, errors.New("local rebalance quote fingerprint does not match the reviewed route")
+	}
+
+	var paths []LocalCircularRoutePath
+	if err := json.Unmarshal([]byte(quote.RouteJson), &paths); err != nil {
+		return nil, errors.New("local rebalance quote route is invalid")
+	}
+	recomputedFingerprint, err := hashLocalRebalanceRouteMaterial(&LocalRebalanceQuoteResponse{
+		AmountMsat:                     quote.AmountMsat,
+		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:              quote.MaxRoutingFeeMsat,
+		MaxTotalDebitMsat:              quote.MaxTotalDebitMsat,
+		OutgoingChannelId:              quote.OutgoingChannelId,
+		OutgoingNodePubkey:             quote.OutgoingNodePubkey,
+		OutgoingShortChannelId:         quote.OutgoingShortChannelId,
+		IncomingChannelId:              quote.IncomingChannelId,
+		IncomingNodePubkey:             quote.IncomingNodePubkey,
+		IncomingShortChannelId:         quote.IncomingShortChannelId,
+		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
+		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
+		Paths:                          paths,
+	})
+	if err != nil || recomputedFingerprint != quote.RouteFingerprint {
+		return nil, errors.New("local rebalance quote fingerprint does not match its persisted route material")
+	}
+
+	result := api.db.Model(&db.LocalRebalanceQuote{}).
+		Where("id = ? AND state = ? AND route_fingerprint = ? AND expires_at > ?", quote.ID, "quoted", expectedRouteFingerprint, now).
+		Updates(map[string]interface{}{
+			"state":      "executing",
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to acquire local rebalance quote: %w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return nil, errors.New("local rebalance quote was already acquired or is no longer executable")
+	}
+	if err := api.db.First(&quote, "id = ?", quote.ID).Error; err != nil {
+		return nil, fmt.Errorf("failed to reload acquired local rebalance quote: %w", err)
+	}
+	if quote.State != "executing" {
+		return nil, errors.New("local rebalance quote acquisition did not persist")
+	}
+	return &quote, nil
+}
+
 // ExecuteRebalance is intentionally fail-closed. Keeping the endpoint and persisted quote contract
 // separate lets the owner review the complete action packet, but no payment can start until the
 // provider protocol has been proven atomic with pre-claim incoming-channel enforcement.
