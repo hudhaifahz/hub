@@ -100,10 +100,10 @@ Allow an owner to request a circular rebalance with:
 ### 3. Fail-closed execution stage
 
 - [x] Accept only an unexpired, unused quote identifier.
-- [ ] Re-read channel identity, state, capacity, and fee limits immediately before sending.
-- [ ] Reject any material difference rather than silently refreshing the quote.
+- [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (Covered by the dormant Rust executor; Hub execution remains locked.)
+- [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
 - [ ] Atomically mark the quote executing before calling the Lightning backend.
-- [ ] Prevent duplicate execution and concurrent rebalance operations.
+- [x] Prevent duplicate execution and concurrent rebalance operations. (The dormant executor shares the preparation lock and atomically persists a distinct outbound record before its one send action; duplicate submission is rejected before a second action.)
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
 ### 4. Outgoing first-hop enforcement
@@ -112,7 +112,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Supply only the selected `ChannelDetails` entry as `first_hops` for route finding.
 - [x] Permit downstream MPP when useful while requiring every part to share the selected first hop.
 - [x] Disable automatic retries and submit the already-verified fixed route, eliminating fallback route-finding.
-- [ ] Persist the constraint with the payment ID before the payment can start.
+- [x] Persist the constraint with the payment ID before the payment can start. (The dormant executor persists the distinct outbound payment record before invoking the fixed-route send action.)
 - [x] On missing constraint, unavailable channel, or route failure: fail with no fallback.
 - [ ] Return or publish actual successful-path evidence including each first-hop channel ID.
 - [ ] Do not implement routing control by disconnecting peers, disabling channels, manipulating fees, or temporarily hiding channels.
@@ -144,16 +144,16 @@ Allow an owner to request a circular rebalance with:
 
 ### Unit and interface tests
 
-- [ ] Exact selected channel is passed to the LDK routing layer.
+- [x] Exact selected channel is passed to the LDK routing layer. (A real three-node circular HTLC test asserts the successful path's first and final SCIDs.)
 - [ ] A cheaper alternative first hop is never used.
-- [ ] All MPP parts share the selected first hop.
-- [ ] Retry remains pinned.
+- [x] All reviewed MPP paths are required to share the selected first hop before submission. (Real executor MPP settlement remains an integration gate.)
+- [x] Retry remains pinned. (The dormant executor submits the preserved fixed route exactly once and performs no automatic route retry.)
 - [ ] Restart recovery remains pinned or fails closed.
 - [ ] Offline, unusable, insufficient, stale, expired, ambiguous, and mismatched channels are rejected. (All except execution-time stale re-read have source checks; execution is currently locked.)
 - [x] Provider fee above limit is rejected.
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
-- [ ] Duplicate execution is rejected. (No execution is currently permitted.)
-- [ ] Wrong inbound channel is rejected before claim when atomic mode is enabled.
+- [x] Duplicate execution is rejected before a second send action by the dormant executor. (No Hub execution is currently permitted.)
+- [x] Wrong inbound channel is rejected before claim by the dormant exact-channel decision and real HTLC tests. (No Hub execution is currently permitted.)
 - [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 - [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
 - [x] A rejected constrained claim updates the inbound payment record to `Failed`, and a fresh payment-store read from persisted bytes returns that failed state.
@@ -162,8 +162,8 @@ Allow an owner to request a circular rebalance with:
 
 - [ ] Build a local test topology with at least three local channels.
 - [ ] Make an unselected route cheaper and more attractive than the selected route.
-- [ ] Prove the selected source is still the only first hop.
-- [ ] Prove insufficient selected capacity fails rather than splitting across other local channels.
+- [x] Prove the selected source is still the only first hop for a real single-path circular settlement.
+- [x] Prove insufficient selected capacity fails before the dormant executor invokes its send action.
 - [ ] Prove downstream MPP remains allowed while the first hop stays pinned.
 - [ ] Interrupt and restart during a pending attempt; prove no unrestricted retry occurs.
 - [x] Restart a genuinely prepared but unsent circular operation; prove the exact pending record, preimage, channel identities, and ChannelManager state survive, no outbound payment appears, channels remain unusable until reconnection, and operation reuse is still rejected.
@@ -469,13 +469,14 @@ Resulting design constraint:
 - Owner-fork LDK source commit `fe52dfad0e78e4283302e8ada12dc7865fbde312` adds a deterministic four-node Lightning test that forces one 15,000,000-msat MPP across two distinct receiver channels. The real `PaymentClaimable` event reports two different receiving user-channel IDs; constraining the payment to either one produces `Fail`, no preimage is disclosed, both HTLC parts fail backward, and the sender reaches terminal `RecipientRejected`. Native Rust tests pass `34/34`; Rust plus UniFFI tests pass `44/44`, with only the same two pre-existing binding warnings. This test moves no live sats and does not use the installed Hub.
 - Owner-fork LDK source commit `25341602fca8a5ef14c4f5a59645ad00bd270e3d` factors the exact prepared-record construction and operation-reuse test behind the production preparation path, then creates a real fixed-amount invoice against two in-memory channels and restarts from serialized ChannelManager plus both ChannelMonitors. The invoice preimage, exact channel IDs, and byte-equivalent pending payment record survive; both channels remain unusable before reconnection; no outbound payment appears; and the production operation-reuse check still rejects the persisted operation ID. Native Rust tests pass `35/35`; Rust plus UniFFI tests pass `45/45`, with only the same two pre-existing binding warnings. This covers prepared-but-unsent restart, not interruption of an in-flight HTLC.
 - Owner-fork LDK source commit `00c82e65b022707bc94e1d6c4c1f86666c593346` closes a route-fidelity gap found before adding any send primitive. The human-readable quote omitted LDK node/channel feature bits, so rebuilding from its visible hops would not reproduce the exact reviewed route. Quotes now also carry the complete finalized LDK route bytes. The decoder requires no retry parameters or blinded tails, cross-checks total amount, total fee, every path, node, SCID, hop amount, fee, and CLTV against the visible quote, rejects trailing bytes, and preserves the original feature bits. Native Rust tests pass `36/36`; Rust plus UniFFI tests pass `46/46`, with only the same two pre-existing binding warnings. The UDL source includes the new field, but Go bindings have not been regenerated and Hub has not been rebuilt or installed.
-- Commits `45f734a`, `b8ff3e1`, `eb2ebb6`, `3087a40`, `5f43f7a`, `39dc42f`, `259d0f4`, `fe52dfa`, `2534160`, and `00c82e6` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion and complete-route preservation, persistence ordering, the dormant inbound decision guard, non-sending preparation and restart recovery, claim/fail dispatch, real single-part and mixed-channel MPP HTLC fail/claim propagation, and durable rejection state only; no live HTLC or value movement occurred.
+- Owner-fork LDK source commit `38d9450ea63e70b0df6506cad0efe70daebdad6e` adds a still-unreachable circular executor. It reloads exactly one pending prepared operation, rejects expired or mismatched invoices, re-reads both selected channels and their current SCIDs/capacities, decodes and cross-checks the complete reviewed route, requires every path to start and finish through the selected counterparties and SCIDs, persists a distinct pending outbound record before one fixed-route send action, performs no automatic retry, rejects duplicate submission before a second action, marks both legs failed on an immediate non-duplicate send error, and preserves pending state when LDK reports a recovered duplicate/in-flight payment. A real three-node circular HTLC leaves through the selected first channel, becomes claimable only on the selected incoming channel, settles successfully, and reports the reserved outbound payment ID, exact hash/preimage/amount, `2,000 msat` fee, and the selected first/final SCIDs. Native Rust tests pass `37/37`; Rust plus UniFFI tests pass `47/47`, with only the same two pre-existing binding warnings. The send method is crate-private, absent from the UDL/Go bindings, and unreachable from Hub.
+- Commits `45f734a`, `b8ff3e1`, `eb2ebb6`, `3087a40`, `5f43f7a`, `39dc42f`, `259d0f4`, `fe52dfa`, `2534160`, `00c82e6`, and `38d9450` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion and complete-route preservation, persistence ordering, the dormant inbound decision guard, non-sending preparation and restart recovery, claim/fail dispatch, real single-part and mixed-channel MPP HTLC fail/claim propagation, durable rejection state, one-action duplicate/error handling, and real single-path circular settlement only; no live HTLC or value movement occurred.
 - These changes are source-only at this checkpoint. The installed app still uses the prior quote-only build, no local quote record has been created by this new code, execution remains unavailable, and no sats moved.
 
 Consequence:
 
-- Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Exact inbound decisions, real mixed-channel MPP rejection, and prepared-but-unsent restart recovery are now covered. In-flight retry, duplicate execution, and crash/restart behavior cannot be tested until a send method exists and remain mandatory before a live executor can exist.
-- The non-sending preparation phase now meets its identified restart gate. The next implementation step is a still-unreachable circular send method that reloads the prepared record, reconstructs and revalidates the exact reviewed route, uses only its reserved outbound payment ID, and submits exactly once with zero automatic retries. It must remain unreachable from Hub while deterministic tests prove pinned first-hop behavior, allowed downstream MPP, wrong-route rejection, duplicate calls, send failures, and interruption/restart of an in-flight attempt. Nothing may be rebuilt into Hub or installed until that safety matrix passes and the owner receives a fresh action packet.
+- Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Exact inbound decisions, real mixed-channel MPP rejection, prepared-but-unsent restart recovery, duplicate pre-send rejection, immediate send-error handling, fixed-route single-path settlement, exact first/final channel evidence, and reserved outbound-ID settlement are now covered.
+- The executor must remain unreachable from Hub while deterministic tests still prove downstream MPP settlement through the pinned first hop, interruption and restart of an actual in-flight HTLC, recovered-event idempotency, and production event-handler updates of both distinct payment-store records. Hub quote consumption must also atomically transition the persisted quote before any backend send becomes reachable. Nothing may be regenerated into Go bindings, rebuilt into Hub, installed, or used for live value until that remaining safety matrix passes and the owner receives a fresh action packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
