@@ -155,6 +155,7 @@ Allow an owner to request a circular rebalance with:
 - [ ] Duplicate execution is rejected. (No execution is currently permitted.)
 - [ ] Wrong inbound channel is rejected before claim when atomic mode is enabled.
 - [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
+- [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
 
 ### Deterministic integration tests
 
@@ -457,13 +458,14 @@ Resulting design constraint:
 - The `eb2ebb6` tests exercise the complete pure claim/fail decision and persistence compatibility, but do not yet drive a real `PaymentClaimable` event against a controlled ChannelManager to independently observe `claim_funds` versus `fail_htlc_backwards` calls.
 - Owner-fork LDK source commit `3087a40a6c09b8d0be4289cc4cb93169668ba1ec` adds a non-sending circular preparation method. It takes a caller-supplied 32-byte operation binding, exact first- and last-hop user-channel IDs, exact amount, expiry, and routing-fee limit; revalidates both channels and maximum source debit; derives a domain-separated outbound payment ID; creates the inbound invoice; and returns only after persisting the invoice, preimage, operation binding, both channel constraints, fee limit, and outbound ID. Preparation is serialized by a shared process lock and persisted operation reuse is rejected after restart. The full invoice is no longer written to logs. Native Rust tests pass `30/30`; Rust plus UniFFI tests pass `40/40`, with only the two pre-existing binding warnings.
 - Commit `3087a40` exposes the preparation primitive in source bindings, but no Hub code calls it. It has no fixed-route circular send method and the installed app cannot reach it.
-- Commits `45f734a`, `b8ff3e1`, `eb2ebb6`, and `3087a40` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion, persistence ordering, the dormant inbound decision guard, and non-sending preparation only; they do not create an HTLC or move value.
+- Owner-fork LDK source commit `5f43f7a98dfa8491fe4aec126233f78d49a6450c` routes the production event-handler claim/fail calls through a small internal action adapter and tests the exact dispatch boundary with controlled counters. Exact decisions call only `claim_funds`; rejection decisions call only `fail_htlc_backwards`; unconstrained payments call neither. Native Rust tests pass `31/31`; Rust plus UniFFI tests pass `41/41`, with only the same two pre-existing binding warnings. This is not yet a multi-node Lightning settlement test and does not independently exercise the handler's failed-record persistence update.
+- Commits `45f734a`, `b8ff3e1`, `eb2ebb6`, `3087a40`, and `5f43f7a` are not yet built into `ldk-node-go`, referenced by Hub, or installed. They prove route-object conversion, persistence ordering, the dormant inbound decision guard, non-sending preparation, and claim/fail dispatch only; they do not create an HTLC or move value.
 - These changes are source-only at this checkpoint. The installed app still uses the prior quote-only build, no local quote record has been created by this new code, execution remains unavailable, and no sats moved.
 
 Consequence:
 
 - Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Wrong-channel failure-before-claim, MPP behavior, retry, duplicate execution, and crash/restart recovery still require deterministic tests before a live executor can exist.
-- The next implementation slice is a controlled event-handler test that independently observes `claim_funds` for the exact incoming channel and `fail_htlc_backwards` for wrong, mixed, unidentified, empty, stale, or malformed cases. After that, a still-unreachable circular send method must reload the prepared record, reconstruct and revalidate the exact reviewed route, use only its reserved outbound payment ID, and submit exactly once with zero automatic retries. Nothing may be rebuilt into Hub or installed until this deterministic safety matrix passes and the owner receives a fresh action packet.
+- The remaining pre-send test gate is a deterministic multi-node topology that independently exercises real HTLC arrival, wrong-channel backward failure, exact-channel claim, payment-store state, and restart behavior. After that, a still-unreachable circular send method must reload the prepared record, reconstruct and revalidate the exact reviewed route, use only its reserved outbound payment ID, and submit exactly once with zero automatic retries. Nothing may be rebuilt into Hub or installed until this deterministic safety matrix passes and the owner receives a fresh action packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
