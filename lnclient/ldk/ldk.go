@@ -858,6 +858,7 @@ func (ls *LDKService) QuoteCircularRoute(amountMsat uint64, firstHopChannelID st
 		LastHopChannelId:       quote.LastHopUserChannelId,
 		LastHopShortChannelId:  quote.LastHopShortChannelId,
 		Paths:                  paths,
+		RouteBytes:             append([]byte(nil), quote.RouteBytes...),
 	}, nil
 }
 

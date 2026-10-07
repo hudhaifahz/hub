@@ -135,6 +135,7 @@ type CircularRouteQuote struct {
 	LastHopChannelId       string
 	LastHopShortChannelId  uint64
 	Paths                  []CircularRoutePath
+	RouteBytes             []byte
 }
 
 type Channel struct {

@@ -42,6 +42,7 @@ func Migrate(gormDB *gorm.DB) error {
 		_202610060100_rebalance_quotes,
 		_202610060200_local_rebalance_quotes,
 		_202610070100_single_local_rebalance_execution,
+		_202610070200_local_rebalance_route_bytes,
 	})
 
 	return m.Migrate()
@@ -51,18 +52,21 @@ type sqlDialectDef struct {
 	Timestamp               string
 	AutoincrementPrimaryKey string
 	DropTableCascade        string
+	Binary                  string
 }
 
 var sqlDialectSqlite = sqlDialectDef{
 	Timestamp:               "datetime",
 	AutoincrementPrimaryKey: "INTEGER PRIMARY KEY AUTOINCREMENT",
 	DropTableCascade:        "",
+	Binary:                  "blob",
 }
 
 var sqlDialectPostgres = sqlDialectDef{
 	Timestamp:               "timestamptz",
 	AutoincrementPrimaryKey: "SERIAL PRIMARY KEY",
 	DropTableCascade:        "CASCADE",
+	Binary:                  "bytea",
 }
 
 func getDialect(tx *gorm.DB) *sqlDialectDef {
