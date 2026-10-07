@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -164,6 +165,60 @@ func TestAcquireLocalRebalanceQuoteForExecutionIsAtomicAndSingleUse(t *testing.T
 	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
 	require.Equal(t, "executing", persisted.State)
 	require.Nil(t, persisted.ExecutedAt)
+}
+
+func TestAcquireLocalRebalanceQuoteForExecutionAllowsOnlyOneExecutingQuote(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	const contenders = 8
+	quotes := make([]db.LocalRebalanceQuote, 0, contenders)
+	fingerprints := make([]string, 0, contenders)
+	for i := 0; i < contenders; i++ {
+		quote, fingerprint := testPersistedLocalRebalanceQuote(
+			t,
+			fmt.Sprintf("distinct-quote-%d", i),
+			now.Add(time.Minute),
+		)
+		require.NoError(t, gormDB.Create(&quote).Error)
+		quotes = append(quotes, quote)
+		fingerprints = append(fingerprints, fingerprint)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, contenders)
+	var waitGroup sync.WaitGroup
+	for i := 0; i < contenders; i++ {
+		waitGroup.Add(1)
+		go func(index int) {
+			defer waitGroup.Done()
+			<-start
+			_, acquireErr := theAPI.acquireLocalRebalanceQuoteForExecution(
+				quotes[index].ID,
+				fingerprints[index],
+				now,
+			)
+			results <- acquireErr
+		}(i)
+	}
+	close(start)
+	waitGroup.Wait()
+	close(results)
+
+	successes := 0
+	for acquireErr := range results {
+		if acquireErr == nil {
+			successes++
+		}
+	}
+	require.Equal(t, 1, successes)
+	var executingCount int64
+	require.NoError(t, gormDB.Model(&db.LocalRebalanceQuote{}).Where("state = ?", "executing").Count(&executingCount).Error)
+	require.Equal(t, int64(1), executingCount)
 }
 
 func TestAcquireLocalRebalanceQuoteForExecutionRejectsMismatchExpiryAndTampering(t *testing.T) {
