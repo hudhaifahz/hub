@@ -281,6 +281,9 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 	if len(quote.Paths) == 0 {
 		return nil, errors.New("local route quote returned no paths")
 	}
+	if len(quote.RouteBytes) == 0 {
+		return nil, errors.New("local route quote returned no executable route bytes")
+	}
 
 	paths := make([]LocalCircularRoutePath, 0, len(quote.Paths))
 	var quotedAmountMsat uint64
@@ -351,6 +354,7 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		ExpiresAt:                      expiresAt,
 		ExecutionEnabled:               false,
 		BlockedReason:                  errLocalRebalanceExecutionDisabled.Error(),
+		routeBytes:                     append([]byte(nil), quote.RouteBytes...),
 	}
 	quoteId, err := randomQuoteId()
 	if err != nil {
@@ -389,6 +393,7 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
 		RouteJson:                      string(routeJSON),
+		RouteBytes:                     append([]byte(nil), response.routeBytes...),
 		ExpiresAt:                      expiresAt,
 	}
 	if err := api.db.Create(&localQuote).Error; err != nil {
@@ -439,6 +444,9 @@ func (api *api) acquireLocalRebalanceQuoteForExecution(
 	if quote.RouteFingerprint != expectedRouteFingerprint {
 		return nil, errors.New("local rebalance quote fingerprint does not match the reviewed route")
 	}
+	if len(quote.RouteBytes) == 0 {
+		return nil, errors.New("local rebalance quote has no executable route bytes")
+	}
 
 	var paths []LocalCircularRoutePath
 	if err := json.Unmarshal([]byte(quote.RouteJson), &paths); err != nil {
@@ -458,6 +466,7 @@ func (api *api) acquireLocalRebalanceQuoteForExecution(
 		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
 		Paths:                          paths,
+		routeBytes:                     append([]byte(nil), quote.RouteBytes...),
 	})
 	if err != nil || recomputedFingerprint != quote.RouteFingerprint {
 		return nil, errors.New("local rebalance quote fingerprint does not match its persisted route material")
@@ -694,6 +703,7 @@ func hashLocalRebalanceRouteMaterial(quote *LocalRebalanceQuoteResponse) (string
 		OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
 		IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
 		Paths                          []LocalCircularRoutePath `json:"paths"`
+		RouteBytes                     []byte                   `json:"routeBytes"`
 	}{
 		AmountMsat:                     quote.AmountMsat,
 		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
@@ -708,6 +718,7 @@ func hashLocalRebalanceRouteMaterial(quote *LocalRebalanceQuoteResponse) (string
 		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
 		Paths:                          quote.Paths,
+		RouteBytes:                     quote.routeBytes,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fingerprint local rebalance route: %w", err)

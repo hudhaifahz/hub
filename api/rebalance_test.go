@@ -98,6 +98,26 @@ func TestLocalRebalanceRouteFingerprintBindsEveryHop(t *testing.T) {
 	require.NotEqual(t, originalFingerprint, changedFingerprint)
 }
 
+func TestLocalRebalanceRouteFingerprintBindsExecutableRouteBytes(t *testing.T) {
+	original := testLocalRebalanceQuoteResponse()
+	originalFingerprint, err := hashLocalRebalanceRouteMaterial(original)
+	require.NoError(t, err)
+
+	changed := testLocalRebalanceQuoteResponse()
+	changed.routeBytes[1] ^= 0xff
+	changedFingerprint, err := hashLocalRebalanceRouteMaterial(changed)
+	require.NoError(t, err)
+
+	require.NotEqual(t, originalFingerprint, changedFingerprint)
+}
+
+func TestLocalRebalanceQuoteResponseDoesNotExposeExecutableRouteBytes(t *testing.T) {
+	encoded, err := json.Marshal(testLocalRebalanceQuoteResponse())
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "routeBytes")
+	require.NotContains(t, string(encoded), "AQIDBA==")
+}
+
 func TestLocalRebalanceRouteFingerprintBindsExactChannelsAndAmounts(t *testing.T) {
 	original := testLocalRebalanceQuoteResponse()
 	originalFingerprint, err := hashLocalRebalanceRouteMaterial(original)
@@ -250,6 +270,14 @@ func TestAcquireLocalRebalanceQuoteForExecutionRejectsMismatchExpiryAndTampering
 	require.ErrorContains(t, err, "persisted route material")
 	require.NoError(t, gormDB.First(&tampered, "id = ?", tampered.ID).Error)
 	require.Equal(t, "quoted", tampered.State)
+
+	tamperedRoute, tamperedRouteFingerprint := testPersistedLocalRebalanceQuote(t, "tampered-route", now.Add(time.Minute))
+	tamperedRoute.RouteBytes[0] ^= 0xff
+	require.NoError(t, gormDB.Create(&tamperedRoute).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(tamperedRoute.ID, tamperedRouteFingerprint, now)
+	require.ErrorContains(t, err, "persisted route material")
+	require.NoError(t, gormDB.First(&tamperedRoute, "id = ?", tamperedRoute.ID).Error)
+	require.Equal(t, "quoted", tamperedRoute.State)
 }
 
 func testPersistedLocalRebalanceQuote(
@@ -279,6 +307,7 @@ func testPersistedLocalRebalanceQuote(
 		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
 		RouteJson:                      string(routeJSON),
+		RouteBytes:                     append([]byte(nil), response.routeBytes...),
 		ExpiresAt:                      expiresAt,
 	}, fingerprint
 }
@@ -297,6 +326,7 @@ func testLocalRebalanceQuoteResponse() *LocalRebalanceQuoteResponse {
 		IncomingShortChannelId:         "202",
 		OutgoingSpendableSnapshotMsat:  989_340_000,
 		IncomingReceivableSnapshotMsat: 840_710_000,
+		routeBytes:                     []byte{0x01, 0x02, 0x03, 0x04},
 		Paths: []LocalCircularRoutePath{{
 			AmountMsat: 20_000_000,
 			FeeMsat:    17_062,

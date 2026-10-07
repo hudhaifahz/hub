@@ -170,6 +170,7 @@ type LocalRebalanceQuote struct {
 	OutgoingSpendableSnapshotMsat  uint64
 	IncomingReceivableSnapshotMsat uint64
 	RouteJson                      string
+	RouteBytes                     []byte
 	ExpiresAt                      time.Time
 	CreatedAt                      time.Time
 	UpdatedAt                      time.Time
