@@ -318,6 +318,24 @@ Consequence:
 - Ad-hoc post-build signing must explicitly preserve `build/darwin/entitlements.plist`; signature validity alone does not prove the app will use the existing sandbox container.
 - The quote and backend-enforcement rollout gate remains open until the owner unlocks the corrected build and the same exact-channel non-paying quote succeeds. Payment execution remains disabled independently of that pending test.
 
+### 2026-10-06 — Exact-channel quote reached the provider and was rejected
+
+Observed:
+
+- The owner unlocked the installed diagnostic build from Hub commit `3ddb44d9147166d119e52c360951b419e9e570f4`. Its executable SHA-256 is `ffbfbd8ce73346365d14de1771384bccc21c8cbe6079fe41d6f45e61b95df835`; the archived bundle is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-3ddb44d9.zip` with SHA-256 `b70224f28d7cf964e38b8bf42a838a0945f6974da32600fc9d5f26214a774f0a`.
+- All three channels were online immediately before the test. The exact outgoing channel `255349693497905514942651862984333935477` for peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c` showed `989,340 sats` spendable. The exact incoming Kraken channel `86157859664272214382561858939519142638` for peer `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485` showed `840,498 sats` receiving capacity.
+- One non-paying quote request used principal `500,000 sats`, provider-fee cap `2,500 sats`, routing-fee cap `1,000 sats`, and maximum possible debit `503,500 sats`. The UI's `Execute locked` control remained disabled throughout.
+- The request passed the Wails router and local channel/capacity checks, reached the external rebalance provider, and returned HTTP `422`. The installed diagnostic build displayed no provider reason because the provider's known error shape nests its message below `error.message`, while commit `3ddb44d9` only accepted top-level string fields.
+- Historical responses from the same provider endpoint use the nested reason `no_route_found`. That makes route unavailability the leading explanation for this `422`, but it is an inference rather than a captured reason from this exact request.
+- After the rejection, the source and destination channel balances remained `989,340 sats` spendable and `840,498 sats` receivable. The database returned `integrity_check = ok`, `rebalance_quotes=0`, `apps=12`, `app_permissions=94`, and `user_configs=16`. No provider invoice was paid, no quote was persisted, and no sats moved.
+- Hub commit `e88a9e4067c907072823d9a35b2e58d29e0e9426` safely parses `error.message`, `error.detail`, or `error.reason` while retaining invoice redaction, control-character filtering, and length limits. API, Wails, and HTTP tests pass; the pre-existing Bark macOS deployment-target warnings remain. This parser commit is source-only and is not installed in the running app.
+
+Consequence:
+
+- The desktop routing defect is closed: a quote request now reaches the provider. The current exact `500,000-sat` Kraken-return quote is unavailable at the provider boundary, so no reviewable quote exists.
+- Do not reduce the amount, change either channel, increase either fee cap, or retry automatically. Any follow-up quote must be a separately reasoned non-paying test using fresh channel state.
+- Payment execution remains hard-locked. The provider rejection does not change the unresolved incoming-channel atomicity gate and does not authorize a value-moving rebalance.
+
 ### 2026-10-05 — Hub quote and review implementation
 
 Observed:
