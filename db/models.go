@@ -149,6 +149,33 @@ type RebalanceQuote struct {
 	FailureReason                  string
 }
 
+// LocalRebalanceQuote is a non-paying, expiring record of an exact circular route review.
+// It contains no invoice, preimage, HTLC, or other payment authorization material.
+type LocalRebalanceQuote struct {
+	ID                             string `gorm:"primaryKey"`
+	State                          string
+	RequestHash                    string
+	RouteFingerprint               string
+	AmountMsat                     uint64
+	TotalRoutingFeeMsat            uint64
+	MaxRoutingFeeMsat              uint64
+	MaxTotalDebitMsat              uint64
+	OutgoingChannelId              string
+	OutgoingNodePubkey             string
+	OutgoingShortChannelId         string
+	IncomingChannelId              string
+	IncomingNodePubkey             string
+	IncomingShortChannelId         string
+	OutgoingSpendableSnapshotMsat  uint64
+	IncomingReceivableSnapshotMsat uint64
+	RouteJson                      string
+	ExpiresAt                      time.Time
+	CreatedAt                      time.Time
+	UpdatedAt                      time.Time
+	ExecutedAt                     *time.Time
+	FailureReason                  string
+}
+
 const (
 	REQUEST_EVENT_STATE_HANDLER_EXECUTING = "executing"
 	REQUEST_EVENT_STATE_HANDLER_EXECUTED  = "executed"

@@ -204,8 +204,8 @@ func (api *api) QuoteRebalance(ctx context.Context, request *QuoteRebalanceReque
 }
 
 // QuoteLocalRebalance constructs and validates a candidate circular route using exact local
-// first- and last-hop channels. It is deliberately side-effect free: no provider request, invoice,
-// database row, probe, HTLC, or payment is created.
+// first- and last-hop channels. It persists only an expiring review record: no provider request,
+// invoice, probe, HTLC, or payment is created.
 func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalRebalanceRequest) (*LocalRebalanceQuoteResponse, error) {
 	lnClient := api.svc.GetLNClient()
 	if lnClient == nil {
@@ -333,7 +333,8 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		return nil, errors.New("local route quote debit overflow")
 	}
 
-	return &LocalRebalanceQuoteResponse{
+	expiresAt := time.Now().UTC().Add(rebalanceQuoteLifetime)
+	response := &LocalRebalanceQuoteResponse{
 		AmountMsat:                     quote.AmountMsat,
 		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
 		MaxRoutingFeeMsat:              request.MaxRoutingFeeMsat,
@@ -347,9 +348,54 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		OutgoingSpendableSnapshotMsat:  uint64(outgoing.LocalSpendableBalanceMsat),
 		IncomingReceivableSnapshotMsat: uint64(incoming.RemoteBalanceMsat),
 		Paths:                          paths,
+		ExpiresAt:                      expiresAt,
 		ExecutionEnabled:               false,
 		BlockedReason:                  errLocalRebalanceExecutionDisabled.Error(),
-	}, nil
+	}
+	quoteId, err := randomQuoteId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local quote ID: %w", err)
+	}
+	requestHash, err := hashLocalRebalanceRequest(request)
+	if err != nil {
+		return nil, err
+	}
+	routeFingerprint, err := hashLocalRebalanceRouteMaterial(response)
+	if err != nil {
+		return nil, err
+	}
+	routeJSON, err := json.Marshal(paths)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode local rebalance route: %w", err)
+	}
+	response.QuoteId = quoteId
+	response.RouteFingerprint = routeFingerprint
+
+	localQuote := db.LocalRebalanceQuote{
+		ID:                             quoteId,
+		State:                          "quoted",
+		RequestHash:                    requestHash,
+		RouteFingerprint:               routeFingerprint,
+		AmountMsat:                     response.AmountMsat,
+		TotalRoutingFeeMsat:            response.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:              response.MaxRoutingFeeMsat,
+		MaxTotalDebitMsat:              response.MaxTotalDebitMsat,
+		OutgoingChannelId:              response.OutgoingChannelId,
+		OutgoingNodePubkey:             response.OutgoingNodePubkey,
+		OutgoingShortChannelId:         response.OutgoingShortChannelId,
+		IncomingChannelId:              response.IncomingChannelId,
+		IncomingNodePubkey:             response.IncomingNodePubkey,
+		IncomingShortChannelId:         response.IncomingShortChannelId,
+		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
+		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
+		RouteJson:                      string(routeJSON),
+		ExpiresAt:                      expiresAt,
+	}
+	if err := api.db.Create(&localQuote).Error; err != nil {
+		return nil, fmt.Errorf("failed to persist local rebalance quote: %w", err)
+	}
+
+	return response, nil
 }
 
 // ExecuteRebalance is intentionally fail-closed. Keeping the endpoint and persisted quote contract
@@ -531,6 +577,54 @@ func hashQuoteMaterial(request *QuoteRebalanceRequest, orderId string, receivePa
 	}{request, orderId, receivePaymentHash, paymentHash})
 	if err != nil {
 		return "", fmt.Errorf("failed to hash rebalance quote: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func hashLocalRebalanceRequest(request *QuoteLocalRebalanceRequest) (string, error) {
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash local rebalance request: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	return hex.EncodeToString(hash[:]), nil
+}
+
+// hashLocalRebalanceRouteMaterial fingerprints every field that could affect a later fixed-route
+// execution. Quote identity, expiry, and UI-only lock text are intentionally separate record data.
+func hashLocalRebalanceRouteMaterial(quote *LocalRebalanceQuoteResponse) (string, error) {
+	encoded, err := json.Marshal(struct {
+		AmountMsat                     uint64                   `json:"amountMsat"`
+		TotalRoutingFeeMsat            uint64                   `json:"totalRoutingFeeMsat"`
+		MaxRoutingFeeMsat              uint64                   `json:"maxRoutingFeeMsat"`
+		MaxTotalDebitMsat              uint64                   `json:"maxTotalDebitMsat"`
+		OutgoingChannelId              string                   `json:"outgoingChannelId"`
+		OutgoingNodePubkey             string                   `json:"outgoingNodePubkey"`
+		OutgoingShortChannelId         string                   `json:"outgoingShortChannelId"`
+		IncomingChannelId              string                   `json:"incomingChannelId"`
+		IncomingNodePubkey             string                   `json:"incomingNodePubkey"`
+		IncomingShortChannelId         string                   `json:"incomingShortChannelId"`
+		OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
+		IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
+		Paths                          []LocalCircularRoutePath `json:"paths"`
+	}{
+		AmountMsat:                     quote.AmountMsat,
+		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:              quote.MaxRoutingFeeMsat,
+		MaxTotalDebitMsat:              quote.MaxTotalDebitMsat,
+		OutgoingChannelId:              quote.OutgoingChannelId,
+		OutgoingNodePubkey:             quote.OutgoingNodePubkey,
+		OutgoingShortChannelId:         quote.OutgoingShortChannelId,
+		IncomingChannelId:              quote.IncomingChannelId,
+		IncomingNodePubkey:             quote.IncomingNodePubkey,
+		IncomingShortChannelId:         quote.IncomingShortChannelId,
+		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
+		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
+		Paths:                          quote.Paths,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to fingerprint local rebalance route: %w", err)
 	}
 	hash := sha256.Sum256(encoded)
 	return hex.EncodeToString(hash[:]), nil

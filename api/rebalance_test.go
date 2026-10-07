@@ -63,3 +63,84 @@ func TestRebalanceProviderErrorIgnoresUnstructuredBody(t *testing.T) {
 	err := rebalanceProviderError(422, []byte(`provider rejected lnbc1sensitiveinvoice`))
 	require.EqualError(t, err, "rebalance quote provider returned HTTP 422")
 }
+
+func TestLocalRebalanceRouteFingerprintIsDeterministic(t *testing.T) {
+	quote := testLocalRebalanceQuoteResponse()
+
+	first, err := hashLocalRebalanceRouteMaterial(quote)
+	require.NoError(t, err)
+	second, err := hashLocalRebalanceRouteMaterial(quote)
+	require.NoError(t, err)
+
+	require.Equal(t, first, second)
+	require.Len(t, first, 64)
+}
+
+func TestLocalRebalanceRouteFingerprintBindsEveryHop(t *testing.T) {
+	original := testLocalRebalanceQuoteResponse()
+	originalFingerprint, err := hashLocalRebalanceRouteMaterial(original)
+	require.NoError(t, err)
+
+	changed := testLocalRebalanceQuoteResponse()
+	changed.Paths[0].Hops[1].ShortChannelId = "999"
+	changedFingerprint, err := hashLocalRebalanceRouteMaterial(changed)
+	require.NoError(t, err)
+
+	require.NotEqual(t, originalFingerprint, changedFingerprint)
+}
+
+func TestLocalRebalanceRouteFingerprintBindsExactChannelsAndAmounts(t *testing.T) {
+	original := testLocalRebalanceQuoteResponse()
+	originalFingerprint, err := hashLocalRebalanceRouteMaterial(original)
+	require.NoError(t, err)
+
+	tests := map[string]func(*LocalRebalanceQuoteResponse){
+		"amount": func(quote *LocalRebalanceQuoteResponse) { quote.AmountMsat++ },
+		"fee":    func(quote *LocalRebalanceQuoteResponse) { quote.TotalRoutingFeeMsat++ },
+		"outgoing channel": func(quote *LocalRebalanceQuoteResponse) {
+			quote.OutgoingChannelId = "other-outgoing"
+		},
+		"incoming channel": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingChannelId = "other-incoming"
+		},
+		"final scid": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingShortChannelId = "998"
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			changed := testLocalRebalanceQuoteResponse()
+			mutate(changed)
+			changedFingerprint, err := hashLocalRebalanceRouteMaterial(changed)
+			require.NoError(t, err)
+			require.NotEqual(t, originalFingerprint, changedFingerprint)
+		})
+	}
+}
+
+func testLocalRebalanceQuoteResponse() *LocalRebalanceQuoteResponse {
+	return &LocalRebalanceQuoteResponse{
+		AmountMsat:                     20_000_000,
+		TotalRoutingFeeMsat:            17_062,
+		MaxRoutingFeeMsat:              1_000_000,
+		MaxTotalDebitMsat:              20_017_062,
+		OutgoingChannelId:              "source-channel",
+		OutgoingNodePubkey:             "02source",
+		OutgoingShortChannelId:         "101",
+		IncomingChannelId:              "kraken-channel",
+		IncomingNodePubkey:             "02kraken",
+		IncomingShortChannelId:         "202",
+		OutgoingSpendableSnapshotMsat:  989_340_000,
+		IncomingReceivableSnapshotMsat: 840_710_000,
+		Paths: []LocalCircularRoutePath{{
+			AmountMsat: 20_000_000,
+			FeeMsat:    17_062,
+			Hops: []LocalCircularRouteHop{
+				{NodePubkey: "02source", ShortChannelId: "101", FeeMsat: 10_000, CltvDelta: 40},
+				{NodePubkey: "02middle", ShortChannelId: "150", FeeMsat: 7_062, CltvDelta: 40},
+				{NodePubkey: "02kraken", ShortChannelId: "175", CltvDelta: 40},
+				{NodePubkey: "02local", ShortChannelId: "202"},
+			},
+		}},
+	}
+}

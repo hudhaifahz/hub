@@ -45,6 +45,8 @@ type LocalRoutePath = {
 };
 
 type RebalanceQuote = {
+  quoteId: string;
+  routeFingerprint: string;
   amountMsat: number;
   totalRoutingFeeMsat: number;
   maxRoutingFeeMsat: number;
@@ -58,6 +60,7 @@ type RebalanceQuote = {
   outgoingSpendableSnapshotMsat: number;
   incomingReceivableSnapshotMsat: number;
   paths: LocalRoutePath[];
+  expiresAt: string;
   executionEnabled: boolean;
   blockedReason: string;
 };
@@ -133,7 +136,8 @@ export function RebalanceChannelDialogContent({
             <div className="space-y-4 text-left">
               <p>
                 Choose both exact channels. This searches the local routing
-                graph only; it creates no invoice, probe, HTLC, or payment.
+                graph and saves an expiring review record; it creates no
+                invoice, probe, HTLC, or payment.
               </p>
 
               <div className="space-y-2">
@@ -252,6 +256,13 @@ export function RebalanceChannelDialogContent({
                     </dd>
                   </dl>
                   <div className="rounded-md bg-muted p-3 text-xs">
+                    <div className="break-all">Quote ID: {quote.quoteId}</div>
+                    <div className="break-all">
+                      Route fingerprint: {quote.routeFingerprint}
+                    </div>
+                    <div>
+                      Expires: {new Date(quote.expiresAt).toLocaleString()}
+                    </div>
                     <div className="break-all">
                       First hop SCID: {quote.outgoingShortChannelId}
                     </div>

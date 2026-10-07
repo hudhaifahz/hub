@@ -87,6 +87,16 @@ Allow an owner to request a circular rebalance with:
 - [x] Persist a single-use quote with an expiry and a hash of all material parameters.
 - [x] Return a human-readable review packet; do not initiate payment.
 
+### 2A. Local exact-route quote record
+
+- [x] Persist each successful local route quote as a separate five-minute review record.
+- [x] Give the record a random quote ID and a deterministic SHA-256 route fingerprint.
+- [x] Bind the fingerprint to exact channel IDs, peer pubkeys, first/final SCIDs, every path and hop, principal, quoted fee, fee cap, maximum debit, and channel balance snapshots.
+- [x] Store the complete reviewed path as JSON and verify the record survives supported database migration.
+- [x] Keep invoice, payment hash, preimage, probe, HTLC, and payment authorization material out of the quote record.
+- [x] Display quote ID, fingerprint, and expiry in the review UI while execution remains disabled.
+- [ ] Require any future executor to reload this record, reject expiry or fingerprint mismatch, and consume it at most once.
+
 ### 3. Fail-closed execution stage
 
 - [x] Accept only an unexpired, unused quote identifier.
@@ -421,6 +431,28 @@ Installed verification state:
 - The quote estimated `17,062 msat` (`17.062 sats`) in routing fees and an exact maximum source debit of `20,017,062 msat` (`20,017.062 sats`). Its one five-hop path was: `030ef18b…` via SCID `1065615883472404481`; `03a5c38d…` via `1058901166039629824`; `026f4620…` via `1066657121068449793`; Kraken `02437c00…` via `1059283795959676929`; and this Hub `02503706…` via exact Kraken final SCID `1065603788758843392`.
 - Immediate independent readback showed the source unchanged at `989,340 sats` spendable and Kraken unchanged at `138,629 sats` spendable plus `840,710 sats` receiving capacity. `nwc.db` returned `integrity_check = ok`, `rebalance_quotes=0`, `apps=12`, `app_permissions=94`, and `user_configs=16`. The execute control remained disabled; no invoice, provider order, probe, quote row, HTLC, payment, or sat movement occurred.
 - This is proof that the current local graph and scorer can construct a route pinned to both selected local channel identifiers at that moment. It is not proof of live intermediate liquidity, settlement, retry safety, or incoming-channel atomicity, so execution remains locked.
+
+### 2026-10-06 — Durable local quote binding and circular-payment design finding
+
+Observed:
+
+- The quote-only router reaches a synthetic terminal because ordinary LDK pathfinding rejects payer-equals-payee routes. The returned review replaces only the displayed synthetic terminal identity with the real local node; the internal route is not yet a valid payment route and must not be sent as-is.
+- LDK's fixed-route send accepts an already constructed route and disables automatic routing retries. This is suitable for preserving the exact reviewed path, but it does not by itself solve circular inbound settlement.
+- The current LDK-node event handler deliberately fails a `PaymentClaimable` event when the payment-store entry for that hash is outbound, logging that circular payments are unsupported.
+- LDK's manual `receive_for_hash` flow can register an inbound hash without revealing its preimage and exposes all receiving channel IDs at claim time. A distinct outbound payment ID would avoid replacing that inbound payment-store record.
+
+Resulting design constraint:
+
+- A future executor must create and durably register the inbound payment hash before sending, keep the preimage unavailable to the network, submit only the approved fixed route, and claim only after every inbound MPP part reports the exact Kraken channel. Any other incoming channel must fail backward without revealing the preimage.
+- The preimage, quote binding, state transition, and restart recovery must be durable before the first HTLC is sent. The storage mechanism must preserve the node's existing encryption and secret-handling boundaries; plaintext application logging or source storage is forbidden.
+- A successful quote is now persisted for five minutes in `local_rebalance_quotes` with a random quote ID, full route JSON, request hash, and SHA-256 fingerprint over all execution-relevant route material. The review UI shows its ID, fingerprint, and expiry.
+- Fingerprint tests prove deterministic output and mutation detection for hop SCID, exact channels, principal, fee, and final SCID. Database migration tests prove the quote record is copied between supported databases. The complete Go test suite, frontend lint/type checks, and the Wails frontend production build pass; only the pre-existing dependency build warnings remain.
+- These changes are source-only at this checkpoint. The installed app still uses the prior quote-only build, no local quote record has been created by this new code, execution remains unavailable, and no sats moved.
+
+Consequence:
+
+- Quote persistence closes the review-to-execution identity gap, but it does not authorize payment. Wrong-channel failure-before-claim, MPP behavior, retry, duplicate execution, and crash/restart recovery still require deterministic tests before a live executor can exist.
+- The next implementation slice is the encrypted, persisted inbound-hash/preimage state machine and its fail-before-claim tests. It must remain unreachable from the installed UI until the complete deterministic safety matrix passes and the owner receives a fresh action packet.
 
 ### 2026-10-05 — Hub quote and review implementation
 
