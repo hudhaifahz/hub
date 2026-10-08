@@ -51,6 +51,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Custom Rust routing enforcement is replayed on `getAlby/ldk-node` commit `74daaf9` as owner-fork commit `057b73d`.
 - [x] Generated Go bindings and a release-mode arm64/x86_64 macOS library are replayed on `getAlby/ldk-node-go` commit `5ba434093284` as owner-fork commit `e7dd77f`.
 - [x] Hub resolves the upgraded owner-fork binding as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261006232835-e7dd77fda90e`.
+- [x] Crash-safe prepared-send recovery is versioned as owner-fork LDK commit `77c0454`, rebuilt into owner-fork Go binding commit `958ddc6`, and pinned by the Hub as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008200336-958ddc682bfd`.
 - [x] The obsolete `v1.24.0` frontend lockfile snapshot was intentionally skipped so it cannot overwrite `v1.24.1` dependency/security updates.
 
 ## Version-control checklist
@@ -104,7 +105,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (Covered by the dormant Rust executor; Hub execution remains locked.)
 - [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
 - [x] Atomically mark the quote executing before calling the Lightning backend. (The required dormant acquisition primitive is implemented and concurrency-tested; no Lightning backend call is wired or reachable yet.)
-- [x] Prevent duplicate execution and concurrent rebalance operations. (The dormant executor shares the preparation lock and atomically persists a distinct outbound record before its one send action; duplicate submission is rejected before a second action.)
+- [x] Prevent duplicate execution and concurrent rebalance operations. (The dormant executor shares the preparation lock, uses a deterministic outbound payment ID, and makes same-operation recovery idempotent: an already tracked payment returns the same ID, while an untracked persisted send can retry only the same fixed route and ID; LDK `DuplicatePayment` is treated as proof of the existing payment, not permission to create another.)
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
 ### 4. Outgoing first-hop enforcement
@@ -149,11 +150,11 @@ Allow an owner to request a circular rebalance with:
 - [ ] A cheaper alternative first hop is never used.
 - [x] All reviewed MPP paths are required to share the selected first hop before submission, and a real executor test settles two downstream branches through that same local first hop.
 - [x] Retry remains pinned. (The dormant executor submits the preserved fixed route exactly once and performs no automatic route retry.)
-- [x] Restart recovery remains pinned or fails closed. (The reloaded in-flight payment resumes through channel reestablishment rather than route finding, while duplicate executor submission is rejected before its send closure.)
+- [x] Restart recovery remains pinned or fails closed. (The reloaded in-flight payment is recognized by deterministic ID, hash, amount, invoice, exact channel constraints, and ChannelManager state; it returns the existing ID without route finding. A persisted-but-untracked send may resubmit only the identical serialized route and payment ID, and LDK rejects any duplicate HTLC.)
 - [ ] Offline, unusable, insufficient, stale, expired, ambiguous, and mismatched channels are rejected. (All except execution-time stale re-read have source checks; execution is currently locked.)
 - [x] Provider fee above limit is rejected.
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
-- [x] Duplicate execution is rejected before a second send action by the dormant executor. (No Hub execution is currently permitted.)
+- [x] Duplicate execution is idempotent without creating a second HTLC. Matching pending or succeeded state returns the deterministic outbound ID; mismatched hash, amount, channel binding, invoice, fee cap, contradictory status, abandoned state, or unknown payment type fails closed. (No Hub execution is currently permitted.)
 - [x] Wrong inbound channel is rejected before claim by the dormant exact-channel decision and real HTLC tests. (No Hub execution is currently permitted.)
 - [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 - [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
@@ -166,7 +167,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Prove the selected source is still the only first hop for a real single-path circular settlement.
 - [x] Prove insufficient selected capacity fails before the dormant executor invokes its send action.
 - [x] Prove downstream MPP remains allowed while the first hop stays pinned. (A five-node, two-part circular payment branches only after the selected source peer, reconverges before the selected destination peer, and reports the same exact first and final SCIDs for both successful paths.)
-- [x] Interrupt and restart during a pending attempt; prove no unrestricted retry occurs. (The node is reloaded after the fixed-route sender durably commits the outbound HTLC but before the first peer receives it; channel reestablishment retransmits that same HTLC and the circular payment settles through the selected final channel.)
+- [x] Interrupt and restart during a pending attempt; prove no unrestricted retry occurs. (The node is reloaded after the fixed-route sender durably commits the outbound HTLC but before the first peer receives it; recovery identifies that exact in-flight payment, a direct same-ID resend returns `DuplicatePayment` without adding a monitor or HTLC, channel reestablishment retransmits the original HTLC, and settlement uses the selected final channel.)
 - [x] Restart a genuinely prepared but unsent circular operation; prove the exact pending record, preimage, channel identities, and ChannelManager state survive, no outbound payment appears, channels remain unusable until reconnection, and operation reuse is still rejected.
 - [x] Deliver a real in-memory HTLC with a mismatched required incoming channel; prove it is failed backward and the sender observes failure.
 - [x] Deliver a second real in-memory HTLC with the exact reported incoming channel; prove it is claimed and the sender observes success.
@@ -502,3 +503,21 @@ Consequence:
 
 - The current source can be reviewed and can produce a non-paying quote, but it is intentionally not a value-moving feature.
 - The focused quote-acquisition tests, full API/Wails/HTTP tests, and complete Go repository suite pass. The new acquisition code is committed and pushed but has not been regenerated into bindings, connected to the dormant Rust executor, built, installed, or exercised with live value.
+
+### 2026-10-08 — Crash-safe same-operation send recovery
+
+Observed:
+
+- Owner-fork LDK commit `77c0454` closes the remaining outbound-record/ChannelManager crash boundary for a prepared circular operation. Recovery derives the same domain-separated outbound payment ID and cross-checks the persisted inbound and outbound records against the exact operation ID, payment hash, preimage, secret, invoice, amount, fee cap, outgoing user-channel ID, and incoming user-channel ID.
+- If ChannelManager already reports the matching payment as pending or fulfilled, the public prepared-send call returns the existing outbound payment ID before any new send call. Wrong hash, wrong amount, abandoned state, unknown payment type, contradictory persisted status, or any record mismatch fails closed.
+- If the outbound record was persisted but ChannelManager does not track it, recovery can reach only the existing fixed-route builder. That builder decodes and revalidates the stored route bytes and both selected channel identities, then submits the identical route with the identical payment ID. An LDK `DuplicatePayment` response is treated as recovery of the existing operation and does not mark either leg failed.
+- The real in-flight restart test reloads ChannelManager and both selected ChannelMonitors, confirms the exact deterministic ID/hash/amount is still tracked, and proves a direct same-route/same-ID resend returns `DuplicatePayment` without adding a monitor or second HTLC. The original HTLC then settles through the exact selected final channel.
+- Native Rust tests pass `39/39`; Rust plus UniFFI tests pass `49/49`. The only binding-build output is the two pre-existing warnings.
+- Owner-fork Go binding commit `958ddc6` contains the rebuilt stripped universal arm64/x86_64 macOS library from LDK commit `77c0454`. Its size is `43,162,496` bytes, SHA-256 is `ad3c898505db401a5fd6dbb8f2b231c8c16bb1d14c6abfa6735f29cb8668c231`, and `go test ./...` passes.
+- The Hub pins that artifact as `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008200336-958ddc682bfd`; the complete Hub Go suite passes. The existing Bark macOS deployment-target linker warnings remain unchanged.
+- No Hub executor orchestration was wired, no desktop build was installed or restarted, no invoice or HTLC was created outside the in-memory tests, and no sats moved.
+
+Consequence:
+
+- The LDK layer now has a tested, idempotent answer for both sides of the dangerous crash boundary: an already-committed payment is returned without another send, while a durable-but-unsent record may retry only the exact stored route with the exact same deterministic ID.
+- Hub execution remains hard-locked. Before it can be considered for installation, the Hub still needs a deterministic operation ID and durable state machine that joins quote acquisition, preparation, exact-route submission, recovery, terminal recording, and rollback/failure transitions without reopening route selection. That orchestration requires its own tests and review; it is not authorized by this source checkpoint.
