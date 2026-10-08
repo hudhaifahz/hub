@@ -1,6 +1,6 @@
 # Pinned Channel Rebalance Reference Plan
 
-Status: implementation in progress; quote review is enabled in source, payment execution is hard-locked. No live rebalance is authorized by this plan.
+Status: implementation in progress; quote review is enabled in source and crash-safe execution orchestration is testable only through an unexported runner. HTTP, Wails, and UI payment execution remain hard-locked. No live rebalance is authorized by this plan.
 
 This document is the durable checklist and learning log for adding fail-closed channel routing to the Alby Hub rebalance flow. Update it whenever implementation evidence changes an assumption. Do not mark an item complete from code presence alone; require the stated verification evidence.
 
@@ -20,10 +20,10 @@ Allow an owner to request a circular rebalance with:
 
 - [ ] Channel labels are display-only. Bind decisions to stable channel identity plus full counterparty pubkey.
 - [x] Every outgoing MPP part uses the selected local channel as its first hop. (A real two-part circular settlement uses the same selected first-hop SCID for both successful paths.)
-- [ ] Retries remain pinned. A retry must never fall back to another local channel.
+- [x] Retries remain pinned. The same deterministic operation and outbound payment IDs can recover only the same stored fixed route; no pathfinding fallback is available.
 - [x] Restart recovery remains pinned or fails closed; it must never resume as an unrestricted payment. (A real fixed-route HTLC survives ChannelManager/ChannelMonitor reload, retransmits only its already-committed selected route, and rejects a second executor send.)
 - [ ] Selected-channel offline, unusable, ambiguous, or insufficient states stop execution.
-- [ ] A changed or expired quote stops execution and requires a new review.
+- [x] A changed quote stops execution. An expired unacquired quote cannot execute; an already-acquired expired quote can only recover a preparation that LDK previously persisted and cannot create a new invoice.
 - [ ] Provider fees and routing fees have separate exact limits.
 - [ ] No unknown or unbounded fee is payable.
 - [ ] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic.
@@ -51,7 +51,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Custom Rust routing enforcement is replayed on `getAlby/ldk-node` commit `74daaf9` as owner-fork commit `057b73d`.
 - [x] Generated Go bindings and a release-mode arm64/x86_64 macOS library are replayed on `getAlby/ldk-node-go` commit `5ba434093284` as owner-fork commit `e7dd77f`.
 - [x] Hub resolves the upgraded owner-fork binding as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261006232835-e7dd77fda90e`.
-- [x] Crash-safe prepared-send recovery is versioned as owner-fork LDK commit `77c0454`, rebuilt into owner-fork Go binding commit `958ddc6`, and pinned by the Hub as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008200336-958ddc682bfd`.
+- [x] Crash-safe prepared-send recovery is versioned as owner-fork LDK commit `77c0454`. Idempotent preparation recovery and recovery-only expired preparation are completed by commits `104945e`, `5ad80b0`, and `4096ee5`. The exact final binary is owner-fork Go binding commit `81c07a4`, pinned by the Hub as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201853-81c07a4acff0`.
 - [x] The obsolete `v1.24.0` frontend lockfile snapshot was intentionally skipped so it cannot overwrite `v1.24.1` dependency/security updates.
 
 ## Version-control checklist
@@ -104,8 +104,9 @@ Allow an owner to request a circular rebalance with:
 - [x] Accept only an unexpired, unused quote identifier.
 - [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (Covered by the dormant Rust executor; Hub execution remains locked.)
 - [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
-- [x] Atomically mark the quote executing before calling the Lightning backend. (The required dormant acquisition primitive is implemented and concurrency-tested; no Lightning backend call is wired or reachable yet.)
-- [x] Prevent duplicate execution and concurrent rebalance operations. (The dormant executor shares the preparation lock, uses a deterministic outbound payment ID, and makes same-operation recovery idempotent: an already tracked payment returns the same ID, while an untracked persisted send can retry only the same fixed route and ID; LDK `DuplicatePayment` is treated as proof of the existing payment, not permission to create another.)
+- [x] Atomically mark the quote executing before calling the Lightning backend. (The dormant acquisition primitive assigns a deterministic operation ID and persists `acquired`, `prepared`, and `submitted` phases; it remains unexported and unreachable from HTTP, Wails, and UI entrypoints.)
+- [x] Prevent duplicate execution and concurrent rebalance operations. (Hub retries reuse the exact operation, payment hash, and outbound payment ID; LDK returns an already tracked payment or retries only the same persisted fixed route and ID. A duplicate LDK result is proof of the existing operation, not permission to create another.)
+- [ ] Reconcile durable terminal Lightning events into one final Hub success or failure state before releasing the single-operation execution slot.
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
 ### 4. Outgoing first-hop enforcement
@@ -155,6 +156,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Provider fee above limit is rejected.
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
 - [x] Duplicate execution is idempotent without creating a second HTLC. Matching pending or succeeded state returns the deterministic outbound ID; mismatched hash, amount, channel binding, invoice, fee cap, contradictory status, abandoned state, or unknown payment type fails closed. (No Hub execution is currently permitted.)
+- [x] Hub preparation and submission recovery persist deterministic operation, hash, and outbound IDs across every Hub-side phase. Retrying `submitted` makes no backend call; retrying after simulated post-send/pre-database uncertainty reuses the same IDs; expired acquisition passes an explicit recovery-only expiry of zero; missing prior preparation stops before send.
 - [x] Wrong inbound channel is rejected before claim by the dormant exact-channel decision and real HTLC tests. (No Hub execution is currently permitted.)
 - [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 - [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
@@ -521,3 +523,20 @@ Consequence:
 
 - The LDK layer now has a tested, idempotent answer for both sides of the dangerous crash boundary: an already-committed payment is returned without another send, while a durable-but-unsent record may retry only the exact stored route with the exact same deterministic ID.
 - Hub execution remains hard-locked. Before it can be considered for installation, the Hub still needs a deterministic operation ID and durable state machine that joins quote acquisition, preparation, exact-route submission, recovery, terminal recording, and rollback/failure transitions without reopening route selection. That orchestration requires its own tests and review; it is not authorized by this source checkpoint.
+
+### 2026-10-08 — Idempotent preparation and dormant Hub orchestration
+
+Observed:
+
+- Owner-fork LDK commits `104945e`, `5ad80b0`, and `4096ee5` make circular preparation idempotently recoverable. The same exact operation returns the previously persisted invoice and identifiers; changed amount, channel bindings, or fee cap fail closed. An expiry of zero is recovery-only: it can return an existing preparation but cannot create a new invoice.
+- Native Rust tests pass `39/39` and Rust plus UniFFI tests pass `49/49` at LDK commit `4096ee5`.
+- Owner-fork Go binding commit `81c07a4` contains the rebuilt stripped universal arm64/x86_64 macOS library from LDK commit `4096ee5`. Its size is `43,178,936` bytes, SHA-256 is `6c0e34777e14bb3416f736d153ca7fdd7ef2316c4161ba957e11b3815f1c0e46`, and `go test ./...` passes.
+- Hub pins that exact artifact as `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201853-81c07a4acff0` and adds a database migration for deterministic operation ID, execution phase, prepared payment hash, outbound payment ID, and preparation/submission timestamps.
+- The Hub runner derives its operation ID from the quote ID and reviewed route fingerprint, re-fingerprints the complete persisted route before every resume, validates LDK's returned amount, fee cap, user-channel IDs, SCIDs, payment hash, and independently derived outbound payment ID, and persists `acquired`, `prepared`, and `submitted` using compare-and-set transitions.
+- Tests cover normal preparation/submission, no backend call after a durable `submitted` phase, same-operation retry after simulated post-send/pre-database uncertainty, expired recovery with expiry zero, refusal to create a missing expired preparation, wrong incoming-channel preparation, and tampered submitted identifiers.
+- The runner is unexported and referenced only by tests. The existing HTTP, Wails, and UI execution paths remain hard-locked. No desktop app was built, installed, restarted, or unlocked; no live invoice or HTLC was created; no sats moved.
+
+Consequence:
+
+- Hub now has a reviewable crash-safe source model through the submission boundary without exposing a value-moving control. It cannot silently switch channels, create a second operation after expiry, or generate a new route during recovery.
+- The remaining source blocker is terminal reconciliation: consume durable Lightning success/failure evidence, verify the exact operation and both legs, write one terminal Hub state idempotently, and only then release the database's single active-operation slot. Until that is implemented and independently tested, the dormant runner must stay unreachable and no build containing it should be installed for live use.

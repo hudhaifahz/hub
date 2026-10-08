@@ -170,9 +170,15 @@ type LocalRebalanceQuote struct {
 	IncomingReceivableSnapshotMsat uint64
 	RouteJson                      string
 	RouteBytes                     []byte
+	OperationId                    string
+	ExecutionPhase                 string
+	PreparedPaymentHash            string
+	OutboundPaymentId              string
 	ExpiresAt                      time.Time
 	CreatedAt                      time.Time
 	UpdatedAt                      time.Time
+	PreparedAt                     *time.Time
+	SubmittedAt                    *time.Time
 	ExecutedAt                     *time.Time
 	FailureReason                  string
 }

@@ -68,6 +68,7 @@ type LDKService struct {
 
 var _ lnclient.PinnedPaymentClient = (*LDKService)(nil)
 var _ lnclient.CircularRouteQuoter = (*LDKService)(nil)
+var _ lnclient.PreparedCircularPaymentClient = (*LDKService)(nil)
 
 const resetRouterKey = "ResetRouter"
 const maxInvoiceExpiry = 24 * time.Hour
@@ -860,6 +861,85 @@ func (ls *LDKService) QuoteCircularRoute(amountMsat uint64, firstHopChannelID st
 		Paths:                  paths,
 		RouteBytes:             append([]byte(nil), quote.RouteBytes...),
 	}, nil
+}
+
+// PrepareCircularPayment durably registers the inbound leg without sending a payment. Retrying
+// the same exact operation recovers the existing preparation; changed parameters fail closed.
+func (ls *LDKService) PrepareCircularPayment(amountMsat uint64, expirySeconds uint32, operationID string, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.PreparedCircularPayment, error) {
+	if len(operationID) != 64 {
+		return nil, errors.New("circular payment operation ID must be 32 bytes")
+	}
+	if _, err := hex.DecodeString(operationID); err != nil {
+		return nil, errors.New("circular payment operation ID must be hexadecimal")
+	}
+	description := ldk_node.Bolt11InvoiceDescriptionDirect{
+		Description: "Alby Hub exact-channel circular rebalance",
+	}
+	prepared, err := ls.node.Bolt11Payment().PrepareCircularPayment(
+		amountMsat,
+		description,
+		expirySeconds,
+		operationID,
+		firstHopChannelID,
+		lastHopChannelID,
+		maxRoutingFeeMsat,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("LDK could not prepare the exact circular payment: %w", err)
+	}
+	return &lnclient.PreparedCircularPayment{
+		PaymentHash:            prepared.PaymentHash,
+		OperationID:            prepared.OperationId,
+		OutboundPaymentID:      prepared.OutboundPaymentId,
+		AmountMsat:             prepared.AmountMsat,
+		MaxRoutingFeeMsat:      prepared.MaxRoutingFeeMsat,
+		FirstHopChannelID:      prepared.FirstHopUserChannelId,
+		FirstHopShortChannelID: prepared.FirstHopShortChannelId,
+		LastHopChannelID:       prepared.LastHopUserChannelId,
+		LastHopShortChannelID:  prepared.LastHopShortChannelId,
+	}, nil
+}
+
+// SendPreparedCircularPayment submits only the complete route bytes and exact path summary that
+// were previously reviewed and persisted. LDK performs the final route and channel cross-checks.
+func (ls *LDKService) SendPreparedCircularPayment(operationID string, quote *lnclient.CircularRouteQuote) (string, error) {
+	if quote == nil {
+		return "", errors.New("circular route quote is required")
+	}
+	paths := make([]ldk_node.CircularRoutePath, 0, len(quote.Paths))
+	for _, path := range quote.Paths {
+		hops := make([]ldk_node.CircularRouteHop, 0, len(path.Hops))
+		for _, hop := range path.Hops {
+			hops = append(hops, ldk_node.CircularRouteHop{
+				NodeId:          hop.NodeId,
+				ShortChannelId:  hop.ShortChannelId,
+				FeeMsat:         hop.FeeMsat,
+				CltvExpiryDelta: hop.CltvExpiryDelta,
+			})
+		}
+		paths = append(paths, ldk_node.CircularRoutePath{
+			Hops:       hops,
+			AmountMsat: path.AmountMsat,
+			FeeMsat:    path.FeeMsat,
+		})
+	}
+	outboundPaymentID, err := ls.node.Bolt11Payment().SendPreparedCircularPayment(
+		operationID,
+		ldk_node.CircularRouteQuote{
+			AmountMsat:             quote.AmountMsat,
+			TotalRoutingFeeMsat:    quote.TotalRoutingFeeMsat,
+			FirstHopUserChannelId:  quote.FirstHopChannelId,
+			FirstHopShortChannelId: quote.FirstHopShortChannelId,
+			LastHopUserChannelId:   quote.LastHopChannelId,
+			LastHopShortChannelId:  quote.LastHopShortChannelId,
+			Paths:                  paths,
+			RouteBytes:             append([]byte(nil), quote.RouteBytes...),
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("LDK could not submit the exact prepared circular payment: %w", err)
+	}
+	return outboundPaymentID, nil
 }
 
 func (ls *LDKService) SendKeysend(amountMsat uint64, destination string, custom_records []lnclient.TLVRecord, preimage string) (*lnclient.PayKeysendResponse, error) {
