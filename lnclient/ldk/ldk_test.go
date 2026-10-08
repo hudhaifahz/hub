@@ -1,12 +1,16 @@
 package ldk
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 	"testing"
 
 	"github.com/getAlby/ldk-node-go/ldk_node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getAlby/hub/lnclient"
 	"github.com/getAlby/hub/tests"
 )
 
@@ -130,6 +134,180 @@ func TestComputeLsps2MinPaymentSizeMsat(t *testing.T) {
 		_, ok := computeLsps2MinPaymentSizeMsat(params)
 		assert.False(t, ok)
 	})
+}
+
+func testCircularPaymentRecords(
+	inboundStatus ldk_node.PaymentStatus,
+	outboundStatus ldk_node.PaymentStatus,
+	includeOutbound bool,
+) (*ldk_node.PaymentDetails, *ldk_node.PaymentDetails, string, string, string) {
+	stringPointer := func(value string) *string { return &value }
+	uint64Pointer := func(value uint64) *uint64 { return &value }
+	preimage := strings.Repeat("11", 32)
+	preimageBytes, _ := hex.DecodeString(preimage)
+	paymentHashBytes := sha256.Sum256(preimageBytes)
+	paymentHash := hex.EncodeToString(paymentHashBytes[:])
+	operationID := strings.Repeat("22", 32)
+	operationBytes, _ := hex.DecodeString(operationID)
+	outboundMaterial := append([]byte("ldk-node circular outbound payment id v1"), operationBytes...)
+	outboundIDBytes := sha256.Sum256(outboundMaterial)
+	outboundPaymentID := hex.EncodeToString(outboundIDBytes[:])
+	secret := strings.Repeat("33", 32)
+	invoice := "test-circular-invoice"
+	firstHopChannelID := "source-channel"
+	lastHopChannelID := "kraken-channel"
+	maxRoutingFeeMsat := uint64(1_000_000)
+	amountMsat := uint64(20_000_000)
+
+	inbound := &ldk_node.PaymentDetails{
+		Id: paymentHash,
+		Kind: ldk_node.PaymentKindBolt11{
+			Hash:                       paymentHash,
+			Preimage:                   stringPointer(preimage),
+			Secret:                     stringPointer(secret),
+			Bolt11Invoice:              stringPointer(invoice),
+			RequiredReceivingChannelId: stringPointer(lastHopChannelID),
+			RequiredSendingChannelId:   stringPointer(firstHopChannelID),
+			CircularOperationId:        stringPointer(operationID),
+			CircularOutboundPaymentId:  stringPointer(outboundPaymentID),
+			CircularMaxRoutingFeeMsat:  uint64Pointer(maxRoutingFeeMsat),
+		},
+		AmountMsat:            uint64Pointer(amountMsat),
+		Direction:             ldk_node.PaymentDirectionInbound,
+		Status:                inboundStatus,
+		LatestUpdateTimestamp: 100,
+	}
+	if !includeOutbound {
+		return inbound, nil, operationID, paymentHash, outboundPaymentID
+	}
+	outboundKind := ldk_node.PaymentKindBolt11{
+		Hash:                       paymentHash,
+		Secret:                     stringPointer(secret),
+		Bolt11Invoice:              stringPointer(invoice),
+		RequiredReceivingChannelId: stringPointer(lastHopChannelID),
+		RequiredSendingChannelId:   stringPointer(firstHopChannelID),
+		CircularOperationId:        stringPointer(operationID),
+		CircularOutboundPaymentId:  stringPointer(outboundPaymentID),
+		CircularMaxRoutingFeeMsat:  uint64Pointer(maxRoutingFeeMsat),
+	}
+	var feePaidMsat *uint64
+	if outboundStatus == ldk_node.PaymentStatusSucceeded {
+		outboundKind.Preimage = stringPointer(preimage)
+		feePaidMsat = uint64Pointer(17_062)
+	}
+	outbound := &ldk_node.PaymentDetails{
+		Id:                    outboundPaymentID,
+		Kind:                  outboundKind,
+		AmountMsat:            uint64Pointer(amountMsat),
+		FeePaidMsat:           feePaidMsat,
+		Direction:             ldk_node.PaymentDirectionOutbound,
+		Status:                outboundStatus,
+		LatestUpdateTimestamp: 101,
+	}
+	return inbound, outbound, operationID, paymentHash, outboundPaymentID
+}
+
+func reconcileTestCircularPayment(
+	inbound *ldk_node.PaymentDetails,
+	outbound *ldk_node.PaymentDetails,
+	operationID string,
+	paymentHash string,
+	outboundPaymentID string,
+) (*lnclient.CircularPaymentReconciliation, error) {
+	return reconcileCircularPaymentRecords(
+		inbound,
+		outbound,
+		operationID,
+		paymentHash,
+		outboundPaymentID,
+		20_000_000,
+		17_062,
+		1_000_000,
+		"source-channel",
+		"kraken-channel",
+	)
+}
+
+func TestReconcileCircularPaymentRecordsRequiresTwoMatchingTerminalLegs(t *testing.T) {
+	inbound, outbound, operationID, paymentHash, outboundPaymentID := testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	reconciliation, err := reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStateSucceeded, reconciliation.State)
+	require.Equal(t, uint64(17_062), *reconciliation.ActualRoutingFeeMsat)
+	require.Equal(t, uint64(101), reconciliation.LatestUpdateTimestamp)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStateFailed, reconciliation.State)
+	require.Nil(t, reconciliation.ActualRoutingFeeMsat)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusPending,
+		ldk_node.PaymentStatusPending,
+		false,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStatePending, reconciliation.State)
+	require.Equal(t, "missing", reconciliation.OutboundPaymentStatus)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusPending,
+		true,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStatePending, reconciliation.State)
+}
+
+func TestReconcileCircularPaymentRecordsRejectsContradictionsAndTampering(t *testing.T) {
+	inbound, outbound, operationID, paymentHash, outboundPaymentID := testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	_, err := reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "contradictory terminal outcomes")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	outboundKind := outbound.Kind.(ldk_node.PaymentKindBolt11)
+	wrongChannel := "wrong-channel"
+	outboundKind.RequiredReceivingChannelId = &wrongChannel
+	outbound.Kind = outboundKind
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "outbound payment binding is invalid")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	wrongFee := uint64(17_063)
+	outbound.FeePaidMsat = &wrongFee
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "exact terminal fee")
+
+	inbound, _, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusPending,
+		false,
+	)
+	_, err = reconcileTestCircularPayment(inbound, nil, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "terminal circular inbound payment has no outbound record")
 }
 
 func TestSanitizeChainEndpointForBitcoind(t *testing.T) {
