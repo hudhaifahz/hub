@@ -109,6 +109,26 @@ Allow an owner to request a circular rebalance with:
 - [ ] Reconcile durable terminal Lightning events into one final Hub success or failure state before releasing the single-operation execution slot.
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
+### 3A. Terminal reconciliation proof and acceptance criteria
+
+The durable LDK payment store, not event delivery or UI state, is the terminal authority. Production handling writes `PaymentClaimed`, `PaymentSent`, and `PaymentFailed` payment-store updates before adding the corresponding user event to the durable event queue. A restarted Hub can therefore reconcile from records even if notification delivery was interrupted.
+
+The reconciler must reload both records by their independently persisted IDs and accept them only when all immutable bindings agree: operation ID, inbound payment hash, deterministic outbound payment ID, amount, exact outgoing and incoming user-channel IDs, routing-fee limit, BOLT 11 type, and opposite inbound/outbound directions. Success additionally requires both records to be `Succeeded`, the same nonempty preimage, and an actual outbound fee equal to the fixed reviewed route fee and no greater than its cap.
+
+Allowed status matrix:
+
+| Inbound | Outbound | Hub result |
+| --- | --- | --- |
+| Pending | missing | remain `executing`; preparation exists but no durable send record is proven |
+| Pending or Succeeded | Pending | remain `executing`; settlement is unresolved |
+| Succeeded | Succeeded | atomically record `succeeded` with exact amount, fee, identifiers, and terminal timestamp |
+| Failed | Failed | atomically record `failed` with a bounded reason and terminal timestamp |
+| Any other combination | Any other combination | fail closed as contradictory; retain the active lock for investigation |
+
+The LDK failure handler must make a circular failure two-legged before Hub may accept it: after validating the outbound record's circular metadata, persist the matching inbound record as `Failed` in the same replayable event-handling turn. A persistence error causes event replay rather than partial terminal acceptance.
+
+Hub terminal writes must compare-and-set only the exact `executing` operation in `prepared` or `submitted`. Replaying identical evidence returns the existing terminal row unchanged. Changed or contradictory evidence is rejected. The database's single-active-operation index is released only by a successfully persisted terminal transition.
+
 ### 4. Outgoing first-hop enforcement
 
 - [x] Add a pinned-payment capability to the LDK dependency and its Go binding.
@@ -219,6 +239,10 @@ Decision: the pinned LDK payment computes a route from a singleton first-hop lis
 ### 2026-10-05 — Quote enabled, execution locked
 
 Decision: the source may create and persist a non-paying provider quote, but both the legacy one-step API and the new execute endpoint fail closed. The UI displays the exact action packet and a locked execution control until incoming-channel atomicity is independently proven.
+
+### 2026-10-08 — Terminal truth comes from two durable payment records
+
+Decision: neither a single Lightning event nor one successful leg can close a circular operation. Hub may record success only after exact-bound, persisted inbound and outbound records both report success with the same preimage and exact reviewed fee. It may record failure only after both records report failure. Pending, missing, or contradictory combinations retain the active execution lock. Terminal writes are idempotent compare-and-set transitions, and event delivery is diagnostic rather than authoritative.
 
 ## Learning log
 
