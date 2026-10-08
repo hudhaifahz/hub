@@ -1,6 +1,6 @@
 # Pinned Channel Rebalance Reference Plan
 
-Status: implementation in progress; quote review is enabled in source, while crash-safe execution and terminal reconciliation are testable only through unexported helpers. HTTP, Wails, and UI payment execution remain hard-locked. No live rebalance is authorized by this plan.
+Status: source implementation and deterministic verification are complete through owner confirmation, exact-route submission, restart recovery, and two-leg terminal reconciliation. HTTP, Wails, and UI execution exist only in the uninstalled source build at commit `587f7837`; the currently installed application has not been replaced. No live rebalance is authorized by this plan.
 
 This document is the durable checklist and learning log for adding fail-closed channel routing to the Alby Hub rebalance flow. Update it whenever implementation evidence changes an assumption. Do not mark an item complete from code presence alone; require the stated verification evidence.
 
@@ -18,15 +18,15 @@ Allow an owner to request a circular rebalance with:
 
 ## Safety invariants
 
-- [ ] Channel labels are display-only. Bind decisions to stable channel identity plus full counterparty pubkey.
+- [x] Channel labels are display-only. Bind decisions to stable channel identity plus full counterparty pubkey.
 - [x] Every outgoing MPP part uses the selected local channel as its first hop. (A real two-part circular settlement uses the same selected first-hop SCID for both successful paths.)
 - [x] Retries remain pinned. The same deterministic operation and outbound payment IDs can recover only the same stored fixed route; no pathfinding fallback is available.
 - [x] Restart recovery remains pinned or fails closed; it must never resume as an unrestricted payment. (A real fixed-route HTLC survives ChannelManager/ChannelMonitor reload, retransmits only its already-committed selected route, and rejects a second executor send.)
-- [ ] Selected-channel offline, unusable, ambiguous, or insufficient states stop execution.
+- [x] Selected-channel offline, unusable, ambiguous, or insufficient states stop execution.
 - [x] A changed quote stops execution. An expired unacquired quote cannot execute; an already-acquired expired quote can only recover a preparation that LDK previously persisted and cannot create a new invoice.
-- [ ] Provider fees and routing fees have separate exact limits.
-- [ ] No unknown or unbounded fee is payable.
-- [ ] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic.
+- [x] Provider fees and routing fees have separate exact limits. (The provider flow remains locked; the enabled local circular path has no provider fee and has a distinct exact routing-fee cap.)
+- [x] No unknown or unbounded fee is payable.
+- [x] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic. (The local self-payment rejects a wrong or mixed incoming channel before claim; the provider flow remains locked.)
 - [x] Only one rebalance operation may execute at a time. (A database-level partial unique index permits at most one local quote in `executing`, including races between different valid quote IDs.)
 - [ ] A live rebalance always requires a fresh, action-specific owner approval packet.
 - [ ] Tests, builds, deployment, UI presence, live execution, and economic success are reported as separate states.
@@ -83,8 +83,8 @@ Allow an owner to request a circular rebalance with:
 
 - [x] Create a provider order and decode its invoice without paying it.
 - [x] Validate network, amount, provider-fee ceiling, expiry, and payment identity.
-- [ ] Snapshot selected channel identities, usability, capacities, reserves, and balances. (Identity, usability, spendable, and receivable values are captured; explicit reserve fields remain.)
-- [ ] Calculate the maximum possible source debit and expected post-action ranges. (Maximum debit is implemented; explicit post-action ranges remain.)
+- [x] Snapshot selected channel identities, usability, capacities, reserves, and balances. (Both channels' local/remote balances and local/counterparty reserves are fingerprint-bound.)
+- [x] Calculate the maximum possible source debit and expected post-action ranges. (The review shows the fixed-route debit and projected outgoing/incoming local, remote, and spendable balances.)
 - [x] Persist a single-use quote with an expiry and a hash of all material parameters.
 - [x] Return a human-readable review packet; do not initiate payment.
 
@@ -96,17 +96,17 @@ Allow an owner to request a circular rebalance with:
 - [x] Store the complete reviewed path as JSON and verify the record survives supported database migration.
 - [x] Persist the complete encoded LDK route separately from the UI path, bind it into the route fingerprint, reject missing or altered route bytes, and never expose those opaque bytes in the review response.
 - [x] Keep invoice, payment hash, preimage, probe, HTLC, and payment authorization material out of the quote record.
-- [x] Display quote ID, fingerprint, and expiry in the review UI while execution remains disabled.
-- [x] Require any future executor to reload this record, reject expiry or fingerprint mismatch, and consume it at most once. (The dormant Hub acquisition primitive re-fingerprints persisted route material and uses an atomic `quoted` to `executing` compare-and-set.)
+- [x] Display quote ID, fingerprint, quote time, expiry, exact channels, route, fee, balance/reserve snapshot, and projections in the review UI.
+- [x] Require the executor to reload this record, reject expiry or fingerprint mismatch, and consume it at most once. (The Hub acquisition primitive re-fingerprints persisted route material and uses an atomic `quoted` to `executing` compare-and-set.)
 
 ### 3. Fail-closed execution stage
 
 - [x] Accept only an unexpired, unused quote identifier.
-- [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (Covered by the dormant Rust executor; Hub execution remains locked.)
-- [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
-- [x] Atomically mark the quote executing before calling the Lightning backend. (The dormant acquisition primitive assigns a deterministic operation ID and persists `acquired`, `prepared`, and `submitted` phases; it remains unexported and unreachable from HTTP, Wails, and UI entrypoints.)
+- [x] Re-read channel identity, state, capacity, and fee limits immediately before sending. (The fixed-route executor performs the execution-time checks after owner confirmation.)
+- [x] Reject any material difference rather than silently refreshing the quote. (The executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, snapshot, and serialized-route mismatches.)
+- [x] Atomically mark the quote executing before calling the Lightning backend. (The owner-facing orchestration assigns a deterministic operation ID and persists `acquired`, `prepared`, and `submitted` phases.)
 - [x] Prevent duplicate execution and concurrent rebalance operations. (Hub retries reuse the exact operation, payment hash, and outbound payment ID; LDK returns an already tracked payment or retries only the same persisted fixed route and ID. A duplicate LDK result is proof of the existing operation, not permission to create another.)
-- [x] Reconcile durable terminal Lightning payment-store records into one final Hub success or failure state before releasing the single-operation execution slot. (Implemented by dormant Hub commit `59b6e750`; no endpoint, Wails method, or UI control can invoke it.)
+- [x] Reconcile durable terminal Lightning payment-store records into one final Hub success or failure state before releasing the single-operation execution slot. (HTTP/Wails status calls are read/reconcile-only and the UI polls only after exact submission.)
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
 ### 3A. Terminal reconciliation proof and acceptance criteria
@@ -138,10 +138,10 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [x] Supply only the selected `ChannelDetails` entry as `first_hops` for route finding.
 - [x] Permit downstream MPP when useful while requiring every part to share the selected first hop.
 - [x] Disable automatic retries and submit the already-verified fixed route, eliminating fallback route-finding.
-- [x] Persist the constraint with the payment ID before the payment can start. (The dormant executor persists the distinct outbound payment record before invoking the fixed-route send action.)
+- [x] Persist the constraint with the payment ID before the payment can start. (The executor persists the distinct outbound payment record before invoking the fixed-route send action.)
 - [x] On missing constraint, unavailable channel, or route failure: fail with no fallback.
-- [ ] Return or publish actual successful-path evidence including each first-hop channel ID.
-- [ ] Do not implement routing control by disconnecting peers, disabling channels, manipulating fees, or temporarily hiding channels.
+- [ ] Return or publish actual live successful-path evidence including each first-hop channel ID. (Deterministic real-HTLC tests prove every tested path's first/final SCIDs, but no live operation has occurred.)
+- [x] Do not implement routing control by disconnecting peers, disabling channels, manipulating fees, or temporarily hiding channels.
 
 ### 5. Incoming-channel enforcement and atomicity gate
 
@@ -149,22 +149,22 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [x] Add a backward-compatible, persisted exact receiving-channel constraint to an inbound BOLT 11 payment record.
 - [x] Add a fail-closed claim decision that requires pending state, exact amount, a persisted preimage, and a nonempty set of MPP parts all reporting the exact selected channel.
 - [x] Add a non-sending preparation primitive that validates both exact local channels, persists the inbound invoice/preimage plus operation binding and fee limit, and reserves a distinct outbound payment ID.
-- [ ] Determine whether the rebalance provider supports a compatible hold/claim or shared-preimage atomic flow.
-- [ ] Prove that rejecting a misrouted inbound HTLC cannot leave the provider invoice settled without the principal returning.
-- [ ] If atomicity is proven, claim only when every incoming MPP part uses the selected channel.
-- [ ] If any part arrives elsewhere, fail the inbound payment and record the reason.
-- [ ] If atomicity cannot be proven, do not label destination routing as enforced and do not enable the value-moving feature.
+- [x] Determine whether the rebalance provider supports a compatible hold/claim or shared-preimage atomic flow. (It was not adopted; the provider execution path stays disabled, and the local circular self-payment removes the external-provider settlement gap.)
+- [x] Prove that rejecting a misrouted inbound HTLC cannot leave the provider invoice settled without the principal returning. (For the selected local architecture there is no provider invoice; deterministic wrong-channel and mixed-MPP tests fail the same circular outbound payment before preimage disclosure.)
+- [x] If atomicity is proven, claim only when every incoming MPP part uses the selected channel.
+- [x] If any part arrives elsewhere, fail the inbound payment and record the reason.
+- [x] If atomicity cannot be proven, do not label destination routing as enforced and do not enable the value-moving feature. (Only the proven local circular architecture is enabled in source.)
 
 ### 6. Owner-facing UI
 
-- [ ] Show exact outgoing and incoming peer names, full pubkeys, and stable channel identifiers.
-- [ ] Show channel status, spending/receiving capacity, reserve, and projected post-action ranges.
-- [ ] Show principal, provider fee, routing-fee cap, and maximum total debit separately.
+- [x] Show exact outgoing and incoming peer names, full pubkeys, and stable channel identifiers.
+- [x] Show channel status, spending/receiving capacity, reserves, and projected post-action ranges.
+- [x] Show principal, quoted routing fee, routing-fee cap, and maximum total debit separately. (The local path has no provider fee.)
 - [x] Make quote creation visibly non-paying.
-- [ ] Require a distinct final confirmation for the exact, still-valid quote.
+- [x] Require a distinct final confirmation for the exact, still-valid quote.
 - [x] Disable execution when safety preconditions are not met.
 - [x] Never offer or imply an automatic fallback route.
-- [ ] Show a final evidence record, not only a success toast.
+- [x] Show a final evidence record, not only a success toast.
 
 ## Verification checklist
 
@@ -173,16 +173,16 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [x] Exact selected channel is passed to the LDK routing layer. (A real three-node circular HTLC test asserts the successful path's first and final SCIDs.)
 - [ ] A cheaper alternative first hop is never used.
 - [x] All reviewed MPP paths are required to share the selected first hop before submission, and a real executor test settles two downstream branches through that same local first hop.
-- [x] Retry remains pinned. (The dormant executor submits the preserved fixed route exactly once and performs no automatic route retry.)
+- [x] Retry remains pinned. (The executor submits the preserved fixed route exactly once and performs no automatic route retry.)
 - [x] Restart recovery remains pinned or fails closed. (The reloaded in-flight payment is recognized by deterministic ID, hash, amount, invoice, exact channel constraints, and ChannelManager state; it returns the existing ID without route finding. A persisted-but-untracked send may resubmit only the identical serialized route and payment ID, and LDK rejects any duplicate HTLC.)
-- [ ] Offline, unusable, insufficient, stale, expired, ambiguous, and mismatched channels are rejected. (All except execution-time stale re-read have source checks; execution is currently locked.)
+- [x] Offline, unusable, insufficient, stale, expired, ambiguous, and mismatched channels are rejected by quote and execution-time checks.
 - [x] Provider fee above limit is rejected.
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
-- [x] Duplicate execution is idempotent without creating a second HTLC. Matching pending or succeeded state returns the deterministic outbound ID; mismatched hash, amount, channel binding, invoice, fee cap, contradictory status, abandoned state, or unknown payment type fails closed. (No Hub execution is currently permitted.)
+- [x] Duplicate execution is idempotent without creating a second HTLC. Matching pending or succeeded state returns the deterministic outbound ID; mismatched hash, amount, channel binding, invoice, fee cap, contradictory status, abandoned state, or unknown payment type fails closed.
 - [x] Hub preparation and submission recovery persist deterministic operation, hash, and outbound IDs across every Hub-side phase. Retrying `submitted` makes no backend call; retrying after simulated post-send/pre-database uncertainty reuses the same IDs; expired acquisition passes an explicit recovery-only expiry of zero; missing prior preparation stops before send.
 - [x] Terminal reconciliation reloads and validates both exact payment records, keeps missing/pending/transient combinations locked, rejects contradictory or tampered evidence, persists terminal evidence by compare-and-set, replays idempotently without another backend read, and releases the single-operation slot only after a matching terminal transition.
-- [x] Wrong inbound channel is rejected before claim by the dormant exact-channel decision and real HTLC tests. (No Hub execution is currently permitted.)
-- [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
+- [x] Wrong inbound channel is rejected before claim by the exact-channel decision and real HTLC tests. (The owner-facing source orchestration is not installed or live-authorized.)
+- [x] The channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 - [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
 - [x] A rejected constrained claim updates the inbound payment record to `Failed`, and a fresh payment-store read from persisted bytes returns that failed state.
 
@@ -191,7 +191,7 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [ ] Build a local test topology with at least three local channels.
 - [ ] Make an unselected route cheaper and more attractive than the selected route.
 - [x] Prove the selected source is still the only first hop for a real single-path circular settlement.
-- [x] Prove insufficient selected capacity fails before the dormant executor invokes its send action.
+- [x] Prove insufficient selected capacity fails before the executor invokes its send action.
 - [x] Prove downstream MPP remains allowed while the first hop stays pinned. (A five-node, two-part circular payment branches only after the selected source peer, reconverges before the selected destination peer, and reports the same exact first and final SCIDs for both successful paths.)
 - [x] Interrupt and restart during a pending attempt; prove no unrestricted retry occurs. (The node is reloaded after the fixed-route sender durably commits the outbound HTLC but before the first peer receives it; recovery identifies that exact in-flight payment, a direct same-ID resend returns `DuplicatePayment` without adding a monitor or HTLC, channel reestablishment retransmits the original HTLC, and settlement uses the selected final channel.)
 - [x] Restart a genuinely prepared but unsent circular operation; prove the exact pending record, preimage, channel identities, and ChannelManager state survive, no outbound payment appears, channels remain unusable until reconnection, and operation reuse is still rejected.
@@ -247,6 +247,10 @@ Decision: the source may create and persist a non-paying provider quote, but bot
 ### 2026-10-08 — Terminal truth comes from two durable payment records
 
 Decision: neither a single Lightning event nor one successful leg can close a circular operation. Hub may record success only after exact-bound, persisted inbound and outbound records both report success with the same preimage and exact reviewed fee. It may record failure only after both records report failure. Pending, missing, or contradictory combinations retain the active execution lock. Terminal writes are idempotent compare-and-set transitions, and event delivery is diagnostic rather than authoritative.
+
+### 2026-10-08 — Owner execution is action-specific and recoverable
+
+Decision: the local circular route may become value-moving only after the owner reviews a fresh fingerprint-bound packet and types the quote-specific confirmation. The execute call may prepare and submit exactly that deterministic operation once. Status polling never sends; an interrupted `acquired` or `prepared` phase can advance only through the same confirmation, operation ID, payment IDs, and serialized route. A terminal replay returns stored evidence without another backend call.
 
 ## Learning log
 
@@ -586,3 +590,22 @@ Consequence:
 
 - Terminal source semantics are no longer the blocker: success and failure now require exact, durable, two-leg evidence and release the execution lock only after an idempotent database transition.
 - The remaining work is owner-facing execution and reconciliation orchestration, followed by a fresh build/install review and a separate live action packet. Until those are explicitly reviewed and authorized, the existing execute endpoint and UI control stay hard-locked.
+
+### 2026-10-08 — Owner-facing exact-route orchestration implemented in source
+
+Observed:
+
+- Hub commit `587f7837` adds full-access HTTP and Wails routes for exact local execution and read/reconcile status. The legacy provider execute path remains fail-closed.
+- The quote response now supplies a quote-specific typed confirmation. A wrong confirmation leaves the quote `quoted` and invokes zero prepare, send, or reconcile backend calls.
+- A correct confirmation atomically acquires the quote, prepares and submits the fixed route once, and performs one immediate durable status read. Repeating the execute request after terminal success returns the same stored result without preparing, sending, or reconciling again.
+- Status calls never send. An `acquired` operation reports that the same exact confirmation is required; a `submitted` operation reads both durable records; terminal state returns the persisted evidence hash and actual fee without requiring a Lightning backend call.
+- Browser recovery stores only the reviewed quote packet, then reloads status after interruption. The database and route fingerprint remain authoritative; altered browser storage cannot alter the operation.
+- Migration `202610080300_local_rebalance_balance_evidence` stores both selected channels' local/remote balances and local/counterparty reserves. All eight fields are included in the route fingerprint and covered by migration/fingerprint tests.
+- The review screen shows quote time/expiry, exact channel IDs and full pubkeys, path SCIDs, principal, quoted fee, fee cap, fixed maximum debit, spendable capacity, reserves, projected local/remote balances, and expected on-chain change of zero. It distinguishes temporary in-flight HTLC commitment from terminal reconciliation.
+- The complete Hub Go suite, API race test, full `go vet`, frontend lint/TypeScript checks, HTTP production build, Wails production build, and database-copy test pass. Output is limited to the previously recorded Bark deployment-target, Lottie direct-eval, bundle-size, and stale Browserslist warnings.
+- This commit is source-only. No desktop bundle was built or installed, the running app was not restarted or unlocked, no quote/invoice/HTLC was created by this work, and no sats moved.
+
+Consequence:
+
+- The owner-facing orchestration source gate is closed, but deployment and live acceptance are not. The next permissible step is a separately reviewed build/install checkpoint that proves UI presence, migration, wallet continuity, and the exact embedded source/library hashes without executing a rebalance.
+- A live test still requires a fresh action packet from the newly installed build with current exact channel state, exact principal, eight-decimal BTC equivalent, quoted fee, fee cap, maximum debit, projected balances, expiry, quote ID, route fingerprint, and explicit owner approval immediately before the value-moving confirmation.
