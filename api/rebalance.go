@@ -36,7 +36,6 @@ const (
 )
 
 var errPinnedRebalanceExecutionDisabled = errors.New("pinned rebalance execution is disabled until incoming-channel atomicity is proven")
-var errLocalRebalanceExecutionDisabled = errors.New("local circular-route execution is not implemented or authorized")
 
 type localRebalanceExecutionResult struct {
 	OperationId       string
@@ -129,6 +128,9 @@ func (api *api) QuoteRebalance(ctx context.Context, request *QuoteRebalanceReque
 	}
 	if !incoming.Active {
 		return nil, errors.New("incoming channel is not online and usable")
+	}
+	if outgoing.LocalBalanceMsat < 0 || outgoing.RemoteBalanceMsat < 0 || incoming.LocalBalanceMsat < 0 || incoming.RemoteBalanceMsat < 0 {
+		return nil, errors.New("selected channel balance snapshot is invalid")
 	}
 	if outgoing.LocalSpendableBalanceMsat < 0 || uint64(outgoing.LocalSpendableBalanceMsat) < maxTotalDebitMsat {
 		return nil, errors.New("outgoing channel has insufficient spendable balance for the maximum debit")
@@ -292,6 +294,9 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 	if !incoming.Active {
 		return nil, errors.New("incoming channel is not online and usable")
 	}
+	if outgoing.LocalBalanceMsat < 0 || outgoing.RemoteBalanceMsat < 0 || incoming.LocalBalanceMsat < 0 || incoming.RemoteBalanceMsat < 0 {
+		return nil, errors.New("selected channel balance snapshot is invalid")
+	}
 	if outgoing.LocalSpendableBalanceMsat < 0 || uint64(outgoing.LocalSpendableBalanceMsat) < maxTotalDebitMsat {
 		return nil, errors.New("outgoing channel has insufficient spendable balance for the maximum debit")
 	}
@@ -374,8 +379,28 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 	if !ok {
 		return nil, errors.New("local route quote debit overflow")
 	}
+	if uint64(outgoing.LocalBalanceMsat) < actualTotalDebitMsat {
+		return nil, errors.New("outgoing channel balance snapshot cannot cover the quoted debit")
+	}
+	if _, ok := checkedAdd(uint64(outgoing.RemoteBalanceMsat), actualTotalDebitMsat); !ok {
+		return nil, errors.New("projected outgoing remote balance overflow")
+	}
+	if _, ok := checkedAdd(uint64(incoming.LocalBalanceMsat), quote.AmountMsat); !ok {
+		return nil, errors.New("projected incoming local balance overflow")
+	}
+	for _, reserveSat := range []uint64{
+		outgoing.UnspendablePunishmentReserveSat,
+		outgoing.CounterpartyUnspendablePunishmentReserveSat,
+		incoming.UnspendablePunishmentReserveSat,
+		incoming.CounterpartyUnspendablePunishmentReserveSat,
+	} {
+		if reserveSat > math.MaxUint64/1_000 {
+			return nil, errors.New("selected channel reserve snapshot overflow")
+		}
+	}
+	quotedAt := time.Now().UTC()
 
-	expiresAt := time.Now().UTC().Add(rebalanceQuoteLifetime)
+	expiresAt := quotedAt.Add(rebalanceQuoteLifetime)
 	response := &LocalRebalanceQuoteResponse{
 		AmountMsat:                     quote.AmountMsat,
 		TotalRoutingFeeMsat:            quote.TotalRoutingFeeMsat,
@@ -389,10 +414,18 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		IncomingShortChannelId:         strconv.FormatUint(quote.LastHopShortChannelId, 10),
 		OutgoingSpendableSnapshotMsat:  uint64(outgoing.LocalSpendableBalanceMsat),
 		IncomingReceivableSnapshotMsat: uint64(incoming.RemoteBalanceMsat),
+		OutgoingLocalSnapshotMsat:      uint64(outgoing.LocalBalanceMsat),
+		OutgoingRemoteSnapshotMsat:     uint64(outgoing.RemoteBalanceMsat),
+		OutgoingLocalReserveMsat:       outgoing.UnspendablePunishmentReserveSat * 1_000,
+		OutgoingRemoteReserveMsat:      outgoing.CounterpartyUnspendablePunishmentReserveSat * 1_000,
+		IncomingLocalSnapshotMsat:      uint64(incoming.LocalBalanceMsat),
+		IncomingRemoteSnapshotMsat:     uint64(incoming.RemoteBalanceMsat),
+		IncomingLocalReserveMsat:       incoming.UnspendablePunishmentReserveSat * 1_000,
+		IncomingRemoteReserveMsat:      incoming.CounterpartyUnspendablePunishmentReserveSat * 1_000,
 		Paths:                          paths,
+		QuotedAt:                       quotedAt,
 		ExpiresAt:                      expiresAt,
-		ExecutionEnabled:               false,
-		BlockedReason:                  errLocalRebalanceExecutionDisabled.Error(),
+		ExecutionEnabled:               true,
 		routeBytes:                     append([]byte(nil), quote.RouteBytes...),
 	}
 	quoteId, err := randomQuoteId()
@@ -413,6 +446,7 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 	}
 	response.QuoteId = quoteId
 	response.RouteFingerprint = routeFingerprint
+	response.ExecutionConfirmation = localRebalanceExecutionConfirmation(quoteId, response.AmountMsat)
 
 	localQuote := db.LocalRebalanceQuote{
 		ID:                             quoteId,
@@ -431,9 +465,19 @@ func (api *api) QuoteLocalRebalance(ctx context.Context, request *QuoteLocalReba
 		IncomingShortChannelId:         response.IncomingShortChannelId,
 		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
+		OutgoingLocalSnapshotMsat:      response.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat:     response.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:       response.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:      response.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:      response.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat:     response.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:       response.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:      response.IncomingRemoteReserveMsat,
 		RouteJson:                      string(routeJSON),
 		RouteBytes:                     append([]byte(nil), response.routeBytes...),
 		ExpiresAt:                      expiresAt,
+		CreatedAt:                      quotedAt,
+		UpdatedAt:                      quotedAt,
 	}
 	if err := api.db.Create(&localQuote).Error; err != nil {
 		return nil, fmt.Errorf("failed to persist local rebalance quote: %w", err)
@@ -450,6 +494,18 @@ func deriveLocalRebalanceOperationId(quoteId string, routeFingerprint string) st
 	hasher.Write([]byte{0})
 	hasher.Write([]byte(routeFingerprint))
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func localRebalanceExecutionConfirmation(quoteId string, amountMsat uint64) string {
+	amount := fmt.Sprintf("%d MSAT", amountMsat)
+	if amountMsat%1_000 == 0 {
+		amount = fmt.Sprintf("%d SATS", amountMsat/1_000)
+	}
+	quoteSuffix := quoteId
+	if len(quoteSuffix) > 8 {
+		quoteSuffix = quoteSuffix[len(quoteSuffix)-8:]
+	}
+	return fmt.Sprintf("REBALANCE %s %s", amount, quoteSuffix)
 }
 
 func deriveCircularOutboundPaymentId(operationId string) (string, error) {
@@ -491,6 +547,14 @@ func localRebalanceRouteFromRecord(quote *db.LocalRebalanceQuote) (*lnclient.Cir
 		IncomingShortChannelId:         quote.IncomingShortChannelId,
 		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
+		OutgoingLocalSnapshotMsat:      quote.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat:     quote.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:       quote.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:      quote.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:      quote.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat:     quote.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:       quote.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:      quote.IncomingRemoteReserveMsat,
 		Paths:                          storedPaths,
 		routeBytes:                     append([]byte(nil), quote.RouteBytes...),
 	})
@@ -725,10 +789,9 @@ func (api *api) persistLocalRebalanceSubmission(
 	return &persisted, nil
 }
 
-// runLocalRebalanceExecution is deliberately not connected to an HTTP, Wails, or UI entrypoint.
-// It exists so the full durable transition can be tested before any value-moving feature is
-// authorized. A caller must still provide the exact reviewed fingerprint and an explicit backend
-// implementing crash-safe prepared circular payments.
+// runLocalRebalanceExecution owns the durable acquired-to-submitted transition. Callers must
+// provide the exact reviewed fingerprint and a backend implementing crash-safe prepared circular
+// payments; owner authorization is enforced by the public orchestration wrapper.
 func (api *api) runLocalRebalanceExecution(
 	quoteId string, expectedRouteFingerprint string, now time.Time,
 	executor lnclient.PreparedCircularPaymentClient,
@@ -954,9 +1017,8 @@ func (api *api) persistLocalRebalanceTerminalEvidence(
 	return terminalResult, nil
 }
 
-// reconcileLocalRebalanceTerminal is deliberately unreachable from HTTP, Wails, and UI routes.
-// It reads the two exact durable Lightning payment records and releases the single-operation lock
-// only after an idempotent terminal compare-and-set.
+// reconcileLocalRebalanceTerminal reads the two exact durable Lightning payment records and
+// releases the single-operation lock only after an idempotent terminal compare-and-set.
 func (api *api) reconcileLocalRebalanceTerminal(
 	quoteId string,
 	expectedRouteFingerprint string,
@@ -1002,6 +1064,215 @@ func (api *api) reconcileLocalRebalanceTerminal(
 		return nil, err
 	}
 	return api.persistLocalRebalanceTerminalEvidence(&quote, evidence, now)
+}
+
+func (api *api) preparedCircularPaymentClient() (lnclient.PreparedCircularPaymentClient, error) {
+	lnClient := api.svc.GetLNClient()
+	if lnClient == nil {
+		return nil, ErrLNClientNotStarted
+	}
+	executor, ok := lnClient.(lnclient.PreparedCircularPaymentClient)
+	if !ok {
+		return nil, errors.New("the active Lightning backend does not support exact circular-route execution")
+	}
+	return executor, nil
+}
+
+func (api *api) loadReviewedLocalRebalanceQuote(quoteId string, routeFingerprint string) (*db.LocalRebalanceQuote, error) {
+	if quoteId == "" || routeFingerprint == "" {
+		return nil, errors.New("quote ID and route fingerprint are required")
+	}
+	var quote db.LocalRebalanceQuote
+	if err := api.db.First(&quote, "id = ?", quoteId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("local rebalance quote was not found")
+		}
+		return nil, fmt.Errorf("failed to load local rebalance quote: %w", err)
+	}
+	if quote.RouteFingerprint != routeFingerprint {
+		return nil, errors.New("local rebalance quote fingerprint does not match the reviewed route")
+	}
+	if _, err := localRebalanceRouteFromRecord(&quote); err != nil {
+		return nil, err
+	}
+	return &quote, nil
+}
+
+func localRebalanceOperationResponseFromQuote(quote *db.LocalRebalanceQuote) (*LocalRebalanceOperationResponse, error) {
+	if quote == nil {
+		return nil, errors.New("local rebalance operation record is required")
+	}
+	if _, err := localRebalanceRouteFromRecord(quote); err != nil {
+		return nil, err
+	}
+	if quote.State != "executing" && quote.State != localRebalancePhaseSucceeded && quote.State != localRebalancePhaseFailed {
+		return nil, fmt.Errorf("local rebalance is not active in state %s", quote.State)
+	}
+	if quote.OperationId != deriveLocalRebalanceOperationId(quote.ID, quote.RouteFingerprint) {
+		return nil, errors.New("local rebalance operation ID does not match the reviewed quote")
+	}
+	if quote.State == "executing" {
+		switch quote.ExecutionPhase {
+		case localRebalancePhaseAcquired:
+			if quote.PreparedPaymentHash != "" || quote.OutboundPaymentId != "" {
+				return nil, errors.New("acquired local rebalance has unexpected payment identifiers")
+			}
+		case localRebalancePhasePrepared, localRebalancePhaseSubmitted:
+			if quote.PreparedPaymentHash == "" || quote.OutboundPaymentId == "" {
+				return nil, errors.New("prepared local rebalance is missing payment identifiers")
+			}
+		default:
+			return nil, errors.New("local rebalance has an invalid execution phase")
+		}
+	} else if _, err := localRebalanceTerminalResultFromQuote(quote); err != nil {
+		return nil, err
+	}
+	return &LocalRebalanceOperationResponse{
+		QuoteId:                    quote.ID,
+		RouteFingerprint:           quote.RouteFingerprint,
+		State:                      quote.State,
+		Phase:                      quote.ExecutionPhase,
+		OperationId:                quote.OperationId,
+		PaymentHash:                quote.PreparedPaymentHash,
+		OutboundPaymentId:          quote.OutboundPaymentId,
+		AmountMsat:                 quote.AmountMsat,
+		QuotedRoutingFeeMsat:       quote.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:          quote.MaxRoutingFeeMsat,
+		ActualRoutingFeeMsat:       quote.ActualRoutingFeeMsat,
+		OutgoingChannelId:          quote.OutgoingChannelId,
+		OutgoingNodePubkey:         quote.OutgoingNodePubkey,
+		IncomingChannelId:          quote.IncomingChannelId,
+		IncomingNodePubkey:         quote.IncomingNodePubkey,
+		OutgoingLocalSnapshotMsat:  quote.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat: quote.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:   quote.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:  quote.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:  quote.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat: quote.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:   quote.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:  quote.IncomingRemoteReserveMsat,
+		PreparedAt:                 quote.PreparedAt,
+		SubmittedAt:                quote.SubmittedAt,
+		LightningTerminalAt:        quote.LightningTerminalAt,
+		ReconciledAt:               quote.ReconciledAt,
+		TerminalEvidenceHash:       quote.TerminalEvidenceHash,
+		FailureReason:              quote.FailureReason,
+		RequiresExactRetry:         quote.State == "executing" && quote.ExecutionPhase != localRebalancePhaseSubmitted,
+		ReconciliationPending:      quote.State == "executing" && quote.ExecutionPhase == localRebalancePhaseSubmitted,
+	}, nil
+}
+
+func (api *api) executeLocalRebalanceWithExecutor(
+	request *ExecuteLocalRebalanceRequest,
+	now time.Time,
+	executor lnclient.PreparedCircularPaymentClient,
+) (*LocalRebalanceOperationResponse, error) {
+	if request == nil {
+		return nil, errors.New("local rebalance execution request is required")
+	}
+	quote, err := api.loadReviewedLocalRebalanceQuote(request.QuoteId, request.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	expectedConfirmation := localRebalanceExecutionConfirmation(quote.ID, quote.AmountMsat)
+	if request.Confirmation != expectedConfirmation {
+		return nil, fmt.Errorf("type %q to authorize this exact local rebalance", expectedConfirmation)
+	}
+	if quote.State == localRebalancePhaseSucceeded || quote.State == localRebalancePhaseFailed {
+		return localRebalanceOperationResponseFromQuote(quote)
+	}
+	if _, err := api.runLocalRebalanceExecution(quote.ID, quote.RouteFingerprint, now, executor); err != nil {
+		return nil, err
+	}
+	if _, err := api.reconcileLocalRebalanceTerminal(quote.ID, quote.RouteFingerprint, now, executor); err != nil {
+		return nil, err
+	}
+	quote, err = api.loadReviewedLocalRebalanceQuote(quote.ID, quote.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return localRebalanceOperationResponseFromQuote(quote)
+}
+
+func (api *api) reconcileLocalRebalanceWithExecutor(
+	request *ReconcileLocalRebalanceRequest,
+	now time.Time,
+	executor lnclient.PreparedCircularPaymentClient,
+) (*LocalRebalanceOperationResponse, error) {
+	if request == nil {
+		return nil, errors.New("local rebalance reconciliation request is required")
+	}
+	quote, err := api.loadReviewedLocalRebalanceQuote(request.QuoteId, request.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if quote.State == localRebalancePhaseSucceeded || quote.State == localRebalancePhaseFailed {
+		return localRebalanceOperationResponseFromQuote(quote)
+	}
+	if quote.State != "executing" {
+		return nil, fmt.Errorf("local rebalance is not active in state %s", quote.State)
+	}
+	if quote.ExecutionPhase == localRebalancePhaseAcquired {
+		return localRebalanceOperationResponseFromQuote(quote)
+	}
+	if _, err := api.reconcileLocalRebalanceTerminal(quote.ID, quote.RouteFingerprint, now, executor); err != nil {
+		return nil, err
+	}
+	quote, err = api.loadReviewedLocalRebalanceQuote(quote.ID, quote.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return localRebalanceOperationResponseFromQuote(quote)
+}
+
+// ExecuteLocalRebalance is the only owner-facing value-moving entrypoint for the local circular
+// route. It requires the exact reviewed fingerprint and a quote-specific typed confirmation. Any
+// retry can resume only the same deterministic operation and fixed route.
+func (api *api) ExecuteLocalRebalance(ctx context.Context, request *ExecuteLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if request == nil {
+		return nil, errors.New("local rebalance execution request is required")
+	}
+	quote, err := api.loadReviewedLocalRebalanceQuote(request.QuoteId, request.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if request.Confirmation != localRebalanceExecutionConfirmation(quote.ID, quote.AmountMsat) {
+		return nil, fmt.Errorf("type %q to authorize this exact local rebalance", localRebalanceExecutionConfirmation(quote.ID, quote.AmountMsat))
+	}
+	if quote.State == localRebalancePhaseSucceeded || quote.State == localRebalancePhaseFailed {
+		return localRebalanceOperationResponseFromQuote(quote)
+	}
+	executor, err := api.preparedCircularPaymentClient()
+	if err != nil {
+		return nil, err
+	}
+	return api.executeLocalRebalanceWithExecutor(request, time.Now().UTC(), executor)
+}
+
+// ReconcileLocalRebalance performs no send. It reads the exact durable payment records and either
+// returns the still-active operation or persists one matching two-leg terminal result.
+func (api *api) ReconcileLocalRebalance(ctx context.Context, request *ReconcileLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if request == nil {
+		return nil, errors.New("local rebalance reconciliation request is required")
+	}
+	quote, err := api.loadReviewedLocalRebalanceQuote(request.QuoteId, request.RouteFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if quote.State == localRebalancePhaseSucceeded || quote.State == localRebalancePhaseFailed || (quote.State == "executing" && quote.ExecutionPhase == localRebalancePhaseAcquired) {
+		return localRebalanceOperationResponseFromQuote(quote)
+	}
+	executor, err := api.preparedCircularPaymentClient()
+	if err != nil {
+		return nil, err
+	}
+	return api.reconcileLocalRebalanceWithExecutor(request, time.Now().UTC(), executor)
 }
 
 // ExecuteRebalance is intentionally fail-closed. Keeping the endpoint and persisted quote contract
@@ -1213,6 +1484,14 @@ func hashLocalRebalanceRouteMaterial(quote *LocalRebalanceQuoteResponse) (string
 		IncomingShortChannelId         string                   `json:"incomingShortChannelId"`
 		OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
 		IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
+		OutgoingLocalSnapshotMsat      uint64                   `json:"outgoingLocalSnapshotMsat"`
+		OutgoingRemoteSnapshotMsat     uint64                   `json:"outgoingRemoteSnapshotMsat"`
+		OutgoingLocalReserveMsat       uint64                   `json:"outgoingLocalReserveMsat"`
+		OutgoingRemoteReserveMsat      uint64                   `json:"outgoingRemoteReserveMsat"`
+		IncomingLocalSnapshotMsat      uint64                   `json:"incomingLocalSnapshotMsat"`
+		IncomingRemoteSnapshotMsat     uint64                   `json:"incomingRemoteSnapshotMsat"`
+		IncomingLocalReserveMsat       uint64                   `json:"incomingLocalReserveMsat"`
+		IncomingRemoteReserveMsat      uint64                   `json:"incomingRemoteReserveMsat"`
 		Paths                          []LocalCircularRoutePath `json:"paths"`
 		RouteBytes                     []byte                   `json:"routeBytes"`
 	}{
@@ -1228,6 +1507,14 @@ func hashLocalRebalanceRouteMaterial(quote *LocalRebalanceQuoteResponse) (string
 		IncomingShortChannelId:         quote.IncomingShortChannelId,
 		OutgoingSpendableSnapshotMsat:  quote.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: quote.IncomingReceivableSnapshotMsat,
+		OutgoingLocalSnapshotMsat:      quote.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat:     quote.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:       quote.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:      quote.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:      quote.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat:     quote.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:       quote.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:      quote.IncomingRemoteReserveMsat,
 		Paths:                          quote.Paths,
 		RouteBytes:                     quote.routeBytes,
 	})
