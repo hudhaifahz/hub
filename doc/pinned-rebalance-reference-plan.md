@@ -1,6 +1,6 @@
 # Pinned Channel Rebalance Reference Plan
 
-Status: implementation in progress; quote review is enabled in source and crash-safe execution orchestration is testable only through an unexported runner. HTTP, Wails, and UI payment execution remain hard-locked. No live rebalance is authorized by this plan.
+Status: implementation in progress; quote review is enabled in source, while crash-safe execution and terminal reconciliation are testable only through unexported helpers. HTTP, Wails, and UI payment execution remain hard-locked. No live rebalance is authorized by this plan.
 
 This document is the durable checklist and learning log for adding fail-closed channel routing to the Alby Hub rebalance flow. Update it whenever implementation evidence changes an assumption. Do not mark an item complete from code presence alone; require the stated verification evidence.
 
@@ -51,7 +51,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Custom Rust routing enforcement is replayed on `getAlby/ldk-node` commit `74daaf9` as owner-fork commit `057b73d`.
 - [x] Generated Go bindings and a release-mode arm64/x86_64 macOS library are replayed on `getAlby/ldk-node-go` commit `5ba434093284` as owner-fork commit `e7dd77f`.
 - [x] Hub resolves the upgraded owner-fork binding as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261006232835-e7dd77fda90e`.
-- [x] Crash-safe prepared-send recovery is versioned as owner-fork LDK commit `77c0454`. Idempotent preparation recovery and recovery-only expired preparation are completed by commits `104945e`, `5ad80b0`, and `4096ee5`. The exact final binary is owner-fork Go binding commit `81c07a4`, pinned by the Hub as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201853-81c07a4acff0`.
+- [x] Crash-safe prepared-send recovery is versioned as owner-fork LDK commit `77c0454`. Idempotent preparation recovery and recovery-only expired preparation are completed by commits `104945e`, `5ad80b0`, and `4096ee5`. Two-leg circular failure persistence and terminal readback are completed by LDK commit `16630be`. The exact final binary is owner-fork Go binding commit `a3dd5b1`, pinned by the Hub as pseudo-version `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008205838-a3dd5b1fe3bb`; its universal macOS library is `43,195,848` bytes with SHA-256 `3399f9446240441f406b7a307b6845415bbf5ea1282b3cebf9f5a689826a7554`.
 - [x] The obsolete `v1.24.0` frontend lockfile snapshot was intentionally skipped so it cannot overwrite `v1.24.1` dependency/security updates.
 
 ## Version-control checklist
@@ -106,7 +106,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Reject any material difference rather than silently refreshing the quote. (The dormant executor rejects channel, SCID, peer, capacity, fee, amount, invoice, expiry, payment identity, and serialized-route mismatches.)
 - [x] Atomically mark the quote executing before calling the Lightning backend. (The dormant acquisition primitive assigns a deterministic operation ID and persists `acquired`, `prepared`, and `submitted` phases; it remains unexported and unreachable from HTTP, Wails, and UI entrypoints.)
 - [x] Prevent duplicate execution and concurrent rebalance operations. (Hub retries reuse the exact operation, payment hash, and outbound payment ID; LDK returns an already tracked payment or retries only the same persisted fixed route and ID. A duplicate LDK result is proof of the existing operation, not permission to create another.)
-- [ ] Reconcile durable terminal Lightning events into one final Hub success or failure state before releasing the single-operation execution slot.
+- [x] Reconcile durable terminal Lightning payment-store records into one final Hub success or failure state before releasing the single-operation execution slot. (Implemented by dormant Hub commit `59b6e750`; no endpoint, Wails method, or UI control can invoke it.)
 - [x] Persist provider order ID, both invoices/payment hashes, exact limits, and selected channel IDs.
 
 ### 3A. Terminal reconciliation proof and acceptance criteria
@@ -120,10 +120,13 @@ Allowed status matrix:
 | Inbound | Outbound | Hub result |
 | --- | --- | --- |
 | Pending | missing | remain `executing`; preparation exists but no durable send record is proven |
-| Pending or Succeeded | Pending | remain `executing`; settlement is unresolved |
+| Pending | Pending | remain `executing`; settlement is unresolved |
+| Succeeded or Failed | Pending | remain `executing`; the other durable leg has not reached terminal state |
+| Pending | Succeeded or Failed | remain `executing`; the other durable leg has not reached terminal state |
 | Succeeded | Succeeded | atomically record `succeeded` with exact amount, fee, identifiers, and terminal timestamp |
 | Failed | Failed | atomically record `failed` with a bounded reason and terminal timestamp |
-| Any other combination | Any other combination | fail closed as contradictory; retain the active lock for investigation |
+| Succeeded | Failed | fail closed as contradictory; retain the active lock for investigation |
+| Failed | Succeeded | fail closed as contradictory; retain the active lock for investigation |
 
 The LDK failure handler must make a circular failure two-legged before Hub may accept it: after validating the outbound record's circular metadata, persist the matching inbound record as `Failed` in the same replayable event-handling turn. A persistence error causes event replay rather than partial terminal acceptance.
 
@@ -177,6 +180,7 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [x] Routing fee above limit is rejected by the pinned LDK route parameters and post-success assertion.
 - [x] Duplicate execution is idempotent without creating a second HTLC. Matching pending or succeeded state returns the deterministic outbound ID; mismatched hash, amount, channel binding, invoice, fee cap, contradictory status, abandoned state, or unknown payment type fails closed. (No Hub execution is currently permitted.)
 - [x] Hub preparation and submission recovery persist deterministic operation, hash, and outbound IDs across every Hub-side phase. Retrying `submitted` makes no backend call; retrying after simulated post-send/pre-database uncertainty reuses the same IDs; expired acquisition passes an explicit recovery-only expiry of zero; missing prior preparation stops before send.
+- [x] Terminal reconciliation reloads and validates both exact payment records, keeps missing/pending/transient combinations locked, rejects contradictory or tampered evidence, persists terminal evidence by compare-and-set, replays idempotently without another backend read, and releases the single-operation slot only after a matching terminal transition.
 - [x] Wrong inbound channel is rejected before claim by the dormant exact-channel decision and real HTLC tests. (No Hub execution is currently permitted.)
 - [x] The dormant channel-constrained claim decision rejects mixed MPP, unidentified-channel, empty-part, missing-preimage, missing-amount, underpayment, overpayment, and previously-failed cases.
 - [x] The production claim/fail action adapter is shared with a controlled test proving claim, fail, and unconstrained decisions dispatch exactly one, one, and zero ChannelManager actions respectively.
@@ -563,4 +567,22 @@ Observed:
 Consequence:
 
 - Hub now has a reviewable crash-safe source model through the submission boundary without exposing a value-moving control. It cannot silently switch channels, create a second operation after expiry, or generate a new route during recovery.
-- The remaining source blocker is terminal reconciliation: consume durable Lightning success/failure evidence, verify the exact operation and both legs, write one terminal Hub state idempotently, and only then release the database's single active-operation slot. Until that is implemented and independently tested, the dormant runner must stay unreachable and no build containing it should be installed for live use.
+- The remaining source blocker at this checkpoint was terminal reconciliation: consume durable Lightning success/failure evidence, verify the exact operation and both legs, write one terminal Hub state idempotently, and only then release the database's single active-operation slot. Until that was implemented and independently tested, the dormant runner had to stay unreachable and no build containing it could be installed for live use.
+
+### 2026-10-08 — Exact two-leg terminal reconciliation implemented and tested
+
+Observed:
+
+- Owner-fork LDK commit `16630be` validates a failed circular outbound record against its deterministic operation ID, payment hash, invoice, preimage, secret, amount, fee cap, and exact outgoing/incoming user-channel IDs before marking both the distinct outbound and inbound payment records `Failed`. Replay is idempotent; a mismatched binding updates neither record.
+- Native Rust library tests pass `41/41`, and Rust plus UniFFI library tests pass `51/51`. A broader integration-fixture invocation also encountered unrelated local Bitcoin regtest directory failures; the complete library matrices covering this behavior passed.
+- Owner-fork Go binding commit `a3dd5b1` contains the rebuilt stripped universal arm64/x86_64 macOS library from LDK commit `16630be`. Its size is `43,195,848` bytes, SHA-256 is `3399f9446240441f406b7a307b6845415bbf5ea1282b3cebf9f5a689826a7554`, and `go test ./...` passes.
+- Hub commit `59b6e750` pins `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008205838-a3dd5b1fe3bb`, reloads both exact payment records, and validates every immutable binding plus matching terminal preimage and exact reviewed routing fee.
+- The Hub migration records actual routing fee, Lightning terminal time, reconciliation time, and a SHA-256 terminal-evidence hash. Terminal writes compare-and-set only the matching `executing` operation in `prepared` or `submitted`; identical replay returns the persisted result without another backend read, while altered evidence is rejected.
+- Both-success records produce `succeeded`; both-failed records produce `failed`; missing, pending, or one-terminal/one-pending records retain the active lock; opposite terminal outcomes fail closed as contradictory. A matching terminal transition releases the database's unique active-operation slot, which is proven by acquiring the next quote in the success test.
+- Focused Hub tests, the API race test, focused `go vet`, and the complete Hub `go test ./...` suite pass. The existing Bark macOS deployment-target linker warnings remain unchanged.
+- The reconciler and runner remain unexported and unreachable from HTTP, Wails, and UI. No desktop build was created or installed, no service was restarted or unlocked, no live invoice or HTLC was created, and no sats moved.
+
+Consequence:
+
+- Terminal source semantics are no longer the blocker: success and failure now require exact, durable, two-leg evidence and release the execution lock only after an idempotent database transition.
+- The remaining work is owner-facing execution and reconciliation orchestration, followed by a fresh build/install review and a separate live action packet. Until those are explicitly reviewed and authorized, the existing execute endpoint and UI control stay hard-locked.
