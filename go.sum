@@ -263,6 +263,8 @@ github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201103-34a206624c80 h1:bIt20RMz
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201103-34a206624c80/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201853-81c07a4acff0 h1:qO2xey9Mb6XXJcjkgHFmhSAliaHsSVtTmkgdZyCBqf4=
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261008201853-81c07a4acff0/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
+github.com/hudhaifahz/ldk-node-go v0.0.0-20261008205838-a3dd5b1fe3bb h1:YzbWsJk1gow/Z925WntjZbXLhhNA8l3v07sJSZxglWg=
+github.com/hudhaifahz/ldk-node-go v0.0.0-20261008205838-a3dd5b1fe3bb/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/jackc/chunkreader/v2 v2.0.0/go.mod h1:odVSm741yZoC3dpHEUXIqA9tQRhFrgOHwnPIn9lDKlk=
 github.com/jackc/chunkreader/v2 v2.0.1 h1:i+RDz65UE+mmpjTfyz0MoVTnzeYxroil2G82ki7MGG8=

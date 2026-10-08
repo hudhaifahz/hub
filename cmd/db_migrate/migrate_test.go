@@ -83,11 +83,17 @@ func TestMigrate(t *testing.T) {
 			requireCount[db.LocalRebalanceQuote](t, env.dest, 1)
 			var migratedQuote db.LocalRebalanceQuote
 			require.NoError(t, env.dest.First(&migratedQuote, "id = ?", "local-quote-1").Error)
-			require.Equal(t, "prepared", migratedQuote.ExecutionPhase)
+			require.Equal(t, "succeeded", migratedQuote.State)
+			require.Equal(t, "succeeded", migratedQuote.ExecutionPhase)
 			require.Equal(t, "operation-id", migratedQuote.OperationId)
 			require.Equal(t, "payment-hash", migratedQuote.PreparedPaymentHash)
 			require.Equal(t, "outbound-payment-id", migratedQuote.OutboundPaymentId)
 			require.NotNil(t, migratedQuote.PreparedAt)
+			require.NotNil(t, migratedQuote.ActualRoutingFeeMsat)
+			require.Equal(t, uint64(17_062), *migratedQuote.ActualRoutingFeeMsat)
+			require.NotNil(t, migratedQuote.LightningTerminalAt)
+			require.NotNil(t, migratedQuote.ReconciledAt)
+			require.Equal(t, "terminal-evidence-hash", migratedQuote.TerminalEvidenceHash)
 			requireCount[db.UserConfig](t, env.dest, 1)
 		})
 	}
@@ -255,9 +261,12 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 	create(t, tx, forward1)
 
 	preparedAt := baseTime.Add(time.Minute)
+	terminalAt := baseTime.Add(2 * time.Minute)
+	reconciledAt := baseTime.Add(3 * time.Minute)
+	actualRoutingFeeMsat := uint64(17_062)
 	localRebalanceQuote1 := &db.LocalRebalanceQuote{
 		ID:                             "local-quote-1",
-		State:                          "executing",
+		State:                          "succeeded",
 		RequestHash:                    "request-hash",
 		RouteFingerprint:               "route-fingerprint",
 		AmountMsat:                     20_000_000,
@@ -274,13 +283,18 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 		IncomingReceivableSnapshotMsat: 840_710_000,
 		RouteJson:                      `[{"hops":[]}]`,
 		OperationId:                    "operation-id",
-		ExecutionPhase:                 "prepared",
+		ExecutionPhase:                 "succeeded",
 		PreparedPaymentHash:            "payment-hash",
 		OutboundPaymentId:              "outbound-payment-id",
+		ActualRoutingFeeMsat:           &actualRoutingFeeMsat,
+		LightningTerminalAt:            &terminalAt,
+		ReconciledAt:                   &reconciledAt,
+		TerminalEvidenceHash:           "terminal-evidence-hash",
 		ExpiresAt:                      baseTime.Add(5 * time.Minute),
 		CreatedAt:                      baseTime,
 		UpdatedAt:                      baseTime,
 		PreparedAt:                     &preparedAt,
+		ExecutedAt:                     &terminalAt,
 	}
 	create(t, tx, localRebalanceQuote1)
 }

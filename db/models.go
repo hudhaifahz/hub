@@ -179,6 +179,10 @@ type LocalRebalanceQuote struct {
 	UpdatedAt                      time.Time
 	PreparedAt                     *time.Time
 	SubmittedAt                    *time.Time
+	ActualRoutingFeeMsat           *uint64
+	LightningTerminalAt            *time.Time
+	ReconciledAt                   *time.Time
+	TerminalEvidenceHash           string
 	ExecutedAt                     *time.Time
 	FailureReason                  string
 }

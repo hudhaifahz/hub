@@ -942,6 +942,159 @@ func (ls *LDKService) SendPreparedCircularPayment(operationID string, quote *lnc
 	return outboundPaymentID, nil
 }
 
+func ldkPaymentStatusName(status ldk_node.PaymentStatus) (string, error) {
+	switch status {
+	case ldk_node.PaymentStatusPending:
+		return lnclient.CircularPaymentStatePending, nil
+	case ldk_node.PaymentStatusSucceeded:
+		return lnclient.CircularPaymentStateSucceeded, nil
+	case ldk_node.PaymentStatusFailed:
+		return lnclient.CircularPaymentStateFailed, nil
+	default:
+		return "", errors.New("circular payment record has an unknown status")
+	}
+}
+
+func reconcileCircularPaymentRecords(
+	inbound *ldk_node.PaymentDetails,
+	outbound *ldk_node.PaymentDetails,
+	operationID string,
+	paymentHash string,
+	outboundPaymentID string,
+	amountMsat uint64,
+	expectedRoutingFeeMsat uint64,
+	maxRoutingFeeMsat uint64,
+	firstHopChannelID string,
+	lastHopChannelID string,
+) (*lnclient.CircularPaymentReconciliation, error) {
+	decodedOperationID, err := hex.DecodeString(operationID)
+	if err != nil || len(decodedOperationID) != sha256.Size {
+		return nil, errors.New("prepared circular operation ID is invalid")
+	}
+	decodedOutboundPaymentID, err := hex.DecodeString(outboundPaymentID)
+	if err != nil || len(decodedOutboundPaymentID) != sha256.Size {
+		return nil, errors.New("prepared circular outbound payment ID is invalid")
+	}
+	outboundIDMaterial := append([]byte("ldk-node circular outbound payment id v1"), decodedOperationID...)
+	expectedOutboundPaymentID := sha256.Sum256(outboundIDMaterial)
+	if !slices.Equal(expectedOutboundPaymentID[:], decodedOutboundPaymentID) {
+		return nil, errors.New("prepared circular outbound payment ID is not derived from its operation")
+	}
+	if inbound == nil {
+		return nil, errors.New("prepared circular inbound payment record is missing")
+	}
+	inboundKind, ok := inbound.Kind.(ldk_node.PaymentKindBolt11)
+	if !ok || inbound.Id != paymentHash || inbound.Direction != ldk_node.PaymentDirectionInbound || inbound.AmountMsat == nil || *inbound.AmountMsat != amountMsat || inbound.FeePaidMsat != nil {
+		return nil, errors.New("prepared circular inbound payment record does not match the operation")
+	}
+	if inboundKind.Hash != paymentHash || inboundKind.Preimage == nil || inboundKind.Secret == nil || inboundKind.Bolt11Invoice == nil || inboundKind.RequiredSendingChannelId == nil || *inboundKind.RequiredSendingChannelId != firstHopChannelID || inboundKind.RequiredReceivingChannelId == nil || *inboundKind.RequiredReceivingChannelId != lastHopChannelID || inboundKind.CircularOperationId == nil || *inboundKind.CircularOperationId != operationID || inboundKind.CircularOutboundPaymentId == nil || *inboundKind.CircularOutboundPaymentId != outboundPaymentID || inboundKind.CircularMaxRoutingFeeMsat == nil || *inboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat {
+		return nil, errors.New("prepared circular inbound payment binding is invalid")
+	}
+	decodedHash, err := hex.DecodeString(paymentHash)
+	if err != nil || len(decodedHash) != sha256.Size {
+		return nil, errors.New("prepared circular payment hash is invalid")
+	}
+	decodedPreimage, err := hex.DecodeString(*inboundKind.Preimage)
+	if err != nil || len(decodedPreimage) != sha256.Size {
+		return nil, errors.New("prepared circular payment preimage is invalid")
+	}
+	preimageHash := sha256.Sum256(decodedPreimage)
+	if !slices.Equal(preimageHash[:], decodedHash) {
+		return nil, errors.New("prepared circular payment preimage does not match its hash")
+	}
+	inboundStatus, err := ldkPaymentStatusName(inbound.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStatePending,
+		OperationID:           operationID,
+		PaymentHash:           paymentHash,
+		OutboundPaymentID:     outboundPaymentID,
+		AmountMsat:            amountMsat,
+		InboundPaymentStatus:  inboundStatus,
+		OutboundPaymentStatus: "missing",
+		LatestUpdateTimestamp: inbound.LatestUpdateTimestamp,
+	}
+	if outbound == nil {
+		if inbound.Status != ldk_node.PaymentStatusPending {
+			return nil, errors.New("terminal circular inbound payment has no outbound record")
+		}
+		return result, nil
+	}
+
+	outboundKind, ok := outbound.Kind.(ldk_node.PaymentKindBolt11)
+	if !ok || outbound.Id != outboundPaymentID || outbound.Direction != ldk_node.PaymentDirectionOutbound || outbound.AmountMsat == nil || *outbound.AmountMsat != amountMsat {
+		return nil, errors.New("prepared circular outbound payment record does not match the operation")
+	}
+	if outboundKind.Hash != paymentHash || outboundKind.Secret == nil || *outboundKind.Secret != *inboundKind.Secret || outboundKind.Bolt11Invoice == nil || *outboundKind.Bolt11Invoice != *inboundKind.Bolt11Invoice || outboundKind.RequiredSendingChannelId == nil || *outboundKind.RequiredSendingChannelId != firstHopChannelID || outboundKind.RequiredReceivingChannelId == nil || *outboundKind.RequiredReceivingChannelId != lastHopChannelID || outboundKind.CircularOperationId == nil || *outboundKind.CircularOperationId != operationID || outboundKind.CircularOutboundPaymentId == nil || *outboundKind.CircularOutboundPaymentId != outboundPaymentID || outboundKind.CircularMaxRoutingFeeMsat == nil || *outboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat || (outboundKind.Preimage != nil && *outboundKind.Preimage != *inboundKind.Preimage) {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	outboundStatus, err := ldkPaymentStatusName(outbound.Status)
+	if err != nil {
+		return nil, err
+	}
+	result.OutboundPaymentStatus = outboundStatus
+	if outbound.LatestUpdateTimestamp > result.LatestUpdateTimestamp {
+		result.LatestUpdateTimestamp = outbound.LatestUpdateTimestamp
+	}
+
+	switch {
+	case inbound.Status == ldk_node.PaymentStatusSucceeded && outbound.Status == ldk_node.PaymentStatusSucceeded:
+		if outboundKind.Preimage == nil || outbound.FeePaidMsat == nil || *outbound.FeePaidMsat != expectedRoutingFeeMsat || *outbound.FeePaidMsat > maxRoutingFeeMsat || result.LatestUpdateTimestamp == 0 {
+			return nil, errors.New("successful circular payment is missing exact terminal fee or timestamp evidence")
+		}
+		fee := *outbound.FeePaidMsat
+		result.State = lnclient.CircularPaymentStateSucceeded
+		result.ActualRoutingFeeMsat = &fee
+		return result, nil
+	case inbound.Status == ldk_node.PaymentStatusFailed && outbound.Status == ldk_node.PaymentStatusFailed:
+		if outbound.FeePaidMsat != nil || result.LatestUpdateTimestamp == 0 {
+			return nil, errors.New("failed circular payment has contradictory terminal evidence")
+		}
+		result.State = lnclient.CircularPaymentStateFailed
+		return result, nil
+	case (inbound.Status == ldk_node.PaymentStatusSucceeded && outbound.Status == ldk_node.PaymentStatusFailed) || (inbound.Status == ldk_node.PaymentStatusFailed && outbound.Status == ldk_node.PaymentStatusSucceeded):
+		return nil, errors.New("circular payment legs have contradictory terminal outcomes")
+	default:
+		if outbound.Status != ldk_node.PaymentStatusSucceeded && outbound.FeePaidMsat != nil {
+			return nil, errors.New("unsettled circular outbound payment unexpectedly has a fee")
+		}
+		return result, nil
+	}
+}
+
+// ReconcilePreparedCircularPayment reloads both exact durable payment records. User-facing events
+// are intentionally not used as terminal authority because their delivery may be replayed after a
+// restart. Only two matching terminal records can produce a terminal result.
+func (ls *LDKService) ReconcilePreparedCircularPayment(operationID string, paymentHash string, outboundPaymentID string, amountMsat uint64, expectedRoutingFeeMsat uint64, maxRoutingFeeMsat uint64, firstHopChannelID string, lastHopChannelID string) (*lnclient.CircularPaymentReconciliation, error) {
+	for name, value := range map[string]string{
+		"operation ID":        operationID,
+		"payment hash":        paymentHash,
+		"outbound payment ID": outboundPaymentID,
+	} {
+		decoded, err := hex.DecodeString(value)
+		if err != nil || len(decoded) != sha256.Size {
+			return nil, fmt.Errorf("circular payment %s must be 32 bytes", name)
+		}
+	}
+	inbound := ls.node.Payment(paymentHash)
+	outbound := ls.node.Payment(outboundPaymentID)
+	return reconcileCircularPaymentRecords(
+		inbound,
+		outbound,
+		operationID,
+		paymentHash,
+		outboundPaymentID,
+		amountMsat,
+		expectedRoutingFeeMsat,
+		maxRoutingFeeMsat,
+		firstHopChannelID,
+		lastHopChannelID,
+	)
+}
+
 func (ls *LDKService) SendKeysend(amountMsat uint64, destination string, custom_records []lnclient.TLVRecord, preimage string) (*lnclient.PayKeysendResponse, error) {
 	paymentStart := time.Now()
 	customTlvs := []ldk_node.CustomTlvRecord{}

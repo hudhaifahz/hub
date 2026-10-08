@@ -31,6 +31,8 @@ const (
 	localRebalancePhaseAcquired  = "acquired"
 	localRebalancePhasePrepared  = "prepared"
 	localRebalancePhaseSubmitted = "submitted"
+	localRebalancePhaseSucceeded = "succeeded"
+	localRebalancePhaseFailed    = "failed"
 )
 
 var errPinnedRebalanceExecutionDisabled = errors.New("pinned rebalance execution is disabled until incoming-channel atomicity is proven")
@@ -41,6 +43,30 @@ type localRebalanceExecutionResult struct {
 	PaymentHash       string
 	OutboundPaymentId string
 	Phase             string
+}
+
+type localRebalanceTerminalResult struct {
+	State                string
+	OperationId          string
+	PaymentHash          string
+	OutboundPaymentId    string
+	ActualRoutingFeeMsat *uint64
+	LightningTerminalAt  *time.Time
+	ReconciledAt         *time.Time
+	TerminalEvidenceHash string
+	FailureReason        string
+}
+
+type localRebalanceTerminalEvidenceMaterial struct {
+	State                 string  `json:"state"`
+	OperationId           string  `json:"operation_id"`
+	PaymentHash           string  `json:"payment_hash"`
+	OutboundPaymentId     string  `json:"outbound_payment_id"`
+	AmountMsat            uint64  `json:"amount_msat"`
+	ActualRoutingFeeMsat  *uint64 `json:"actual_routing_fee_msat"`
+	LatestUpdateTimestamp uint64  `json:"latest_update_timestamp"`
+	InboundPaymentStatus  string  `json:"inbound_payment_status"`
+	OutboundPaymentStatus string  `json:"outbound_payment_status"`
 }
 
 type rspRebalanceCreateOrderResponse struct {
@@ -781,6 +807,201 @@ func (api *api) runLocalRebalanceExecution(
 		OutboundPaymentId: quote.OutboundPaymentId,
 		Phase:             quote.ExecutionPhase,
 	}, nil
+}
+
+func hashLocalRebalanceTerminalEvidence(evidence *lnclient.CircularPaymentReconciliation) (string, error) {
+	if evidence == nil {
+		return "", errors.New("local rebalance terminal evidence is required")
+	}
+	encoded, err := json.Marshal(localRebalanceTerminalEvidenceMaterial{
+		State:                 evidence.State,
+		OperationId:           evidence.OperationID,
+		PaymentHash:           evidence.PaymentHash,
+		OutboundPaymentId:     evidence.OutboundPaymentID,
+		AmountMsat:            evidence.AmountMsat,
+		ActualRoutingFeeMsat:  evidence.ActualRoutingFeeMsat,
+		LatestUpdateTimestamp: evidence.LatestUpdateTimestamp,
+		InboundPaymentStatus:  evidence.InboundPaymentStatus,
+		OutboundPaymentStatus: evidence.OutboundPaymentStatus,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to encode local rebalance terminal evidence: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func validateLocalRebalanceReconciliation(
+	quote *db.LocalRebalanceQuote,
+	evidence *lnclient.CircularPaymentReconciliation,
+) error {
+	if quote == nil || evidence == nil {
+		return errors.New("local rebalance reconciliation evidence is required")
+	}
+	if evidence.OperationID != quote.OperationId || evidence.PaymentHash != quote.PreparedPaymentHash || evidence.OutboundPaymentID != quote.OutboundPaymentId || evidence.AmountMsat != quote.AmountMsat {
+		return errors.New("local rebalance reconciliation does not match the exact prepared operation")
+	}
+	switch evidence.State {
+	case lnclient.CircularPaymentStatePending:
+		if evidence.ActualRoutingFeeMsat != nil {
+			return errors.New("pending local rebalance unexpectedly reports a routing fee")
+		}
+	case lnclient.CircularPaymentStateSucceeded:
+		if evidence.InboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.OutboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.ActualRoutingFeeMsat == nil || *evidence.ActualRoutingFeeMsat != quote.TotalRoutingFeeMsat || *evidence.ActualRoutingFeeMsat > quote.MaxRoutingFeeMsat || evidence.LatestUpdateTimestamp == 0 || evidence.LatestUpdateTimestamp > math.MaxInt64 {
+			return errors.New("successful local rebalance lacks exact two-leg terminal evidence")
+		}
+	case lnclient.CircularPaymentStateFailed:
+		if evidence.InboundPaymentStatus != lnclient.CircularPaymentStateFailed || evidence.OutboundPaymentStatus != lnclient.CircularPaymentStateFailed || evidence.ActualRoutingFeeMsat != nil || evidence.LatestUpdateTimestamp == 0 || evidence.LatestUpdateTimestamp > math.MaxInt64 {
+			return errors.New("failed local rebalance lacks exact two-leg terminal evidence")
+		}
+	default:
+		return errors.New("local rebalance reconciliation returned an unknown state")
+	}
+	return nil
+}
+
+func localRebalanceTerminalResultFromQuote(quote *db.LocalRebalanceQuote) (*localRebalanceTerminalResult, error) {
+	if quote == nil || (quote.State != localRebalancePhaseSucceeded && quote.State != localRebalancePhaseFailed) || quote.ExecutionPhase != quote.State || quote.OperationId != deriveLocalRebalanceOperationId(quote.ID, quote.RouteFingerprint) || quote.PreparedPaymentHash == "" || quote.OutboundPaymentId == "" || quote.TerminalEvidenceHash == "" || quote.LightningTerminalAt == nil || quote.ReconciledAt == nil {
+		return nil, errors.New("persisted local rebalance terminal record is incomplete")
+	}
+	if quote.State == localRebalancePhaseSucceeded {
+		if quote.ActualRoutingFeeMsat == nil || *quote.ActualRoutingFeeMsat != quote.TotalRoutingFeeMsat || *quote.ActualRoutingFeeMsat > quote.MaxRoutingFeeMsat || quote.ExecutedAt == nil || quote.FailureReason != "" {
+			return nil, errors.New("persisted successful local rebalance evidence is invalid")
+		}
+	} else if quote.ActualRoutingFeeMsat != nil || quote.ExecutedAt != nil || quote.FailureReason == "" {
+		return nil, errors.New("persisted failed local rebalance evidence is invalid")
+	}
+	evidence := &lnclient.CircularPaymentReconciliation{
+		State:                 quote.State,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		ActualRoutingFeeMsat:  quote.ActualRoutingFeeMsat,
+		LatestUpdateTimestamp: uint64(quote.LightningTerminalAt.Unix()),
+		InboundPaymentStatus:  quote.State,
+		OutboundPaymentStatus: quote.State,
+	}
+	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence)
+	if err != nil || evidenceHash != quote.TerminalEvidenceHash {
+		return nil, errors.New("persisted local rebalance terminal evidence hash does not match")
+	}
+	return &localRebalanceTerminalResult{
+		State:                quote.State,
+		OperationId:          quote.OperationId,
+		PaymentHash:          quote.PreparedPaymentHash,
+		OutboundPaymentId:    quote.OutboundPaymentId,
+		ActualRoutingFeeMsat: quote.ActualRoutingFeeMsat,
+		LightningTerminalAt:  quote.LightningTerminalAt,
+		ReconciledAt:         quote.ReconciledAt,
+		TerminalEvidenceHash: quote.TerminalEvidenceHash,
+		FailureReason:        quote.FailureReason,
+	}, nil
+}
+
+func (api *api) persistLocalRebalanceTerminalEvidence(
+	quote *db.LocalRebalanceQuote,
+	evidence *lnclient.CircularPaymentReconciliation,
+	now time.Time,
+) (*localRebalanceTerminalResult, error) {
+	if evidence.State == lnclient.CircularPaymentStatePending {
+		return &localRebalanceTerminalResult{
+			State:             evidence.State,
+			OperationId:       quote.OperationId,
+			PaymentHash:       quote.PreparedPaymentHash,
+			OutboundPaymentId: quote.OutboundPaymentId,
+		}, nil
+	}
+	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence)
+	if err != nil {
+		return nil, err
+	}
+	lightningTerminalAt := time.Unix(int64(evidence.LatestUpdateTimestamp), 0).UTC()
+	reconciledAt := now.UTC()
+	updates := map[string]interface{}{
+		"state":                   evidence.State,
+		"execution_phase":         evidence.State,
+		"actual_routing_fee_msat": evidence.ActualRoutingFeeMsat,
+		"lightning_terminal_at":   lightningTerminalAt,
+		"reconciled_at":           reconciledAt,
+		"terminal_evidence_hash":  evidenceHash,
+		"updated_at":              reconciledAt,
+	}
+	if evidence.State == lnclient.CircularPaymentStateSucceeded {
+		updates["executed_at"] = lightningTerminalAt
+		updates["failure_reason"] = ""
+	} else {
+		updates["executed_at"] = nil
+		updates["failure_reason"] = "both exact-bound Lightning payment legs failed"
+	}
+	result := api.db.Model(&db.LocalRebalanceQuote{}).
+		Where("id = ? AND state = ? AND operation_id = ? AND execution_phase IN ? AND prepared_payment_hash = ? AND outbound_payment_id = ?", quote.ID, "executing", quote.OperationId, []string{localRebalancePhasePrepared, localRebalancePhaseSubmitted}, quote.PreparedPaymentHash, quote.OutboundPaymentId).
+		Updates(updates)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to persist local rebalance terminal evidence: %w", result.Error)
+	}
+	var persisted db.LocalRebalanceQuote
+	if err := api.db.First(&persisted, "id = ?", quote.ID).Error; err != nil {
+		return nil, fmt.Errorf("failed to reload local rebalance terminal evidence: %w", err)
+	}
+	terminalResult, err := localRebalanceTerminalResultFromQuote(&persisted)
+	if err != nil {
+		return nil, err
+	}
+	if terminalResult.TerminalEvidenceHash != evidenceHash || terminalResult.State != evidence.State {
+		return nil, errors.New("persisted local rebalance terminal evidence does not match the reconciled operation")
+	}
+	return terminalResult, nil
+}
+
+// reconcileLocalRebalanceTerminal is deliberately unreachable from HTTP, Wails, and UI routes.
+// It reads the two exact durable Lightning payment records and releases the single-operation lock
+// only after an idempotent terminal compare-and-set.
+func (api *api) reconcileLocalRebalanceTerminal(
+	quoteId string,
+	expectedRouteFingerprint string,
+	now time.Time,
+	executor lnclient.PreparedCircularPaymentClient,
+) (*localRebalanceTerminalResult, error) {
+	if executor == nil {
+		return nil, errors.New("prepared circular payment backend is required")
+	}
+	var quote db.LocalRebalanceQuote
+	if err := api.db.First(&quote, "id = ?", quoteId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("local rebalance quote was not found")
+		}
+		return nil, fmt.Errorf("failed to load local rebalance quote: %w", err)
+	}
+	if quote.RouteFingerprint != expectedRouteFingerprint || quote.OperationId != deriveLocalRebalanceOperationId(quote.ID, quote.RouteFingerprint) {
+		return nil, errors.New("local rebalance terminal reconciliation does not match the reviewed operation")
+	}
+	if _, err := localRebalanceRouteFromRecord(&quote); err != nil {
+		return nil, err
+	}
+	if quote.State == localRebalancePhaseSucceeded || quote.State == localRebalancePhaseFailed {
+		return localRebalanceTerminalResultFromQuote(&quote)
+	}
+	if quote.State != "executing" || (quote.ExecutionPhase != localRebalancePhasePrepared && quote.ExecutionPhase != localRebalancePhaseSubmitted) || quote.PreparedPaymentHash == "" || quote.OutboundPaymentId == "" {
+		return nil, errors.New("local rebalance is not ready for terminal reconciliation")
+	}
+	evidence, err := executor.ReconcilePreparedCircularPayment(
+		quote.OperationId,
+		quote.PreparedPaymentHash,
+		quote.OutboundPaymentId,
+		quote.AmountMsat,
+		quote.TotalRoutingFeeMsat,
+		quote.MaxRoutingFeeMsat,
+		quote.OutgoingChannelId,
+		quote.IncomingChannelId,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconcile local rebalance payment records: %w", err)
+	}
+	if err := validateLocalRebalanceReconciliation(&quote, evidence); err != nil {
+		return nil, err
+	}
+	return api.persistLocalRebalanceTerminalEvidence(&quote, evidence, now)
 }
 
 // ExecuteRebalance is intentionally fail-closed. Keeping the endpoint and persisted quote contract

@@ -120,6 +120,7 @@ type CircularRouteQuoter interface {
 type PreparedCircularPaymentClient interface {
 	PrepareCircularPayment(amountMsat uint64, expirySeconds uint32, operationID string, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*PreparedCircularPayment, error)
 	SendPreparedCircularPayment(operationID string, quote *CircularRouteQuote) (string, error)
+	ReconcilePreparedCircularPayment(operationID string, paymentHash string, outboundPaymentID string, amountMsat uint64, expectedRoutingFeeMsat uint64, maxRoutingFeeMsat uint64, firstHopChannelID string, lastHopChannelID string) (*CircularPaymentReconciliation, error)
 }
 
 type PreparedCircularPayment struct {
@@ -132,6 +133,24 @@ type PreparedCircularPayment struct {
 	FirstHopShortChannelID uint64
 	LastHopChannelID       string
 	LastHopShortChannelID  uint64
+}
+
+const (
+	CircularPaymentStatePending   = "pending"
+	CircularPaymentStateSucceeded = "succeeded"
+	CircularPaymentStateFailed    = "failed"
+)
+
+type CircularPaymentReconciliation struct {
+	State                 string
+	OperationID           string
+	PaymentHash           string
+	OutboundPaymentID     string
+	AmountMsat            uint64
+	ActualRoutingFeeMsat  *uint64
+	LatestUpdateTimestamp uint64
+	InboundPaymentStatus  string
+	OutboundPaymentStatus string
 }
 
 type CircularRouteHop struct {
