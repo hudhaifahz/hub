@@ -45,6 +45,7 @@ func Migrate(gormDB *gorm.DB) error {
 		_202610070200_local_rebalance_route_bytes,
 		_202610080100_local_rebalance_execution_recovery,
 		_202610080200_local_rebalance_terminal_evidence,
+		_202610080300_local_rebalance_balance_evidence,
 	})
 
 	return m.Migrate()

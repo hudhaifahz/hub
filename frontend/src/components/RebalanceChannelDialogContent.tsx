@@ -1,4 +1,4 @@
-import { AlertTriangleIcon, LockIcon } from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { FormattedBitcoinAmount } from "src/components/FormattedBitcoinAmount";
@@ -31,6 +31,8 @@ type Props = {
   closeDialog(): void;
 };
 
+const localRebalanceRecoveryKey = "alby-local-rebalance-recovery-v1";
+
 type LocalRouteHop = {
   nodePubkey: string;
   shortChannelId: string;
@@ -59,11 +61,63 @@ type RebalanceQuote = {
   incomingShortChannelId: string;
   outgoingSpendableSnapshotMsat: number;
   incomingReceivableSnapshotMsat: number;
+  outgoingLocalSnapshotMsat: number;
+  outgoingRemoteSnapshotMsat: number;
+  outgoingLocalReserveMsat: number;
+  outgoingRemoteReserveMsat: number;
+  incomingLocalSnapshotMsat: number;
+  incomingRemoteSnapshotMsat: number;
+  incomingLocalReserveMsat: number;
+  incomingRemoteReserveMsat: number;
   paths: LocalRoutePath[];
+  quotedAt: string;
   expiresAt: string;
   executionEnabled: boolean;
   blockedReason: string;
+  executionConfirmation: string;
 };
+
+type LocalRebalanceOperation = {
+  quoteId: string;
+  routeFingerprint: string;
+  state: "executing" | "succeeded" | "failed";
+  phase: "acquired" | "prepared" | "submitted" | "succeeded" | "failed";
+  operationId: string;
+  paymentHash: string;
+  outboundPaymentId: string;
+  amountMsat: number;
+  quotedRoutingFeeMsat: number;
+  maxRoutingFeeMsat: number;
+  actualRoutingFeeMsat?: number;
+  outgoingChannelId: string;
+  outgoingNodePubkey: string;
+  incomingChannelId: string;
+  incomingNodePubkey: string;
+  outgoingLocalSnapshotMsat: number;
+  outgoingRemoteSnapshotMsat: number;
+  outgoingLocalReserveMsat: number;
+  outgoingRemoteReserveMsat: number;
+  incomingLocalSnapshotMsat: number;
+  incomingRemoteSnapshotMsat: number;
+  incomingLocalReserveMsat: number;
+  incomingRemoteReserveMsat: number;
+  preparedAt?: string;
+  submittedAt?: string;
+  lightningTerminalAt?: string;
+  reconciledAt?: string;
+  terminalEvidenceHash?: string;
+  failureReason?: string;
+  requiresExactRetry: boolean;
+  reconciliationPending: boolean;
+};
+
+function exactBtc(amountMsat: number) {
+  return (amountMsat / 1000 / 100_000_000).toFixed(8);
+}
+
+function sats(amountMsat: number) {
+  return Math.floor(amountMsat / 1000).toLocaleString();
+}
 
 function channelIdentity(channel: Channel) {
   return `${channel.remotePubkey.slice(0, 12)}… · ${channel.id}`;
@@ -81,7 +135,78 @@ export function RebalanceChannelDialogContent({
   const [amountSat, setAmountSat] = React.useState("");
   const [maxRoutingFeeSat, setMaxRoutingFeeSat] = React.useState("1000");
   const [isQuoting, setQuoting] = React.useState(false);
+  const [isExecuting, setExecuting] = React.useState(false);
   const [quote, setQuote] = React.useState<RebalanceQuote>();
+  const [confirmation, setConfirmation] = React.useState("");
+  const [operation, setOperation] = React.useState<LocalRebalanceOperation>();
+  const [resumeStoredOperation, setResumeStoredOperation] =
+    React.useState(false);
+
+  const refreshOperation = React.useCallback(async () => {
+    if (!quote) {
+      return;
+    }
+    const response = await request<LocalRebalanceOperation>(
+      "/api/channels/rebalance/local-status",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quoteId: quote.quoteId,
+          routeFingerprint: quote.routeFingerprint,
+        }),
+      }
+    );
+    if (response) {
+      setOperation(response);
+    }
+  }, [quote]);
+
+  React.useEffect(() => {
+    if (!operation?.reconciliationPending) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      refreshOperation().catch((error) => console.error(error));
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [operation, refreshOperation]);
+
+  React.useEffect(() => {
+    if (operation?.state === "succeeded" || operation?.state === "failed") {
+      window.localStorage.removeItem(localRebalanceRecoveryKey);
+    }
+  }, [operation]);
+
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(localRebalanceRecoveryKey);
+      if (!stored) {
+        return;
+      }
+      const storedQuote = JSON.parse(stored) as RebalanceQuote;
+      if (storedQuote.incomingChannelId !== incomingChannel.id) {
+        return;
+      }
+      setQuote(storedQuote);
+      setOutgoingChannelId(storedQuote.outgoingChannelId);
+      setAmountSat(String(storedQuote.amountMsat / 1000));
+      setMaxRoutingFeeSat(String(storedQuote.maxRoutingFeeMsat / 1000));
+      setResumeStoredOperation(true);
+    } catch (error) {
+      console.error(error);
+      window.localStorage.removeItem(localRebalanceRecoveryKey);
+    }
+  }, [incomingChannel.id]);
+
+  React.useEffect(() => {
+    if (!resumeStoredOperation || !quote) {
+      return;
+    }
+    refreshOperation()
+      .catch((error) => console.error(error))
+      .finally(() => setResumeStoredOperation(false));
+  }, [quote, refreshOperation, resumeStoredOperation]);
 
   if (!channels) {
     return <Loading />;
@@ -99,6 +224,9 @@ export function RebalanceChannelDialogContent({
     }
     setQuoting(true);
     setQuote(undefined);
+    setConfirmation("");
+    setOperation(undefined);
+    window.localStorage.removeItem(localRebalanceRecoveryKey);
     try {
       const response = await request<RebalanceQuote>(
         "/api/channels/rebalance/local-quote",
@@ -127,6 +255,56 @@ export function RebalanceChannelDialogContent({
     }
   }
 
+  async function executeQuote() {
+    if (!quote || confirmation !== quote.executionConfirmation) {
+      return;
+    }
+    setExecuting(true);
+    window.localStorage.setItem(
+      localRebalanceRecoveryKey,
+      JSON.stringify(quote)
+    );
+    try {
+      const response = await request<LocalRebalanceOperation>(
+        "/api/channels/rebalance/local-execute",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quoteId: quote.quoteId,
+            routeFingerprint: quote.routeFingerprint,
+            confirmation,
+          }),
+        }
+      );
+      if (!response) {
+        throw new Error("No execution response received");
+      }
+      setOperation(response);
+      if (response.state === "succeeded") {
+        toast.success("Exact-channel rebalance succeeded and was reconciled.");
+      } else if (response.state === "failed") {
+        toast.error(
+          "Exact-channel rebalance failed; both payment legs were reconciled."
+        );
+      } else {
+        toast.info(
+          "Exact route submitted. Waiting for durable two-leg reconciliation."
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(String(error));
+      try {
+        await refreshOperation();
+      } catch (statusError) {
+        console.error(statusError);
+      }
+    } finally {
+      setExecuting(false);
+    }
+  }
+
   return (
     <AlertDialogContent className="max-w-2xl">
       <form onSubmit={createQuote}>
@@ -143,6 +321,7 @@ export function RebalanceChannelDialogContent({
               <div className="space-y-2">
                 <Label>Leave through this channel</Label>
                 <Select
+                  disabled={Boolean(operation)}
                   value={outgoingChannelId}
                   onValueChange={(value) => {
                     setOutgoingChannelId(value);
@@ -199,6 +378,7 @@ export function RebalanceChannelDialogContent({
                 <div>
                   <Label htmlFor="rebalance-amount">Principal (sats)</Label>
                   <Input
+                    disabled={Boolean(operation)}
                     id="rebalance-amount"
                     type="number"
                     required
@@ -214,6 +394,7 @@ export function RebalanceChannelDialogContent({
                 <div>
                   <Label htmlFor="routing-fee-cap">Routing fee cap</Label>
                   <Input
+                    disabled={Boolean(operation)}
                     id="routing-fee-cap"
                     type="number"
                     required
@@ -254,11 +435,89 @@ export function RebalanceChannelDialogContent({
                         amountMsat={quote.maxTotalDebitMsat}
                       />
                     </dd>
+                    <dt>Principal in BTC</dt>
+                    <dd className="text-right font-mono">
+                      {exactBtc(quote.amountMsat)} BTC
+                    </dd>
+                    <dt>Outgoing spendable at quote</dt>
+                    <dd className="text-right">
+                      {sats(quote.outgoingSpendableSnapshotMsat)} sats
+                    </dd>
+                    <dt>Projected outgoing spendable</dt>
+                    <dd className="text-right">
+                      {sats(
+                        quote.outgoingSpendableSnapshotMsat -
+                          quote.maxTotalDebitMsat
+                      )}{" "}
+                      sats
+                    </dd>
                   </dl>
+                  <div className="space-y-2 rounded-md border p-3 text-xs">
+                    <div className="font-medium">
+                      Fingerprint-bound channel balance evidence
+                    </div>
+                    <dl className="grid grid-cols-2 gap-1">
+                      <dt>Outgoing local → projected</dt>
+                      <dd className="text-right">
+                        {sats(quote.outgoingLocalSnapshotMsat)} →{" "}
+                        {sats(
+                          quote.outgoingLocalSnapshotMsat -
+                            quote.maxTotalDebitMsat
+                        )}{" "}
+                        sats
+                      </dd>
+                      <dt>Outgoing remote → projected</dt>
+                      <dd className="text-right">
+                        {sats(quote.outgoingRemoteSnapshotMsat)} →{" "}
+                        {sats(
+                          quote.outgoingRemoteSnapshotMsat +
+                            quote.maxTotalDebitMsat
+                        )}{" "}
+                        sats
+                      </dd>
+                      <dt>Outgoing reserves (local / remote)</dt>
+                      <dd className="text-right">
+                        {sats(quote.outgoingLocalReserveMsat)} /{" "}
+                        {sats(quote.outgoingRemoteReserveMsat)} sats
+                      </dd>
+                      <dt>Incoming local → projected</dt>
+                      <dd className="text-right">
+                        {sats(quote.incomingLocalSnapshotMsat)} →{" "}
+                        {sats(
+                          quote.incomingLocalSnapshotMsat + quote.amountMsat
+                        )}{" "}
+                        sats
+                      </dd>
+                      <dt>Incoming remote → projected</dt>
+                      <dd className="text-right">
+                        {sats(quote.incomingRemoteSnapshotMsat)} →{" "}
+                        {sats(
+                          quote.incomingRemoteSnapshotMsat - quote.amountMsat
+                        )}{" "}
+                        sats
+                      </dd>
+                      <dt>Incoming reserves (local / remote)</dt>
+                      <dd className="text-right">
+                        {sats(quote.incomingLocalReserveMsat)} /{" "}
+                        {sats(quote.incomingRemoteReserveMsat)} sats
+                      </dd>
+                      <dt>Expected on-chain change</dt>
+                      <dd className="text-right">0 sats</dd>
+                    </dl>
+                    <p className="text-muted-foreground">
+                      Projections use the quoted fixed-route debit. While the
+                      payment is in flight, the amount is temporarily committed
+                      in HTLCs; final balances are accepted only after both
+                      durable payment records reconcile.
+                    </p>
+                  </div>
                   <div className="rounded-md bg-muted p-3 text-xs">
                     <div className="break-all">Quote ID: {quote.quoteId}</div>
                     <div className="break-all">
                       Route fingerprint: {quote.routeFingerprint}
+                    </div>
+                    <div>
+                      Quoted: {new Date(quote.quotedAt).toLocaleString()}
                     </div>
                     <div>
                       Expires: {new Date(quote.expiresAt).toLocaleString()}
@@ -290,28 +549,138 @@ export function RebalanceChannelDialogContent({
                       ))}
                     </div>
                   ))}
+                  {(!operation || operation.requiresExactRetry) && (
+                    <div className="space-y-2 rounded-md border border-destructive p-3">
+                      <Label htmlFor="rebalance-confirmation">
+                        Type this exact confirmation
+                      </Label>
+                      <code className="block break-all text-xs">
+                        {quote.executionConfirmation}
+                      </code>
+                      <Input
+                        autoComplete="off"
+                        id="rebalance-confirmation"
+                        value={confirmation}
+                        onChange={(event) =>
+                          setConfirmation(event.target.value)
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
-              <Alert variant="destructive">
-                <AlertTriangleIcon className="h-4 w-4" />
-                <AlertTitle>Payment execution remains locked</AlertTitle>
-                <AlertDescription>
-                  {quote?.blockedReason ||
-                    "Local circular-route execution is not implemented or authorized."}{" "}
-                  This route result cannot spend funds.
-                </AlertDescription>
-              </Alert>
+              {operation && (
+                <Alert
+                  variant={
+                    operation.state === "succeeded" ? "default" : "destructive"
+                  }
+                >
+                  {operation.state === "succeeded" ? (
+                    <CheckCircle2Icon className="h-4 w-4" />
+                  ) : (
+                    <AlertTriangleIcon className="h-4 w-4" />
+                  )}
+                  <AlertTitle>
+                    {operation.state === "succeeded"
+                      ? "Rebalance reconciled"
+                      : operation.state === "failed"
+                        ? "Rebalance failed"
+                        : operation.requiresExactRetry
+                          ? "Exact-operation recovery required"
+                          : "Payment submitted; reconciliation pending"}
+                  </AlertTitle>
+                  <AlertDescription>
+                    <div className="space-y-1 break-all text-xs">
+                      <div>
+                        State/phase: {operation.state} / {operation.phase}
+                      </div>
+                      <div>Operation ID: {operation.operationId}</div>
+                      {operation.paymentHash && (
+                        <div>Payment hash: {operation.paymentHash}</div>
+                      )}
+                      {operation.outboundPaymentId && (
+                        <div>
+                          Outbound payment ID: {operation.outboundPaymentId}
+                        </div>
+                      )}
+                      {operation.actualRoutingFeeMsat !== undefined && (
+                        <div>
+                          Actual routing fee:{" "}
+                          {operation.actualRoutingFeeMsat.toLocaleString()} msat
+                        </div>
+                      )}
+                      {operation.terminalEvidenceHash && (
+                        <div>
+                          Evidence hash: {operation.terminalEvidenceHash}
+                        </div>
+                      )}
+                      {operation.failureReason && (
+                        <div>{operation.failureReason}</div>
+                      )}
+                      {operation.reconciliationPending && (
+                        <div>
+                          Status is read from both durable payment records every
+                          two seconds.
+                        </div>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!operation && quote && (
+                <Alert variant="destructive">
+                  <AlertTriangleIcon className="h-4 w-4" />
+                  <AlertTitle>This action moves funds</AlertTitle>
+                  <AlertDescription>
+                    One fixed-route payment will debit at most{" "}
+                    {Math.ceil(quote.maxTotalDebitMsat / 1000).toLocaleString()}{" "}
+                    sats from channel {quote.outgoingChannelId}, return{" "}
+                    {Math.floor(quote.amountMsat / 1000).toLocaleString()} sats
+                    through channel {quote.incomingChannelId}, use no automatic
+                    fallback route, and remain locked until both durable payment
+                    records agree.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {!quote && (
+                <Alert>
+                  <AlertTriangleIcon className="h-4 w-4" />
+                  <AlertTitle>Quote first</AlertTitle>
+                  <AlertDescription>
+                    Finding a route is non-paying. Execution requires a fresh
+                    quote and a separate exact confirmation.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4">
           <AlertDialogCancel onClick={closeDialog}>Close</AlertDialogCancel>
-          <LoadingButton loading={isQuoting} type="submit">
+          <LoadingButton
+            disabled={Boolean(operation)}
+            loading={isQuoting}
+            type="submit"
+          >
             Find local route
           </LoadingButton>
-          <LoadingButton disabled type="button" variant="destructive">
-            <LockIcon /> Execute locked
+          <LoadingButton
+            disabled={
+              !quote?.executionEnabled ||
+              confirmation !== quote.executionConfirmation ||
+              Boolean(operation && !operation.requiresExactRetry)
+            }
+            loading={isExecuting}
+            onClick={executeQuote}
+            type="button"
+            variant="destructive"
+          >
+            {operation?.requiresExactRetry
+              ? "Retry exact operation"
+              : "Execute exact route"}
           </LoadingButton>
         </AlertDialogFooter>
       </form>
