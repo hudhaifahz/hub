@@ -284,13 +284,16 @@ func TestAcquireLocalRebalanceQuoteForExecutionRejectsMismatchExpiryAndTampering
 }
 
 type recordingCircularPaymentExecutor struct {
-	prepareCalls  int
-	sendCalls     int
-	lastExpiry    uint32
-	lastOperation string
-	prepared      *lnclient.PreparedCircularPayment
-	prepareErr    error
-	sendErr       error
+	prepareCalls   int
+	sendCalls      int
+	reconcileCalls int
+	lastExpiry     uint32
+	lastOperation  string
+	prepared       *lnclient.PreparedCircularPayment
+	reconciliation *lnclient.CircularPaymentReconciliation
+	prepareErr     error
+	sendErr        error
+	reconcileErr   error
 }
 
 func (executor *recordingCircularPaymentExecutor) PrepareCircularPayment(
@@ -318,6 +321,21 @@ func (executor *recordingCircularPaymentExecutor) SendPreparedCircularPayment(
 		return "", executor.sendErr
 	}
 	return executor.prepared.OutboundPaymentID, nil
+}
+
+func (executor *recordingCircularPaymentExecutor) ReconcilePreparedCircularPayment(
+	operationID string, _ string, _ string, _ uint64, _ uint64, _ uint64, _ string, _ string,
+) (*lnclient.CircularPaymentReconciliation, error) {
+	executor.reconcileCalls++
+	executor.lastOperation = operationID
+	if executor.reconcileErr != nil {
+		return nil, executor.reconcileErr
+	}
+	if executor.reconciliation == nil {
+		return nil, errors.New("no reconciliation configured")
+	}
+	result := *executor.reconciliation
+	return &result, nil
 }
 
 func TestRunLocalRebalanceExecutionPersistsExactPreparedAndSubmittedState(t *testing.T) {
@@ -476,6 +494,178 @@ func TestRunLocalRebalanceExecutionRejectsTamperedSubmittedIdentifiers(t *testin
 	require.ErrorContains(t, err, "missing persisted payment identifiers")
 	require.Zero(t, executor.prepareCalls)
 	require.Zero(t, executor.sendCalls)
+}
+
+func TestReconcileLocalRebalanceTerminalPersistsSuccessAndReplaysWithoutBackend(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPreparedLocalRebalanceQuote(t, "terminal-success", now, localRebalancePhaseSubmitted)
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	fee := quote.TotalRoutingFeeMsat
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStateSucceeded,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		ActualRoutingFeeMsat:  &fee,
+		LatestUpdateTimestamp: uint64(now.Add(2 * time.Second).Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateSucceeded,
+		OutboundPaymentStatus: lnclient.CircularPaymentStateSucceeded,
+	}
+
+	result, err := theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(3*time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, localRebalancePhaseSucceeded, result.State)
+	require.Equal(t, quote.OperationId, result.OperationId)
+	require.Equal(t, quote.PreparedPaymentHash, result.PaymentHash)
+	require.Equal(t, quote.OutboundPaymentId, result.OutboundPaymentId)
+	require.Equal(t, fee, *result.ActualRoutingFeeMsat)
+	require.NotEmpty(t, result.TerminalEvidenceHash)
+	require.Empty(t, result.FailureReason)
+	require.Equal(t, 1, executor.reconcileCalls)
+
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, localRebalancePhaseSucceeded, persisted.State)
+	require.Equal(t, localRebalancePhaseSucceeded, persisted.ExecutionPhase)
+	require.NotNil(t, persisted.ExecutedAt)
+	require.NotNil(t, persisted.LightningTerminalAt)
+	require.NotNil(t, persisted.ReconciledAt)
+	require.Equal(t, result.TerminalEvidenceHash, persisted.TerminalEvidenceHash)
+
+	replayed, err := theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(4*time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, result, replayed)
+	require.Equal(t, 1, executor.reconcileCalls)
+
+	nextQuote, nextFingerprint := testPersistedLocalRebalanceQuote(t, "after-terminal-success", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&nextQuote).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(nextQuote.ID, nextFingerprint, now)
+	require.NoError(t, err)
+
+	require.NoError(t, gormDB.Model(&db.LocalRebalanceQuote{}).Where("id = ?", quote.ID).Update("terminal_evidence_hash", "tampered").Error)
+	_, err = theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(5*time.Second), executor)
+	require.ErrorContains(t, err, "evidence hash does not match")
+	require.Equal(t, 1, executor.reconcileCalls)
+}
+
+func TestReconcileLocalRebalanceTerminalPersistsTwoLegFailure(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPreparedLocalRebalanceQuote(t, "terminal-failure", now, localRebalancePhasePrepared)
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStateFailed,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		LatestUpdateTimestamp: uint64(now.Add(2 * time.Second).Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateFailed,
+		OutboundPaymentStatus: lnclient.CircularPaymentStateFailed,
+	}
+
+	result, err := theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(3*time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, localRebalancePhaseFailed, result.State)
+	require.Nil(t, result.ActualRoutingFeeMsat)
+	require.Equal(t, "both exact-bound Lightning payment legs failed", result.FailureReason)
+	require.NotEmpty(t, result.TerminalEvidenceHash)
+
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, localRebalancePhaseFailed, persisted.State)
+	require.Equal(t, localRebalancePhaseFailed, persisted.ExecutionPhase)
+	require.Nil(t, persisted.ExecutedAt)
+	require.Nil(t, persisted.ActualRoutingFeeMsat)
+	require.NotNil(t, persisted.LightningTerminalAt)
+	require.NotNil(t, persisted.ReconciledAt)
+}
+
+func TestReconcileLocalRebalanceTerminalKeepsPendingAndContradictoryOperationsLocked(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPreparedLocalRebalanceQuote(t, "terminal-pending", now, localRebalancePhaseSubmitted)
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStatePending,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		LatestUpdateTimestamp: uint64(now.Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateFailed,
+		OutboundPaymentStatus: lnclient.CircularPaymentStatePending,
+	}
+
+	result, err := theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStatePending, result.State)
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, "executing", persisted.State)
+	require.Equal(t, localRebalancePhaseSubmitted, persisted.ExecutionPhase)
+	require.Empty(t, persisted.TerminalEvidenceHash)
+
+	fee := quote.TotalRoutingFeeMsat
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStateSucceeded,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		ActualRoutingFeeMsat:  &fee,
+		LatestUpdateTimestamp: uint64(now.Add(time.Second).Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateSucceeded,
+		OutboundPaymentStatus: lnclient.CircularPaymentStateFailed,
+	}
+	_, err = theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(time.Second), executor)
+	require.ErrorContains(t, err, "two-leg terminal evidence")
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, "executing", persisted.State)
+	require.Empty(t, persisted.TerminalEvidenceHash)
+
+	blockedQuote, blockedFingerprint := testPersistedLocalRebalanceQuote(t, "blocked-by-pending", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&blockedQuote).Error)
+	_, err = theAPI.acquireLocalRebalanceQuoteForExecution(blockedQuote.ID, blockedFingerprint, now)
+	require.Error(t, err)
+}
+
+func testPreparedLocalRebalanceQuote(
+	t *testing.T, quoteId string, now time.Time, phase string,
+) (db.LocalRebalanceQuote, string) {
+	t.Helper()
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, quoteId, now.Add(time.Minute))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = phase
+	quote.PreparedPaymentHash = strings.Repeat("a", 64)
+	var err error
+	quote.OutboundPaymentId, err = deriveCircularOutboundPaymentId(quote.OperationId)
+	require.NoError(t, err)
+	preparedAt := now
+	quote.PreparedAt = &preparedAt
+	if phase == localRebalancePhaseSubmitted {
+		submittedAt := now.Add(time.Second)
+		quote.SubmittedAt = &submittedAt
+	}
+	return quote, fingerprint
 }
 
 func TestRunLocalRebalanceExecutionRejectsMismatchedPreparationBeforeSend(t *testing.T) {
