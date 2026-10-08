@@ -136,6 +136,30 @@ func TestLocalRebalanceRouteFingerprintBindsExactChannelsAndAmounts(t *testing.T
 		"final scid": func(quote *LocalRebalanceQuoteResponse) {
 			quote.IncomingShortChannelId = "998"
 		},
+		"outgoing local snapshot": func(quote *LocalRebalanceQuoteResponse) {
+			quote.OutgoingLocalSnapshotMsat++
+		},
+		"outgoing remote snapshot": func(quote *LocalRebalanceQuoteResponse) {
+			quote.OutgoingRemoteSnapshotMsat++
+		},
+		"outgoing local reserve": func(quote *LocalRebalanceQuoteResponse) {
+			quote.OutgoingLocalReserveMsat++
+		},
+		"outgoing remote reserve": func(quote *LocalRebalanceQuoteResponse) {
+			quote.OutgoingRemoteReserveMsat++
+		},
+		"incoming local snapshot": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingLocalSnapshotMsat++
+		},
+		"incoming remote snapshot": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingRemoteSnapshotMsat++
+		},
+		"incoming local reserve": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingLocalReserveMsat++
+		},
+		"incoming remote reserve": func(quote *LocalRebalanceQuoteResponse) {
+			quote.IncomingRemoteReserveMsat++
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -647,6 +671,130 @@ func TestReconcileLocalRebalanceTerminalKeepsPendingAndContradictoryOperationsLo
 	require.Error(t, err)
 }
 
+func TestOwnerLocalRebalanceRequiresExactTypedConfirmationBeforeAnyBackendCall(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "owner-confirmation-quote", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	_, err = theAPI.executeLocalRebalanceWithExecutor(&ExecuteLocalRebalanceRequest{
+		QuoteId:          quote.ID,
+		RouteFingerprint: fingerprint,
+		Confirmation:     "REBALANCE 20000 SATS wrong",
+	}, now, executor)
+	require.ErrorContains(t, err, localRebalanceExecutionConfirmation(quote.ID, quote.AmountMsat))
+	require.Zero(t, executor.prepareCalls)
+	require.Zero(t, executor.sendCalls)
+	require.Zero(t, executor.reconcileCalls)
+
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, "quoted", persisted.State)
+	require.Empty(t, persisted.OperationId)
+}
+
+func TestOwnerLocalRebalanceSubmitsOncePollsTerminalAndReplaysWithoutSending(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "owner-execution-quote", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	operationId := deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	outboundPaymentId, err := deriveCircularOutboundPaymentId(operationId)
+	require.NoError(t, err)
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStatePending,
+		OperationID:           operationId,
+		PaymentHash:           strings.Repeat("a", 64),
+		OutboundPaymentID:     outboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		InboundPaymentStatus:  lnclient.CircularPaymentStatePending,
+		OutboundPaymentStatus: lnclient.CircularPaymentStatePending,
+	}
+	request := &ExecuteLocalRebalanceRequest{
+		QuoteId:          quote.ID,
+		RouteFingerprint: fingerprint,
+		Confirmation:     localRebalanceExecutionConfirmation(quote.ID, quote.AmountMsat),
+	}
+
+	pending, err := theAPI.executeLocalRebalanceWithExecutor(request, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, "executing", pending.State)
+	require.Equal(t, localRebalancePhaseSubmitted, pending.Phase)
+	require.True(t, pending.ReconciliationPending)
+	require.False(t, pending.RequiresExactRetry)
+	require.Equal(t, quote.OutgoingChannelId, pending.OutgoingChannelId)
+	require.Equal(t, quote.IncomingChannelId, pending.IncomingChannelId)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+	require.Equal(t, 1, executor.reconcileCalls)
+
+	fee := quote.TotalRoutingFeeMsat
+	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStateSucceeded,
+		OperationID:           operationId,
+		PaymentHash:           strings.Repeat("a", 64),
+		OutboundPaymentID:     outboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		ActualRoutingFeeMsat:  &fee,
+		LatestUpdateTimestamp: uint64(now.Add(2 * time.Second).Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateSucceeded,
+		OutboundPaymentStatus: lnclient.CircularPaymentStateSucceeded,
+	}
+	terminal, err := theAPI.reconcileLocalRebalanceWithExecutor(&ReconcileLocalRebalanceRequest{
+		QuoteId: quote.ID, RouteFingerprint: fingerprint,
+	}, now.Add(3*time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, localRebalancePhaseSucceeded, terminal.State)
+	require.Equal(t, localRebalancePhaseSucceeded, terminal.Phase)
+	require.Equal(t, fee, *terminal.ActualRoutingFeeMsat)
+	require.False(t, terminal.ReconciliationPending)
+	require.NotEmpty(t, terminal.TerminalEvidenceHash)
+	require.Equal(t, 2, executor.reconcileCalls)
+
+	replayed, err := theAPI.executeLocalRebalanceWithExecutor(request, now.Add(4*time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, terminal, replayed)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+	require.Equal(t, 2, executor.reconcileCalls)
+}
+
+func TestOwnerLocalRebalanceStatusDoesNotSendFromAcquiredPhase(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "owner-acquired-quote", now.Add(time.Minute))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = localRebalancePhaseAcquired
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	status, err := theAPI.reconcileLocalRebalanceWithExecutor(&ReconcileLocalRebalanceRequest{
+		QuoteId: quote.ID, RouteFingerprint: fingerprint,
+	}, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, localRebalancePhaseAcquired, status.Phase)
+	require.True(t, status.RequiresExactRetry)
+	require.False(t, status.ReconciliationPending)
+	require.Zero(t, executor.prepareCalls)
+	require.Zero(t, executor.sendCalls)
+	require.Zero(t, executor.reconcileCalls)
+}
+
 func testPreparedLocalRebalanceQuote(
 	t *testing.T, quoteId string, now time.Time, phase string,
 ) (db.LocalRebalanceQuote, string) {
@@ -727,6 +875,14 @@ func testPersistedLocalRebalanceQuote(
 		IncomingShortChannelId:         response.IncomingShortChannelId,
 		OutgoingSpendableSnapshotMsat:  response.OutgoingSpendableSnapshotMsat,
 		IncomingReceivableSnapshotMsat: response.IncomingReceivableSnapshotMsat,
+		OutgoingLocalSnapshotMsat:      response.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat:     response.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:       response.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:      response.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:      response.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat:     response.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:       response.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:      response.IncomingRemoteReserveMsat,
 		RouteJson:                      string(routeJSON),
 		RouteBytes:                     append([]byte(nil), response.routeBytes...),
 		ExpiresAt:                      expiresAt,
@@ -747,6 +903,14 @@ func testLocalRebalanceQuoteResponse() *LocalRebalanceQuoteResponse {
 		IncomingShortChannelId:         "202",
 		OutgoingSpendableSnapshotMsat:  989_340_000,
 		IncomingReceivableSnapshotMsat: 840_710_000,
+		OutgoingLocalSnapshotMsat:      1_000_000_000,
+		OutgoingRemoteSnapshotMsat:     500_000_000,
+		OutgoingLocalReserveMsat:       10_000_000,
+		OutgoingRemoteReserveMsat:      10_000_000,
+		IncomingLocalSnapshotMsat:      489_340_000,
+		IncomingRemoteSnapshotMsat:     840_710_000,
+		IncomingLocalReserveMsat:       10_000_000,
+		IncomingRemoteReserveMsat:      10_000_000,
 		routeBytes:                     []byte{0x01, 0x02, 0x03, 0x04},
 		Paths: []LocalCircularRoutePath{{
 			AmountMsat: 20_000_000,

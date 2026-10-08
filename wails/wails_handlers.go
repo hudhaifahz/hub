@@ -625,6 +625,40 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: executeRebalanceResponse, Error: ""}
+	case "/api/channels/rebalance/local-execute":
+		if method != "POST" {
+			break
+		}
+		executeLocalRebalanceRequest := &api.ExecuteLocalRebalanceRequest{}
+		if err := json.Unmarshal([]byte(body), executeLocalRebalanceRequest); err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  route,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		executeLocalRebalanceResponse, err := app.api.ExecuteLocalRebalance(ctx, executeLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: executeLocalRebalanceResponse, Error: ""}
+	case "/api/channels/rebalance/local-status":
+		if method != "POST" {
+			break
+		}
+		reconcileLocalRebalanceRequest := &api.ReconcileLocalRebalanceRequest{}
+		if err := json.Unmarshal([]byte(body), reconcileLocalRebalanceRequest); err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  route,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		reconcileLocalRebalanceResponse, err := app.api.ReconcileLocalRebalance(ctx, reconcileLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: reconcileLocalRebalanceResponse, Error: ""}
 	case "/api/balances":
 		balancesResponse, err := app.api.GetBalances(ctx)
 		if err != nil {

@@ -38,6 +38,8 @@ type API interface {
 	QuoteRebalance(ctx context.Context, request *QuoteRebalanceRequest) (*RebalanceQuoteResponse, error)
 	QuoteLocalRebalance(ctx context.Context, request *QuoteLocalRebalanceRequest) (*LocalRebalanceQuoteResponse, error)
 	ExecuteRebalance(ctx context.Context, request *ExecuteRebalanceRequest) (*RebalanceChannelResponse, error)
+	ExecuteLocalRebalance(ctx context.Context, request *ExecuteLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error)
+	ReconcileLocalRebalance(ctx context.Context, request *ReconcileLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error)
 	CloseChannel(ctx context.Context, peerId, channelId string, force bool) (*CloseChannelResponse, error)
 	UpdateChannel(ctx context.Context, updateChannelRequest *UpdateChannelRequest) error
 	MakeOffer(ctx context.Context, description string) (string, error)
@@ -508,16 +510,71 @@ type LocalRebalanceQuoteResponse struct {
 	IncomingShortChannelId         string                   `json:"incomingShortChannelId"`
 	OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
 	IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
+	OutgoingLocalSnapshotMsat      uint64                   `json:"outgoingLocalSnapshotMsat"`
+	OutgoingRemoteSnapshotMsat     uint64                   `json:"outgoingRemoteSnapshotMsat"`
+	OutgoingLocalReserveMsat       uint64                   `json:"outgoingLocalReserveMsat"`
+	OutgoingRemoteReserveMsat      uint64                   `json:"outgoingRemoteReserveMsat"`
+	IncomingLocalSnapshotMsat      uint64                   `json:"incomingLocalSnapshotMsat"`
+	IncomingRemoteSnapshotMsat     uint64                   `json:"incomingRemoteSnapshotMsat"`
+	IncomingLocalReserveMsat       uint64                   `json:"incomingLocalReserveMsat"`
+	IncomingRemoteReserveMsat      uint64                   `json:"incomingRemoteReserveMsat"`
 	Paths                          []LocalCircularRoutePath `json:"paths"`
+	QuotedAt                       time.Time                `json:"quotedAt"`
 	ExpiresAt                      time.Time                `json:"expiresAt"`
 	ExecutionEnabled               bool                     `json:"executionEnabled"`
 	BlockedReason                  string                   `json:"blockedReason"`
+	ExecutionConfirmation          string                   `json:"executionConfirmation"`
 	routeBytes                     []byte
 }
 
 type ExecuteRebalanceRequest struct {
 	QuoteId          string `json:"quoteId"`
 	RouteFingerprint string `json:"routeFingerprint"`
+}
+
+type ExecuteLocalRebalanceRequest struct {
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
+	Confirmation     string `json:"confirmation"`
+}
+
+type ReconcileLocalRebalanceRequest struct {
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
+}
+
+type LocalRebalanceOperationResponse struct {
+	QuoteId                    string     `json:"quoteId"`
+	RouteFingerprint           string     `json:"routeFingerprint"`
+	State                      string     `json:"state"`
+	Phase                      string     `json:"phase"`
+	OperationId                string     `json:"operationId"`
+	PaymentHash                string     `json:"paymentHash"`
+	OutboundPaymentId          string     `json:"outboundPaymentId"`
+	AmountMsat                 uint64     `json:"amountMsat"`
+	QuotedRoutingFeeMsat       uint64     `json:"quotedRoutingFeeMsat"`
+	MaxRoutingFeeMsat          uint64     `json:"maxRoutingFeeMsat"`
+	ActualRoutingFeeMsat       *uint64    `json:"actualRoutingFeeMsat,omitempty"`
+	OutgoingChannelId          string     `json:"outgoingChannelId"`
+	OutgoingNodePubkey         string     `json:"outgoingNodePubkey"`
+	IncomingChannelId          string     `json:"incomingChannelId"`
+	IncomingNodePubkey         string     `json:"incomingNodePubkey"`
+	OutgoingLocalSnapshotMsat  uint64     `json:"outgoingLocalSnapshotMsat"`
+	OutgoingRemoteSnapshotMsat uint64     `json:"outgoingRemoteSnapshotMsat"`
+	OutgoingLocalReserveMsat   uint64     `json:"outgoingLocalReserveMsat"`
+	OutgoingRemoteReserveMsat  uint64     `json:"outgoingRemoteReserveMsat"`
+	IncomingLocalSnapshotMsat  uint64     `json:"incomingLocalSnapshotMsat"`
+	IncomingRemoteSnapshotMsat uint64     `json:"incomingRemoteSnapshotMsat"`
+	IncomingLocalReserveMsat   uint64     `json:"incomingLocalReserveMsat"`
+	IncomingRemoteReserveMsat  uint64     `json:"incomingRemoteReserveMsat"`
+	PreparedAt                 *time.Time `json:"preparedAt,omitempty"`
+	SubmittedAt                *time.Time `json:"submittedAt,omitempty"`
+	LightningTerminalAt        *time.Time `json:"lightningTerminalAt,omitempty"`
+	ReconciledAt               *time.Time `json:"reconciledAt,omitempty"`
+	TerminalEvidenceHash       string     `json:"terminalEvidenceHash,omitempty"`
+	FailureReason              string     `json:"failureReason,omitempty"`
+	RequiresExactRetry         bool       `json:"requiresExactRetry"`
+	ReconciliationPending      bool       `json:"reconciliationPending"`
 }
 
 type RedeemOnchainFundsRequest struct {

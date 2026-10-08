@@ -94,6 +94,14 @@ func TestMigrate(t *testing.T) {
 			require.NotNil(t, migratedQuote.LightningTerminalAt)
 			require.NotNil(t, migratedQuote.ReconciledAt)
 			require.Equal(t, "terminal-evidence-hash", migratedQuote.TerminalEvidenceHash)
+			require.Equal(t, uint64(1_000_000_000), migratedQuote.OutgoingLocalSnapshotMsat)
+			require.Equal(t, uint64(500_000_000), migratedQuote.OutgoingRemoteSnapshotMsat)
+			require.Equal(t, uint64(10_000_000), migratedQuote.OutgoingLocalReserveMsat)
+			require.Equal(t, uint64(11_000_000), migratedQuote.OutgoingRemoteReserveMsat)
+			require.Equal(t, uint64(489_340_000), migratedQuote.IncomingLocalSnapshotMsat)
+			require.Equal(t, uint64(840_710_000), migratedQuote.IncomingRemoteSnapshotMsat)
+			require.Equal(t, uint64(12_000_000), migratedQuote.IncomingLocalReserveMsat)
+			require.Equal(t, uint64(13_000_000), migratedQuote.IncomingRemoteReserveMsat)
 			requireCount[db.UserConfig](t, env.dest, 1)
 		})
 	}
@@ -281,6 +289,14 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 		IncomingShortChannelId:         "202",
 		OutgoingSpendableSnapshotMsat:  989_340_000,
 		IncomingReceivableSnapshotMsat: 840_710_000,
+		OutgoingLocalSnapshotMsat:      1_000_000_000,
+		OutgoingRemoteSnapshotMsat:     500_000_000,
+		OutgoingLocalReserveMsat:       10_000_000,
+		OutgoingRemoteReserveMsat:      11_000_000,
+		IncomingLocalSnapshotMsat:      489_340_000,
+		IncomingRemoteSnapshotMsat:     840_710_000,
+		IncomingLocalReserveMsat:       12_000_000,
+		IncomingRemoteReserveMsat:      13_000_000,
 		RouteJson:                      `[{"hops":[]}]`,
 		OperationId:                    "operation-id",
 		ExecutionPhase:                 "succeeded",

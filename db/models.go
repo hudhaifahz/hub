@@ -168,6 +168,14 @@ type LocalRebalanceQuote struct {
 	IncomingShortChannelId         string
 	OutgoingSpendableSnapshotMsat  uint64
 	IncomingReceivableSnapshotMsat uint64
+	OutgoingLocalSnapshotMsat      uint64
+	OutgoingRemoteSnapshotMsat     uint64
+	OutgoingLocalReserveMsat       uint64
+	OutgoingRemoteReserveMsat      uint64
+	IncomingLocalSnapshotMsat      uint64
+	IncomingRemoteSnapshotMsat     uint64
+	IncomingLocalReserveMsat       uint64
+	IncomingRemoteReserveMsat      uint64
 	RouteJson                      string
 	RouteBytes                     []byte
 	OperationId                    string
