@@ -705,3 +705,19 @@ Security review:
 - The scanner still reports uncalled, no-fix package/module findings for `github.com/jackc/pgproto3/v2@v2.3.3` and `golang.org/x/crypto/openpgp`; they are recorded residuals, not represented as a clean dependency graph.
 - Rust lockfile audit reports four vulnerabilities plus three unmaintained warnings only through the exact old-version migration-test dependency. Neither the arm64 nor x86_64 production macOS library tree contains the affected `h2 0.3.27`, `rustls-webpki 0.101.7`, `bincode 1.3.3`, `paste 1.0.15`, or `rustls-pemfile 1.0.4` packages. This is a production-tree exclusion, not a claim that the full development lockfile is clean.
 - Go vet also identified and fixed a pre-existing Phoenix invoice-date layout typo (`2006-02-01` to `2006-01-02`).
+
+### 2026-10-08 — Guarded diagnostic owner build installed; unlock acceptance pending
+
+Observed:
+
+- Pushed Hub commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f` was built with Go `1.27.2` and Wails `2.15.0` as a universal arm64/x86_64 application. It pins the matching diagnostic binding commit `2d4b8cae5b4188451fbccdb347113838a9981dbf`.
+- The guarded owner-test archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-diagnostic-4a82cbf-owner-test.zip`, size `72,189,711` bytes, SHA-256 `d8bfadd9c778135f0bd0a1b7f6360f6605d663723e843cd3cd33e253158150ee`. The adjacent checksum and manifest were produced by the packaging command.
+- The installed executable SHA-256 is `948b05c05bcdf9c81d9818ccfd3e0bf85f8d55ebdb2508d70cd7f098fdc1fb50`; the installed, signed embedded LDK SHA-256 is `0e3081280f84177a7cd47a835004048d95d7207163ee030de1fe47ed027ea69f`. Both contain arm64 and x86_64 slices.
+- Positive static package verification passed. Negative checks reject a wrong bundle identifier and reject this ad-hoc owner build when non-ad-hoc public signing is required.
+- Before replacement, the application was shut down through its confirmation UI. Integrity-checked SQLite snapshots and the complete prior application were preserved at `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-diagnostic-4a82cbf`.
+- The installed process opens the canonical sandbox database and loads only `/Applications/Alby Hub.app/Contents/Frameworks/libldk_node.dylib`. Migration `202610090100_local_rebalance_failure_diagnostics` is recorded and all four diagnostic columns exist with fail-safe defaults.
+- Database integrity remains `ok`. Continuity counts remain `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=246`, and `local_rebalance_quotes=8`.
+
+Pending:
+
+- The application is at its normal password screen. Owner unlock, chain sync, channel visibility, balances, and the responsive exact-channel dialog still require live readback. No quote, invoice, probe, HTLC, payment, or rebalance has been created.
