@@ -205,7 +205,7 @@ func (svc *PhoenixService) MakeInvoice(ctx context.Context, amountMsat int64, de
 		form.Add("description", "invoice")
 	}
 
-	today := time.Now().UTC().Format("2006-02-01") // querying is too slow so we limit the invoices we query with the date - see list transactions
+	today := time.Now().UTC().Format("2006-01-02") // querying is too slow so we limit the invoices we query with the date - see list transactions
 	form.Add("externalId", today)                  // for some resone phoenixd requires an external id to query a list of invoices. thus we set this to nwc
 	logger.Logger.WithFields(logrus.Fields{
 		"externalId": today,
