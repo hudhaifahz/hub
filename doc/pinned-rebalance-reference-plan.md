@@ -647,3 +647,20 @@ Consequence:
 
 - This is live proof that the fixed route used the exact selected outgoing and incoming channels, persisted two-leg terminal evidence, charged the reviewed fee, and reconciled successfully. It did not repopulate Kraken or advance the intended inbound-`030ef18b…` / outbound-Kraken liquidity goal.
 - The current UI safety is insufficient for a financially cautious owner: attaching `Rebalance In` to a row plus fingerprint confirmation did not prevent an unintended incoming-channel choice. Before another live attempt, make the target unmistakable in the confirmation step and require an action-specific confirmation that names or includes both exact channel IDs. A new Kraken attempt must use a fresh quote and separate approval packet.
+
+### 2026-10-08 — Responsive exact-route review UI installed; owner visual acceptance pending
+
+Observed:
+
+- Hub commit `a382994f06dfe901b1f5f45e4cec6c0104829d50` contains only the responsive exact-route dialog fix on top of the documented release-plan commit. It keeps the long exact identifiers inside the modal, makes the review body independently scrollable, collapses evidence rows on narrow screens, and keeps the action footer visible and wrapping.
+- Frontend lint, TypeScript, and formatting checks passed. A universal arm64/x86_64 macOS bundle was built as Alby Hub `v1.24.1`; only the previously recorded Bark deployment-target warnings appeared.
+- Before replacement, the prior application and transaction-safe database snapshots were preserved at `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-ui-fix-a382994f`. The post-quit database snapshot and the live database both returned `integrity_check = ok`.
+- The installed executable SHA-256 is `20d5d51c47891a80955113b2ee8bb76347a430c91c562b9e3d4da9258a861240`. The embedded signed LDK library remains SHA-256 `f853168d63280736237e84d40f869fd03fabe3e5560c5e067f026c893b68b19a` and both artifacts remain universal arm64/x86_64.
+- The reproducible archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-a382994f.zip`, SHA-256 `60a15668e600bdf8a3d2fde93a6cacfb476afe3f69b1f5bba50400e5f2506c4e`.
+- Deep code-signature verification passes. Gatekeeper still rejects this owner build because it is ad-hoc signed rather than Developer-ID signed and notarized; this is unchanged and is not suitable as the public package.
+- The restarted application is at its password screen and reports `v1.24.1`. Wallet continuity counts are `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=246`, and `local_rebalance_quotes=8`.
+
+Consequence:
+
+- The responsive bundle is installed without altering wallet data, but live visual acceptance is intentionally pending owner unlock and inspection of the exact-channel dialog. No quote, invoice, probe, HTLC, payment, or rebalance was created by this deployment.
+- Safety-diagnostic development remains paused until that UI checkpoint is accepted.
