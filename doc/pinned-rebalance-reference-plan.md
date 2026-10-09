@@ -656,14 +656,14 @@ Observed:
 - Frontend lint, TypeScript, and formatting checks passed. A universal arm64/x86_64 macOS bundle was built as Alby Hub `v1.24.1`; only the previously recorded Bark deployment-target warnings appeared.
 - Before replacement, the prior application and transaction-safe database snapshots were preserved at `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-ui-fix-a382994f`. The post-quit database snapshot and the live database both returned `integrity_check = ok`.
 - The installed executable SHA-256 is `20d5d51c47891a80955113b2ee8bb76347a430c91c562b9e3d4da9258a861240`. The embedded signed LDK library remains SHA-256 `f853168d63280736237e84d40f869fd03fabe3e5560c5e067f026c893b68b19a` and both artifacts remain universal arm64/x86_64.
-- The reproducible archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-a382994f.zip`, SHA-256 `60a15668e600bdf8a3d2fde93a6cacfb476afe3f69b1f5bba50400e5f2506c4e`.
+- The first archive `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-a382994f.zip`, SHA-256 `60a15668e600bdf8a3d2fde93a6cacfb476afe3f69b1f5bba50400e5f2506c4e`, was subsequently rejected by the sandbox-path incident below. It has been removed from the distributable build directory and retained only as `REJECTED-unsandboxed-Alby-Hub-v1.24.1-custom-a382994f.zip` inside the incident rollback directory.
 - Deep code-signature verification passes. Gatekeeper still rejects this owner build because it is ad-hoc signed rather than Developer-ID signed and notarized; this is unchanged and is not suitable as the public package.
 - The restarted application is at its password screen and reports `v1.24.1`. Wallet continuity counts are `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=246`, and `local_rebalance_quotes=8`.
 
 Consequence:
 
-- The responsive bundle is installed without altering wallet data, but live visual acceptance is intentionally pending owner unlock and inspection of the exact-channel dialog. No quote, invoice, probe, HTLC, payment, or rebalance was created by this deployment.
-- Safety-diagnostic development remains paused until that UI checkpoint is accepted.
+- The corrected responsive bundle is installed without altering wallet data, but the current clean restart is intentionally stopped at the password screen pending owner unlock. No quote, invoice, probe, HTLC, payment, or rebalance was created by this deployment.
+- Safety-diagnostic development resumed on a source-only path; no diagnostic build is installed until its migration, package, and runtime checks pass.
 
 ### 2026-10-08 — Raw Wails UI deployment reverted after sandbox-path failure
 
@@ -674,9 +674,34 @@ Observed:
 - The canonical sandbox wallet at `/Users/kode/Library/Containers/com.getalby.Alby-Hub/Data/Library/Application Support/albyhub` remained intact with `integrity_check = ok`, `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=246`, and `local_rebalance_quotes=8`.
 - The empty profile database and faulty raw bundle were preserved in `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-ui-fix-a382994f` for evidence. The known-good prior bundle was restored before another wallet start.
 - After owner unlock, the restored process opened the canonical sandbox database and embedded `/Applications/Alby Hub.app/Contents/Frameworks/libldk_node.dylib`. The live UI again showed all four channels, Lightning spendable `869,446 sats`, receive limit `2,069,233 sats`, and on-chain balance `41,883 sats`; two channels were online and two were offline at observation time.
-- A corrected `a382994f` candidate was prepared offline at `/Users/kode/Development/albyhub-builds/v1.24.1/Alby Hub UI a382994f corrected.app`. It has the five required sandbox/network/file entitlements, an embedded-only LDK rpath, universal arm64/x86_64 executable and library, and a valid deep ad-hoc signature. It is not installed at this checkpoint.
+- A corrected `a382994f` candidate was prepared offline at `/Users/kode/Development/albyhub-builds/v1.24.1/Alby Hub UI a382994f corrected.app`. It has the five required sandbox/network/file entitlements, an embedded-only LDK rpath, universal arm64/x86_64 executable and library, and a valid deep ad-hoc signature. That corrected bundle is now installed at `/Applications/Alby Hub.app`.
+- Static verification passes on the installed bundle. A prior unlocked run proved that its process opened the canonical sandbox database and loaded the embedded LDK library. On the first start at `20:14:55` the chain connection failed while DNS lookups were unavailable; a second start at `20:15:24` completed wallet sync at `20:15:31`. This was a transient chain-source/network failure, not channel loss or another data-container mismatch.
+- The rejected raw bundle and empty non-sandbox profile remain quarantined at `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-ui-fix-a382994f`. The rejected archive is absent from `/Users/kode/Development/albyhub-builds/v1.24.1`.
 
 Consequence:
 
-- The responsive source change remains valid, but the first deployment is rejected and must never be distributed. The currently running bundle is the restored known-good pre-UI build.
-- Future installation checks must fail closed unless both the sandbox entitlement and embedded-only LDK rpath are verified before replacement, followed by runtime proof of the canonical database and embedded library after owner unlock.
+- The responsive source change remains valid, but the first deployment is rejected and must never be distributed. The installed bundle is the corrected UI build and is currently waiting at the password screen after a clean restart.
+- Future installation checks fail closed unless the intended bundle identity, all five required entitlements, embedded-only LDK rpath, matching executable/library architectures, and signature class are verified before replacement. Runtime acceptance still requires proof of the canonical database and embedded library after owner unlock.
+
+### 2026-10-08 — Packaging gate and safety-diagnostic implementation
+
+Implemented:
+
+- `scripts/verify-darwin-app.sh` rejects a missing or invalid deep signature, wrong bundle identifier, any missing sandbox/network/file entitlement, a non-embedded or extra LDK runtime path, a non-`@rpath` LDK link, or mismatched executable/library architectures. Public candidates additionally require a non-ad-hoc signature and Team Identifier.
+- `scripts/package-darwin-app.sh` requires an explicit `owner-test` or `developer-id-candidate` classification, refuses ambiguous signing, refuses to overwrite evidence, repairs the runtime path before signing, runs the verifier, and emits an archive hash plus a manifest of bundle, architecture, executable, and embedded-library identities. Owner-test filenames must say `owner-test`; developer candidates must say `candidate`.
+- The macOS release workflow now removes every pre-existing runtime path, adds only the embedded Frameworks path, and runs the same invariant verifier after signing and before disk-image creation.
+- Positive owner-test packaging and negative wrong-identifier/ad-hoc-public-candidate cases passed. The corrected installed application also passed the static verifier. A Developer ID candidate still requires independent naming and data location, notarization, stapling, fresh-download Gatekeeper acceptance, and published manifest verification before it can be offered publicly.
+
+Safety diagnostics:
+
+- LDK commit `05d86840f2184dbe846e260b71e7eeed2bea998a` persists a bounded reason for a rejected circular receive, every observed receiving channel ID, and a count of arriving parts whose receiving channel could not be identified. Rust library tests pass `51/51` and the UniFFI feature check passes.
+- Go binding commit `2d4b8cae5b4188451fbccdb347113838a9981dbf` exposes that evidence and contains the matching universal arm64/x86_64 library, size `43,195,664` bytes, SHA-256 `c8d73f2abb2143df44811f5a8aefcfd804b02f926fb9d31d820c6e2a5d703a07`. The complete binding test suite passes.
+- Hub commit `1164edf0` validates the closed set of failure codes and 128-bit decimal channel IDs, rejects diagnostics on successful or outbound records, persists diagnostic terminal evidence under hash version 2, continues to verify legacy version-1 terminal records, and displays the expected and actually observed return-channel identities only after both exact-bound legs are terminal failed. Pending or contradictory evidence remains locked.
+- Migration preservation, legacy-hash compatibility, diagnostic-tamper rejection, API race, complete Go, Go vet, frontend lint/type/build, and dependency verification tests pass. No execution path was exercised and no value moved.
+
+Security review:
+
+- Reachable Go vulnerabilities are zero after moving to Go `1.27.2`, `golang.org/x/net v0.60.0`, `google.golang.org/grpc v1.83.2`, and `github.com/klauspost/compress v1.18.7`. The frontend production dependency audit reports zero vulnerabilities.
+- The scanner still reports uncalled, no-fix package/module findings for `github.com/jackc/pgproto3/v2@v2.3.3` and `golang.org/x/crypto/openpgp`; they are recorded residuals, not represented as a clean dependency graph.
+- Rust lockfile audit reports four vulnerabilities plus three unmaintained warnings only through the exact old-version migration-test dependency. Neither the arm64 nor x86_64 production macOS library tree contains the affected `h2 0.3.27`, `rustls-webpki 0.101.7`, `bincode 1.3.3`, `paste 1.0.15`, or `rustls-pemfile 1.0.4` packages. This is a production-tree exclusion, not a claim that the full development lockfile is clean.
+- Go vet also identified and fixed a pre-existing Phoenix invoice-date layout typo (`2006-02-01` to `2006-01-02`).
