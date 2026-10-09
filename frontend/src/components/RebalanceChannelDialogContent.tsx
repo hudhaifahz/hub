@@ -106,7 +106,11 @@ type LocalRebalanceOperation = {
   lightningTerminalAt?: string;
   reconciledAt?: string;
   terminalEvidenceHash?: string;
+  terminalEvidenceVersion?: number;
   failureReason?: string;
+  failureCode?: string;
+  observedReceivingChannelIds?: string[];
+  unidentifiedReceivingChannelCount?: number;
   requiresExactRetry: boolean;
   reconciliationPending: boolean;
 };
@@ -621,7 +625,40 @@ export function RebalanceChannelDialogContent({
                         </div>
                       )}
                       {operation.failureReason && (
-                        <div>{operation.failureReason}</div>
+                        <div className="font-medium">
+                          {operation.failureReason}
+                        </div>
+                      )}
+                      {operation.state === "failed" && (
+                        <div className="mt-2 space-y-1 rounded-md border border-destructive/40 p-2">
+                          <div className="font-medium">
+                            Local safety diagnostic
+                          </div>
+                          <div>
+                            Expected return channel:{" "}
+                            {operation.incomingChannelId}
+                          </div>
+                          {operation.failureCode && (
+                            <div>Failure code: {operation.failureCode}</div>
+                          )}
+                          {operation.observedReceivingChannelIds?.map(
+                            (channelId, index) => (
+                              <div key={channelId + "-" + index}>
+                                Observed return channel {index + 1}: {channelId}
+                              </div>
+                            )
+                          )}
+                          {!!operation.unidentifiedReceivingChannelCount && (
+                            <div>
+                              Unidentified arriving parts:{" "}
+                              {operation.unidentifiedReceivingChannelCount}
+                            </div>
+                          )}
+                          <div>
+                            Both exact-bound payment records ended failed; no
+                            rebalance principal settled.
+                          </div>
+                        </div>
                       )}
                       {operation.reconciliationPending && (
                         <div>

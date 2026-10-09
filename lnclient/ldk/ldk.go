@@ -955,6 +955,28 @@ func ldkPaymentStatusName(status ldk_node.PaymentStatus) (string, error) {
 	}
 }
 
+func circularPaymentFailureCode(reason *ldk_node.CircularPaymentFailureReason) (string, error) {
+	if reason == nil {
+		return "", nil
+	}
+	switch *reason {
+	case ldk_node.CircularPaymentFailureReasonPaymentNotPending:
+		return "payment_not_pending", nil
+	case ldk_node.CircularPaymentFailureReasonCircularMetadataMismatch:
+		return "circular_metadata_mismatch", nil
+	case ldk_node.CircularPaymentFailureReasonAmountMismatch:
+		return "amount_mismatch", nil
+	case ldk_node.CircularPaymentFailureReasonMissingPreimage:
+		return "missing_preimage", nil
+	case ldk_node.CircularPaymentFailureReasonMissingReceivingChannelIdentity:
+		return "missing_receiving_channel_identity", nil
+	case ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch:
+		return "receiving_channel_mismatch", nil
+	default:
+		return "", errors.New("circular payment record has an unknown local failure reason")
+	}
+}
+
 func reconcileCircularPaymentRecords(
 	inbound *ldk_node.PaymentDetails,
 	outbound *ldk_node.PaymentDetails,
@@ -1006,16 +1028,27 @@ func reconcileCircularPaymentRecords(
 	if err != nil {
 		return nil, err
 	}
+	failureCode, err := circularPaymentFailureCode(inbound.CircularFailureReason)
+	if err != nil {
+		return nil, err
+	}
+	observedReceivingChannelIDs := append([]string(nil), inbound.CircularObservedReceivingChannelIds...)
+	if inbound.Status != ldk_node.PaymentStatusFailed && (failureCode != "" || len(observedReceivingChannelIDs) != 0 || inbound.CircularUnidentifiedReceivingChannelCount != 0) {
+		return nil, errors.New("non-failed circular inbound payment has rejection diagnostics")
+	}
 
 	result := &lnclient.CircularPaymentReconciliation{
-		State:                 lnclient.CircularPaymentStatePending,
-		OperationID:           operationID,
-		PaymentHash:           paymentHash,
-		OutboundPaymentID:     outboundPaymentID,
-		AmountMsat:            amountMsat,
-		InboundPaymentStatus:  inboundStatus,
-		OutboundPaymentStatus: "missing",
-		LatestUpdateTimestamp: inbound.LatestUpdateTimestamp,
+		State:                             lnclient.CircularPaymentStatePending,
+		OperationID:                       operationID,
+		PaymentHash:                       paymentHash,
+		OutboundPaymentID:                 outboundPaymentID,
+		AmountMsat:                        amountMsat,
+		InboundPaymentStatus:              inboundStatus,
+		OutboundPaymentStatus:             "missing",
+		LatestUpdateTimestamp:             inbound.LatestUpdateTimestamp,
+		FailureCode:                       failureCode,
+		ObservedReceivingChannelIDs:       observedReceivingChannelIDs,
+		UnidentifiedReceivingChannelCount: inbound.CircularUnidentifiedReceivingChannelCount,
 	}
 	if outbound == nil {
 		if inbound.Status != ldk_node.PaymentStatusPending {
@@ -1034,6 +1067,9 @@ func reconcileCircularPaymentRecords(
 	outboundStatus, err := ldkPaymentStatusName(outbound.Status)
 	if err != nil {
 		return nil, err
+	}
+	if outbound.CircularFailureReason != nil || len(outbound.CircularObservedReceivingChannelIds) != 0 || outbound.CircularUnidentifiedReceivingChannelCount != 0 {
+		return nil, errors.New("circular outbound payment unexpectedly has receiving-channel diagnostics")
 	}
 	result.OutboundPaymentStatus = outboundStatus
 	if outbound.LatestUpdateTimestamp > result.LatestUpdateTimestamp {

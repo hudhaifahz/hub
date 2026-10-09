@@ -551,6 +551,7 @@ func TestReconcileLocalRebalanceTerminalPersistsSuccessAndReplaysWithoutBackend(
 	require.Equal(t, quote.OutboundPaymentId, result.OutboundPaymentId)
 	require.Equal(t, fee, *result.ActualRoutingFeeMsat)
 	require.NotEmpty(t, result.TerminalEvidenceHash)
+	require.Equal(t, localRebalanceTerminalEvidenceVersionDiagnostics, result.TerminalEvidenceVersion)
 	require.Empty(t, result.FailureReason)
 	require.Equal(t, 1, executor.reconcileCalls)
 
@@ -590,21 +591,28 @@ func TestReconcileLocalRebalanceTerminalPersistsTwoLegFailure(t *testing.T) {
 	require.NoError(t, gormDB.Create(&quote).Error)
 	executor := testCircularPaymentExecutor(&quote)
 	executor.reconciliation = &lnclient.CircularPaymentReconciliation{
-		State:                 lnclient.CircularPaymentStateFailed,
-		OperationID:           quote.OperationId,
-		PaymentHash:           quote.PreparedPaymentHash,
-		OutboundPaymentID:     quote.OutboundPaymentId,
-		AmountMsat:            quote.AmountMsat,
-		LatestUpdateTimestamp: uint64(now.Add(2 * time.Second).Unix()),
-		InboundPaymentStatus:  lnclient.CircularPaymentStateFailed,
-		OutboundPaymentStatus: lnclient.CircularPaymentStateFailed,
+		State:                             lnclient.CircularPaymentStateFailed,
+		OperationID:                       quote.OperationId,
+		PaymentHash:                       quote.PreparedPaymentHash,
+		OutboundPaymentID:                 quote.OutboundPaymentId,
+		AmountMsat:                        quote.AmountMsat,
+		LatestUpdateTimestamp:             uint64(now.Add(2 * time.Second).Unix()),
+		InboundPaymentStatus:              lnclient.CircularPaymentStateFailed,
+		OutboundPaymentStatus:             lnclient.CircularPaymentStateFailed,
+		FailureCode:                       "receiving_channel_mismatch",
+		ObservedReceivingChannelIDs:       []string{"40", "43"},
+		UnidentifiedReceivingChannelCount: 1,
 	}
 
 	result, err := theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(3*time.Second), executor)
 	require.NoError(t, err)
 	require.Equal(t, localRebalancePhaseFailed, result.State)
 	require.Nil(t, result.ActualRoutingFeeMsat)
-	require.Equal(t, "both exact-bound Lightning payment legs failed", result.FailureReason)
+	require.Equal(t, "local recipient rejected the payment because at least one arriving part used a different return channel", result.FailureReason)
+	require.Equal(t, "receiving_channel_mismatch", result.FailureCode)
+	require.Equal(t, []string{"40", "43"}, result.ObservedReceivingChannelIDs)
+	require.Equal(t, uint32(1), result.UnidentifiedReceivingChannelCount)
+	require.Equal(t, localRebalanceTerminalEvidenceVersionDiagnostics, result.TerminalEvidenceVersion)
 	require.NotEmpty(t, result.TerminalEvidenceHash)
 
 	var persisted db.LocalRebalanceQuote
@@ -615,6 +623,52 @@ func TestReconcileLocalRebalanceTerminalPersistsTwoLegFailure(t *testing.T) {
 	require.Nil(t, persisted.ActualRoutingFeeMsat)
 	require.NotNil(t, persisted.LightningTerminalAt)
 	require.NotNil(t, persisted.ReconciledAt)
+	require.Equal(t, localRebalanceTerminalEvidenceVersionDiagnostics, persisted.TerminalEvidenceVersion)
+	require.Equal(t, "receiving_channel_mismatch", persisted.FailureCode)
+	require.JSONEq(t, `["40","43"]`, persisted.ObservedReceivingChannelIDsJSON)
+	require.Equal(t, uint32(1), persisted.UnidentifiedReceivingChannelCount)
+
+	require.NoError(t, gormDB.Model(&db.LocalRebalanceQuote{}).
+		Where("id = ?", quote.ID).
+		Update("observed_receiving_channel_ids_json", `["40","44"]`).Error)
+	_, err = theAPI.reconcileLocalRebalanceTerminal(quote.ID, fingerprint, now.Add(4*time.Second), executor)
+	require.ErrorContains(t, err, "evidence hash does not match")
+	require.Equal(t, 1, executor.reconcileCalls)
+}
+
+func TestLegacyLocalRebalanceTerminalEvidenceRemainsReadable(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	quote, _ := testPreparedLocalRebalanceQuote(t, "legacy-terminal-success", now, localRebalancePhaseSubmitted)
+	fee := quote.TotalRoutingFeeMsat
+	lightningTerminalAt := now.Add(2 * time.Second)
+	reconciledAt := now.Add(3 * time.Second)
+	evidence := &lnclient.CircularPaymentReconciliation{
+		State:                 lnclient.CircularPaymentStateSucceeded,
+		OperationID:           quote.OperationId,
+		PaymentHash:           quote.PreparedPaymentHash,
+		OutboundPaymentID:     quote.OutboundPaymentId,
+		AmountMsat:            quote.AmountMsat,
+		ActualRoutingFeeMsat:  &fee,
+		LatestUpdateTimestamp: uint64(lightningTerminalAt.Unix()),
+		InboundPaymentStatus:  lnclient.CircularPaymentStateSucceeded,
+		OutboundPaymentStatus: lnclient.CircularPaymentStateSucceeded,
+	}
+	legacyHash, err := hashLocalRebalanceTerminalEvidence(evidence, localRebalanceTerminalEvidenceVersionLegacy)
+	require.NoError(t, err)
+	quote.State = localRebalancePhaseSucceeded
+	quote.ExecutionPhase = localRebalancePhaseSucceeded
+	quote.ActualRoutingFeeMsat = &fee
+	quote.ExecutedAt = &lightningTerminalAt
+	quote.LightningTerminalAt = &lightningTerminalAt
+	quote.ReconciledAt = &reconciledAt
+	quote.TerminalEvidenceHash = legacyHash
+	quote.TerminalEvidenceVersion = localRebalanceTerminalEvidenceVersionLegacy
+	quote.ObservedReceivingChannelIDsJSON = "[]"
+
+	result, err := localRebalanceTerminalResultFromQuote(&quote)
+	require.NoError(t, err)
+	require.Equal(t, legacyHash, result.TerminalEvidenceHash)
+	require.Equal(t, localRebalanceTerminalEvidenceVersionLegacy, result.TerminalEvidenceVersion)
 }
 
 func TestReconcileLocalRebalanceTerminalKeepsPendingAndContradictoryOperationsLocked(t *testing.T) {

@@ -152,47 +152,51 @@ type RebalanceQuote struct {
 // LocalRebalanceQuote is a non-paying, expiring record of an exact circular route review.
 // It contains no invoice, preimage, HTLC, or other payment authorization material.
 type LocalRebalanceQuote struct {
-	ID                             string `gorm:"primaryKey"`
-	State                          string
-	RequestHash                    string
-	RouteFingerprint               string
-	AmountMsat                     uint64
-	TotalRoutingFeeMsat            uint64
-	MaxRoutingFeeMsat              uint64
-	MaxTotalDebitMsat              uint64
-	OutgoingChannelId              string
-	OutgoingNodePubkey             string
-	OutgoingShortChannelId         string
-	IncomingChannelId              string
-	IncomingNodePubkey             string
-	IncomingShortChannelId         string
-	OutgoingSpendableSnapshotMsat  uint64
-	IncomingReceivableSnapshotMsat uint64
-	OutgoingLocalSnapshotMsat      uint64
-	OutgoingRemoteSnapshotMsat     uint64
-	OutgoingLocalReserveMsat       uint64
-	OutgoingRemoteReserveMsat      uint64
-	IncomingLocalSnapshotMsat      uint64
-	IncomingRemoteSnapshotMsat     uint64
-	IncomingLocalReserveMsat       uint64
-	IncomingRemoteReserveMsat      uint64
-	RouteJson                      string
-	RouteBytes                     []byte
-	OperationId                    string
-	ExecutionPhase                 string
-	PreparedPaymentHash            string
-	OutboundPaymentId              string
-	ExpiresAt                      time.Time
-	CreatedAt                      time.Time
-	UpdatedAt                      time.Time
-	PreparedAt                     *time.Time
-	SubmittedAt                    *time.Time
-	ActualRoutingFeeMsat           *uint64
-	LightningTerminalAt            *time.Time
-	ReconciledAt                   *time.Time
-	TerminalEvidenceHash           string
-	ExecutedAt                     *time.Time
-	FailureReason                  string
+	ID                                string `gorm:"primaryKey"`
+	State                             string
+	RequestHash                       string
+	RouteFingerprint                  string
+	AmountMsat                        uint64
+	TotalRoutingFeeMsat               uint64
+	MaxRoutingFeeMsat                 uint64
+	MaxTotalDebitMsat                 uint64
+	OutgoingChannelId                 string
+	OutgoingNodePubkey                string
+	OutgoingShortChannelId            string
+	IncomingChannelId                 string
+	IncomingNodePubkey                string
+	IncomingShortChannelId            string
+	OutgoingSpendableSnapshotMsat     uint64
+	IncomingReceivableSnapshotMsat    uint64
+	OutgoingLocalSnapshotMsat         uint64
+	OutgoingRemoteSnapshotMsat        uint64
+	OutgoingLocalReserveMsat          uint64
+	OutgoingRemoteReserveMsat         uint64
+	IncomingLocalSnapshotMsat         uint64
+	IncomingRemoteSnapshotMsat        uint64
+	IncomingLocalReserveMsat          uint64
+	IncomingRemoteReserveMsat         uint64
+	RouteJson                         string
+	RouteBytes                        []byte
+	OperationId                       string
+	ExecutionPhase                    string
+	PreparedPaymentHash               string
+	OutboundPaymentId                 string
+	ExpiresAt                         time.Time
+	CreatedAt                         time.Time
+	UpdatedAt                         time.Time
+	PreparedAt                        *time.Time
+	SubmittedAt                       *time.Time
+	ActualRoutingFeeMsat              *uint64
+	LightningTerminalAt               *time.Time
+	ReconciledAt                      *time.Time
+	TerminalEvidenceHash              string
+	TerminalEvidenceVersion           uint32
+	FailureCode                       string
+	ObservedReceivingChannelIDsJSON   string
+	UnidentifiedReceivingChannelCount uint32
+	ExecutedAt                        *time.Time
+	FailureReason                     string
 }
 
 const (

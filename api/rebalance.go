@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,11 @@ const (
 	localRebalancePhaseFailed    = "failed"
 )
 
+const (
+	localRebalanceTerminalEvidenceVersionLegacy      uint32 = 1
+	localRebalanceTerminalEvidenceVersionDiagnostics uint32 = 2
+)
+
 var errPinnedRebalanceExecutionDisabled = errors.New("pinned rebalance execution is disabled until incoming-channel atomicity is proven")
 
 type localRebalanceExecutionResult struct {
@@ -45,15 +51,19 @@ type localRebalanceExecutionResult struct {
 }
 
 type localRebalanceTerminalResult struct {
-	State                string
-	OperationId          string
-	PaymentHash          string
-	OutboundPaymentId    string
-	ActualRoutingFeeMsat *uint64
-	LightningTerminalAt  *time.Time
-	ReconciledAt         *time.Time
-	TerminalEvidenceHash string
-	FailureReason        string
+	State                             string
+	OperationId                       string
+	PaymentHash                       string
+	OutboundPaymentId                 string
+	ActualRoutingFeeMsat              *uint64
+	LightningTerminalAt               *time.Time
+	ReconciledAt                      *time.Time
+	TerminalEvidenceHash              string
+	TerminalEvidenceVersion           uint32
+	FailureReason                     string
+	FailureCode                       string
+	ObservedReceivingChannelIDs       []string
+	UnidentifiedReceivingChannelCount uint32
 }
 
 type localRebalanceTerminalEvidenceMaterial struct {
@@ -66,6 +76,22 @@ type localRebalanceTerminalEvidenceMaterial struct {
 	LatestUpdateTimestamp uint64  `json:"latest_update_timestamp"`
 	InboundPaymentStatus  string  `json:"inbound_payment_status"`
 	OutboundPaymentStatus string  `json:"outbound_payment_status"`
+}
+
+type localRebalanceTerminalEvidenceMaterialV2 struct {
+	Version                           uint32   `json:"version"`
+	State                             string   `json:"state"`
+	OperationId                       string   `json:"operation_id"`
+	PaymentHash                       string   `json:"payment_hash"`
+	OutboundPaymentId                 string   `json:"outbound_payment_id"`
+	AmountMsat                        uint64   `json:"amount_msat"`
+	ActualRoutingFeeMsat              *uint64  `json:"actual_routing_fee_msat"`
+	LatestUpdateTimestamp             uint64   `json:"latest_update_timestamp"`
+	InboundPaymentStatus              string   `json:"inbound_payment_status"`
+	OutboundPaymentStatus             string   `json:"outbound_payment_status"`
+	FailureCode                       string   `json:"failure_code"`
+	ObservedReceivingChannelIDs       []string `json:"observed_receiving_channel_ids"`
+	UnidentifiedReceivingChannelCount uint32   `json:"unidentified_receiving_channel_count"`
 }
 
 type rspRebalanceCreateOrderResponse struct {
@@ -872,26 +898,96 @@ func (api *api) runLocalRebalanceExecution(
 	}, nil
 }
 
-func hashLocalRebalanceTerminalEvidence(evidence *lnclient.CircularPaymentReconciliation) (string, error) {
+func hashLocalRebalanceTerminalEvidence(evidence *lnclient.CircularPaymentReconciliation, version uint32) (string, error) {
 	if evidence == nil {
 		return "", errors.New("local rebalance terminal evidence is required")
 	}
-	encoded, err := json.Marshal(localRebalanceTerminalEvidenceMaterial{
-		State:                 evidence.State,
-		OperationId:           evidence.OperationID,
-		PaymentHash:           evidence.PaymentHash,
-		OutboundPaymentId:     evidence.OutboundPaymentID,
-		AmountMsat:            evidence.AmountMsat,
-		ActualRoutingFeeMsat:  evidence.ActualRoutingFeeMsat,
-		LatestUpdateTimestamp: evidence.LatestUpdateTimestamp,
-		InboundPaymentStatus:  evidence.InboundPaymentStatus,
-		OutboundPaymentStatus: evidence.OutboundPaymentStatus,
-	})
+	var material interface{}
+	switch version {
+	case localRebalanceTerminalEvidenceVersionLegacy:
+		material = localRebalanceTerminalEvidenceMaterial{
+			State:                 evidence.State,
+			OperationId:           evidence.OperationID,
+			PaymentHash:           evidence.PaymentHash,
+			OutboundPaymentId:     evidence.OutboundPaymentID,
+			AmountMsat:            evidence.AmountMsat,
+			ActualRoutingFeeMsat:  evidence.ActualRoutingFeeMsat,
+			LatestUpdateTimestamp: evidence.LatestUpdateTimestamp,
+			InboundPaymentStatus:  evidence.InboundPaymentStatus,
+			OutboundPaymentStatus: evidence.OutboundPaymentStatus,
+		}
+	case localRebalanceTerminalEvidenceVersionDiagnostics:
+		material = localRebalanceTerminalEvidenceMaterialV2{
+			Version:                           version,
+			State:                             evidence.State,
+			OperationId:                       evidence.OperationID,
+			PaymentHash:                       evidence.PaymentHash,
+			OutboundPaymentId:                 evidence.OutboundPaymentID,
+			AmountMsat:                        evidence.AmountMsat,
+			ActualRoutingFeeMsat:              evidence.ActualRoutingFeeMsat,
+			LatestUpdateTimestamp:             evidence.LatestUpdateTimestamp,
+			InboundPaymentStatus:              evidence.InboundPaymentStatus,
+			OutboundPaymentStatus:             evidence.OutboundPaymentStatus,
+			FailureCode:                       evidence.FailureCode,
+			ObservedReceivingChannelIDs:       append([]string(nil), evidence.ObservedReceivingChannelIDs...),
+			UnidentifiedReceivingChannelCount: evidence.UnidentifiedReceivingChannelCount,
+		}
+	default:
+		return "", errors.New("local rebalance terminal evidence version is unsupported")
+	}
+	encoded, err := json.Marshal(material)
 	if err != nil {
 		return "", fmt.Errorf("failed to encode local rebalance terminal evidence: %w", err)
 	}
 	hash := sha256.Sum256(encoded)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+func validateLocalRebalanceFailureDiagnostics(failureCode string, observedChannelIDs []string, unidentifiedCount uint32) error {
+	allowed := map[string]struct{}{
+		"":                                   {},
+		"payment_not_pending":                {},
+		"circular_metadata_mismatch":         {},
+		"amount_mismatch":                    {},
+		"missing_preimage":                   {},
+		"missing_receiving_channel_identity": {},
+		"receiving_channel_mismatch":         {},
+	}
+	if _, ok := allowed[failureCode]; !ok {
+		return errors.New("local rebalance failure code is unknown")
+	}
+	if failureCode == "" && (len(observedChannelIDs) != 0 || unidentifiedCount != 0) {
+		return errors.New("local rebalance channel diagnostics have no failure code")
+	}
+	if len(observedChannelIDs) > 64 {
+		return errors.New("local rebalance has too many observed receiving channels")
+	}
+	for _, channelID := range observedChannelIDs {
+		parsed, ok := new(big.Int).SetString(channelID, 10)
+		if !ok || parsed.Sign() < 0 || parsed.BitLen() > 128 {
+			return errors.New("local rebalance observed receiving channel ID is invalid")
+		}
+	}
+	return nil
+}
+
+func localRebalanceFailureReason(failureCode string) string {
+	switch failureCode {
+	case "payment_not_pending":
+		return "local recipient rejected the payment because its prepared record was no longer pending"
+	case "circular_metadata_mismatch":
+		return "local recipient rejected the payment because its exact circular binding was incomplete or inconsistent"
+	case "amount_mismatch":
+		return "local recipient rejected the payment because the received amount did not match the reviewed principal"
+	case "missing_preimage":
+		return "local recipient rejected the payment because the prepared preimage was unavailable"
+	case "missing_receiving_channel_identity":
+		return "local recipient rejected the payment because at least one arriving part had no identifiable local channel"
+	case "receiving_channel_mismatch":
+		return "local recipient rejected the payment because at least one arriving part used a different return channel"
+	default:
+		return "both exact-bound Lightning payment legs failed"
+	}
 }
 
 func validateLocalRebalanceReconciliation(
@@ -904,13 +1000,16 @@ func validateLocalRebalanceReconciliation(
 	if evidence.OperationID != quote.OperationId || evidence.PaymentHash != quote.PreparedPaymentHash || evidence.OutboundPaymentID != quote.OutboundPaymentId || evidence.AmountMsat != quote.AmountMsat {
 		return errors.New("local rebalance reconciliation does not match the exact prepared operation")
 	}
+	if err := validateLocalRebalanceFailureDiagnostics(evidence.FailureCode, evidence.ObservedReceivingChannelIDs, evidence.UnidentifiedReceivingChannelCount); err != nil {
+		return err
+	}
 	switch evidence.State {
 	case lnclient.CircularPaymentStatePending:
 		if evidence.ActualRoutingFeeMsat != nil {
 			return errors.New("pending local rebalance unexpectedly reports a routing fee")
 		}
 	case lnclient.CircularPaymentStateSucceeded:
-		if evidence.InboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.OutboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.ActualRoutingFeeMsat == nil || *evidence.ActualRoutingFeeMsat != quote.TotalRoutingFeeMsat || *evidence.ActualRoutingFeeMsat > quote.MaxRoutingFeeMsat || evidence.LatestUpdateTimestamp == 0 || evidence.LatestUpdateTimestamp > math.MaxInt64 {
+		if evidence.InboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.OutboundPaymentStatus != lnclient.CircularPaymentStateSucceeded || evidence.ActualRoutingFeeMsat == nil || *evidence.ActualRoutingFeeMsat != quote.TotalRoutingFeeMsat || *evidence.ActualRoutingFeeMsat > quote.MaxRoutingFeeMsat || evidence.LatestUpdateTimestamp == 0 || evidence.LatestUpdateTimestamp > math.MaxInt64 || evidence.FailureCode != "" || len(evidence.ObservedReceivingChannelIDs) != 0 || evidence.UnidentifiedReceivingChannelCount != 0 {
 			return errors.New("successful local rebalance lacks exact two-leg terminal evidence")
 		}
 	case lnclient.CircularPaymentStateFailed:
@@ -934,31 +1033,64 @@ func localRebalanceTerminalResultFromQuote(quote *db.LocalRebalanceQuote) (*loca
 	} else if quote.ActualRoutingFeeMsat != nil || quote.ExecutedAt != nil || quote.FailureReason == "" {
 		return nil, errors.New("persisted failed local rebalance evidence is invalid")
 	}
-	evidence := &lnclient.CircularPaymentReconciliation{
-		State:                 quote.State,
-		OperationID:           quote.OperationId,
-		PaymentHash:           quote.PreparedPaymentHash,
-		OutboundPaymentID:     quote.OutboundPaymentId,
-		AmountMsat:            quote.AmountMsat,
-		ActualRoutingFeeMsat:  quote.ActualRoutingFeeMsat,
-		LatestUpdateTimestamp: uint64(quote.LightningTerminalAt.Unix()),
-		InboundPaymentStatus:  quote.State,
-		OutboundPaymentStatus: quote.State,
+	version := quote.TerminalEvidenceVersion
+	if version == 0 {
+		version = localRebalanceTerminalEvidenceVersionLegacy
 	}
-	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence)
+	observedChannelIDs := []string{}
+	if quote.ObservedReceivingChannelIDsJSON != "" {
+		if err := json.Unmarshal([]byte(quote.ObservedReceivingChannelIDsJSON), &observedChannelIDs); err != nil {
+			return nil, errors.New("persisted local rebalance receiving-channel evidence is invalid")
+		}
+	}
+	if err := validateLocalRebalanceFailureDiagnostics(quote.FailureCode, observedChannelIDs, quote.UnidentifiedReceivingChannelCount); err != nil {
+		return nil, err
+	}
+	if version == localRebalanceTerminalEvidenceVersionLegacy {
+		if quote.FailureCode != "" || len(observedChannelIDs) != 0 || quote.UnidentifiedReceivingChannelCount != 0 {
+			return nil, errors.New("legacy local rebalance terminal evidence unexpectedly has diagnostics")
+		}
+	} else if version != localRebalanceTerminalEvidenceVersionDiagnostics {
+		return nil, errors.New("persisted local rebalance terminal evidence version is unsupported")
+	}
+	if quote.State == localRebalancePhaseSucceeded && (quote.FailureCode != "" || len(observedChannelIDs) != 0 || quote.UnidentifiedReceivingChannelCount != 0) {
+		return nil, errors.New("persisted successful local rebalance unexpectedly has failure diagnostics")
+	}
+	if quote.State == localRebalancePhaseFailed && quote.FailureReason != localRebalanceFailureReason(quote.FailureCode) {
+		return nil, errors.New("persisted local rebalance failure reason does not match its diagnostic code")
+	}
+	evidence := &lnclient.CircularPaymentReconciliation{
+		State:                             quote.State,
+		OperationID:                       quote.OperationId,
+		PaymentHash:                       quote.PreparedPaymentHash,
+		OutboundPaymentID:                 quote.OutboundPaymentId,
+		AmountMsat:                        quote.AmountMsat,
+		ActualRoutingFeeMsat:              quote.ActualRoutingFeeMsat,
+		LatestUpdateTimestamp:             uint64(quote.LightningTerminalAt.Unix()),
+		InboundPaymentStatus:              quote.State,
+		OutboundPaymentStatus:             quote.State,
+		FailureCode:                       quote.FailureCode,
+		ObservedReceivingChannelIDs:       observedChannelIDs,
+		UnidentifiedReceivingChannelCount: quote.UnidentifiedReceivingChannelCount,
+	}
+	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence, version)
 	if err != nil || evidenceHash != quote.TerminalEvidenceHash {
 		return nil, errors.New("persisted local rebalance terminal evidence hash does not match")
 	}
 	return &localRebalanceTerminalResult{
-		State:                quote.State,
-		OperationId:          quote.OperationId,
-		PaymentHash:          quote.PreparedPaymentHash,
-		OutboundPaymentId:    quote.OutboundPaymentId,
-		ActualRoutingFeeMsat: quote.ActualRoutingFeeMsat,
-		LightningTerminalAt:  quote.LightningTerminalAt,
-		ReconciledAt:         quote.ReconciledAt,
-		TerminalEvidenceHash: quote.TerminalEvidenceHash,
-		FailureReason:        quote.FailureReason,
+		State:                             quote.State,
+		OperationId:                       quote.OperationId,
+		PaymentHash:                       quote.PreparedPaymentHash,
+		OutboundPaymentId:                 quote.OutboundPaymentId,
+		ActualRoutingFeeMsat:              quote.ActualRoutingFeeMsat,
+		LightningTerminalAt:               quote.LightningTerminalAt,
+		ReconciledAt:                      quote.ReconciledAt,
+		TerminalEvidenceHash:              quote.TerminalEvidenceHash,
+		TerminalEvidenceVersion:           version,
+		FailureReason:                     quote.FailureReason,
+		FailureCode:                       quote.FailureCode,
+		ObservedReceivingChannelIDs:       append([]string(nil), observedChannelIDs...),
+		UnidentifiedReceivingChannelCount: quote.UnidentifiedReceivingChannelCount,
 	}, nil
 }
 
@@ -975,27 +1107,39 @@ func (api *api) persistLocalRebalanceTerminalEvidence(
 			OutboundPaymentId: quote.OutboundPaymentId,
 		}, nil
 	}
-	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence)
+	if err := validateLocalRebalanceFailureDiagnostics(evidence.FailureCode, evidence.ObservedReceivingChannelIDs, evidence.UnidentifiedReceivingChannelCount); err != nil {
+		return nil, err
+	}
+	observedChannelIDsJSON, err := json.Marshal(evidence.ObservedReceivingChannelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode local rebalance receiving-channel evidence: %w", err)
+	}
+	evidenceVersion := localRebalanceTerminalEvidenceVersionDiagnostics
+	evidenceHash, err := hashLocalRebalanceTerminalEvidence(evidence, evidenceVersion)
 	if err != nil {
 		return nil, err
 	}
 	lightningTerminalAt := time.Unix(int64(evidence.LatestUpdateTimestamp), 0).UTC()
 	reconciledAt := now.UTC()
 	updates := map[string]interface{}{
-		"state":                   evidence.State,
-		"execution_phase":         evidence.State,
-		"actual_routing_fee_msat": evidence.ActualRoutingFeeMsat,
-		"lightning_terminal_at":   lightningTerminalAt,
-		"reconciled_at":           reconciledAt,
-		"terminal_evidence_hash":  evidenceHash,
-		"updated_at":              reconciledAt,
+		"state":                                evidence.State,
+		"execution_phase":                      evidence.State,
+		"actual_routing_fee_msat":              evidence.ActualRoutingFeeMsat,
+		"lightning_terminal_at":                lightningTerminalAt,
+		"reconciled_at":                        reconciledAt,
+		"terminal_evidence_hash":               evidenceHash,
+		"terminal_evidence_version":            evidenceVersion,
+		"failure_code":                         evidence.FailureCode,
+		"observed_receiving_channel_ids_json":  string(observedChannelIDsJSON),
+		"unidentified_receiving_channel_count": evidence.UnidentifiedReceivingChannelCount,
+		"updated_at":                           reconciledAt,
 	}
 	if evidence.State == lnclient.CircularPaymentStateSucceeded {
 		updates["executed_at"] = lightningTerminalAt
 		updates["failure_reason"] = ""
 	} else {
 		updates["executed_at"] = nil
-		updates["failure_reason"] = "both exact-bound Lightning payment legs failed"
+		updates["failure_reason"] = localRebalanceFailureReason(evidence.FailureCode)
 	}
 	result := api.db.Model(&db.LocalRebalanceQuote{}).
 		Where("id = ? AND state = ? AND operation_id = ? AND execution_phase IN ? AND prepared_payment_hash = ? AND outbound_payment_id = ?", quote.ID, "executing", quote.OperationId, []string{localRebalancePhasePrepared, localRebalancePhaseSubmitted}, quote.PreparedPaymentHash, quote.OutboundPaymentId).
@@ -1111,6 +1255,7 @@ func localRebalanceOperationResponseFromQuote(quote *db.LocalRebalanceQuote) (*L
 	if quote.OperationId != deriveLocalRebalanceOperationId(quote.ID, quote.RouteFingerprint) {
 		return nil, errors.New("local rebalance operation ID does not match the reviewed quote")
 	}
+	var terminalResult *localRebalanceTerminalResult
 	if quote.State == "executing" {
 		switch quote.ExecutionPhase {
 		case localRebalancePhaseAcquired:
@@ -1124,41 +1269,59 @@ func localRebalanceOperationResponseFromQuote(quote *db.LocalRebalanceQuote) (*L
 		default:
 			return nil, errors.New("local rebalance has an invalid execution phase")
 		}
-	} else if _, err := localRebalanceTerminalResultFromQuote(quote); err != nil {
-		return nil, err
+	} else {
+		var err error
+		terminalResult, err = localRebalanceTerminalResultFromQuote(quote)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var terminalEvidenceVersion uint32
+	var failureCode string
+	var observedReceivingChannelIDs []string
+	var unidentifiedReceivingChannelCount uint32
+	if terminalResult != nil {
+		terminalEvidenceVersion = terminalResult.TerminalEvidenceVersion
+		failureCode = terminalResult.FailureCode
+		observedReceivingChannelIDs = append([]string(nil), terminalResult.ObservedReceivingChannelIDs...)
+		unidentifiedReceivingChannelCount = terminalResult.UnidentifiedReceivingChannelCount
 	}
 	return &LocalRebalanceOperationResponse{
-		QuoteId:                    quote.ID,
-		RouteFingerprint:           quote.RouteFingerprint,
-		State:                      quote.State,
-		Phase:                      quote.ExecutionPhase,
-		OperationId:                quote.OperationId,
-		PaymentHash:                quote.PreparedPaymentHash,
-		OutboundPaymentId:          quote.OutboundPaymentId,
-		AmountMsat:                 quote.AmountMsat,
-		QuotedRoutingFeeMsat:       quote.TotalRoutingFeeMsat,
-		MaxRoutingFeeMsat:          quote.MaxRoutingFeeMsat,
-		ActualRoutingFeeMsat:       quote.ActualRoutingFeeMsat,
-		OutgoingChannelId:          quote.OutgoingChannelId,
-		OutgoingNodePubkey:         quote.OutgoingNodePubkey,
-		IncomingChannelId:          quote.IncomingChannelId,
-		IncomingNodePubkey:         quote.IncomingNodePubkey,
-		OutgoingLocalSnapshotMsat:  quote.OutgoingLocalSnapshotMsat,
-		OutgoingRemoteSnapshotMsat: quote.OutgoingRemoteSnapshotMsat,
-		OutgoingLocalReserveMsat:   quote.OutgoingLocalReserveMsat,
-		OutgoingRemoteReserveMsat:  quote.OutgoingRemoteReserveMsat,
-		IncomingLocalSnapshotMsat:  quote.IncomingLocalSnapshotMsat,
-		IncomingRemoteSnapshotMsat: quote.IncomingRemoteSnapshotMsat,
-		IncomingLocalReserveMsat:   quote.IncomingLocalReserveMsat,
-		IncomingRemoteReserveMsat:  quote.IncomingRemoteReserveMsat,
-		PreparedAt:                 quote.PreparedAt,
-		SubmittedAt:                quote.SubmittedAt,
-		LightningTerminalAt:        quote.LightningTerminalAt,
-		ReconciledAt:               quote.ReconciledAt,
-		TerminalEvidenceHash:       quote.TerminalEvidenceHash,
-		FailureReason:              quote.FailureReason,
-		RequiresExactRetry:         quote.State == "executing" && quote.ExecutionPhase != localRebalancePhaseSubmitted,
-		ReconciliationPending:      quote.State == "executing" && quote.ExecutionPhase == localRebalancePhaseSubmitted,
+		QuoteId:                           quote.ID,
+		RouteFingerprint:                  quote.RouteFingerprint,
+		State:                             quote.State,
+		Phase:                             quote.ExecutionPhase,
+		OperationId:                       quote.OperationId,
+		PaymentHash:                       quote.PreparedPaymentHash,
+		OutboundPaymentId:                 quote.OutboundPaymentId,
+		AmountMsat:                        quote.AmountMsat,
+		QuotedRoutingFeeMsat:              quote.TotalRoutingFeeMsat,
+		MaxRoutingFeeMsat:                 quote.MaxRoutingFeeMsat,
+		ActualRoutingFeeMsat:              quote.ActualRoutingFeeMsat,
+		OutgoingChannelId:                 quote.OutgoingChannelId,
+		OutgoingNodePubkey:                quote.OutgoingNodePubkey,
+		IncomingChannelId:                 quote.IncomingChannelId,
+		IncomingNodePubkey:                quote.IncomingNodePubkey,
+		OutgoingLocalSnapshotMsat:         quote.OutgoingLocalSnapshotMsat,
+		OutgoingRemoteSnapshotMsat:        quote.OutgoingRemoteSnapshotMsat,
+		OutgoingLocalReserveMsat:          quote.OutgoingLocalReserveMsat,
+		OutgoingRemoteReserveMsat:         quote.OutgoingRemoteReserveMsat,
+		IncomingLocalSnapshotMsat:         quote.IncomingLocalSnapshotMsat,
+		IncomingRemoteSnapshotMsat:        quote.IncomingRemoteSnapshotMsat,
+		IncomingLocalReserveMsat:          quote.IncomingLocalReserveMsat,
+		IncomingRemoteReserveMsat:         quote.IncomingRemoteReserveMsat,
+		PreparedAt:                        quote.PreparedAt,
+		SubmittedAt:                       quote.SubmittedAt,
+		LightningTerminalAt:               quote.LightningTerminalAt,
+		ReconciledAt:                      quote.ReconciledAt,
+		TerminalEvidenceHash:              quote.TerminalEvidenceHash,
+		TerminalEvidenceVersion:           terminalEvidenceVersion,
+		FailureReason:                     quote.FailureReason,
+		FailureCode:                       failureCode,
+		ObservedReceivingChannelIds:       observedReceivingChannelIDs,
+		UnidentifiedReceivingChannelCount: unidentifiedReceivingChannelCount,
+		RequiresExactRetry:                quote.State == "executing" && quote.ExecutionPhase != localRebalancePhaseSubmitted,
+		ReconciliationPending:             quote.State == "executing" && quote.ExecutionPhase == localRebalancePhaseSubmitted,
 	}, nil
 }
 
