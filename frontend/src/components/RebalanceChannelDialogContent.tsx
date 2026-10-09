@@ -306,12 +306,15 @@ export function RebalanceChannelDialogContent({
   }
 
   return (
-    <AlertDialogContent className="max-w-2xl">
-      <form onSubmit={createQuote}>
-        <AlertDialogHeader>
+    <AlertDialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 max-w-2xl overflow-hidden p-0">
+      <form
+        className="flex max-h-[calc(100dvh-2rem)] min-h-0 min-w-0 flex-col"
+        onSubmit={createQuote}
+      >
+        <AlertDialogHeader className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-6 pb-4">
           <AlertDialogTitle>Exact-channel rebalance</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-4 text-left">
+            <div className="min-w-0 space-y-4 text-left">
               <p>
                 Choose both exact channels. This searches the local routing
                 graph and saves an expiring review record; it creates no
@@ -328,7 +331,7 @@ export function RebalanceChannelDialogContent({
                     setQuote(undefined);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-w-0 [&>span]:truncate">
                     <SelectValue placeholder="Select exact outgoing channel" />
                   </SelectTrigger>
                   <SelectContent>
@@ -358,8 +361,10 @@ export function RebalanceChannelDialogContent({
 
               <div className="space-y-2">
                 <Label>Return through this channel</Label>
-                <div className="rounded-md border p-3 text-sm">
-                  <div>{channelIdentity(incomingChannel)}</div>
+                <div className="min-w-0 rounded-md border p-3 text-sm">
+                  <div className="truncate">
+                    {channelIdentity(incomingChannel)}
+                  </div>
                   <div className="mt-1 break-all text-xs text-muted-foreground">
                     Peer: {incomingChannel.remotePubkey}
                     <br />
@@ -375,7 +380,7 @@ export function RebalanceChannelDialogContent({
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
+                <div className="min-w-0">
                   <Label htmlFor="rebalance-amount">Principal (sats)</Label>
                   <Input
                     disabled={Boolean(operation)}
@@ -391,7 +396,7 @@ export function RebalanceChannelDialogContent({
                     }}
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label htmlFor="routing-fee-cap">Routing fee cap</Label>
                   <Input
                     disabled={Boolean(operation)}
@@ -412,7 +417,7 @@ export function RebalanceChannelDialogContent({
               {quote && (
                 <div className="space-y-3 rounded-md border p-4">
                   <h3 className="font-medium">Quote review</h3>
-                  <dl className="grid grid-cols-2 gap-2 text-sm">
+                  <dl className="grid min-w-0 grid-cols-1 gap-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-left sm:grid-cols-2 sm:[&>dd]:text-right">
                     <dt>Principal</dt>
                     <dd className="text-right">
                       <FormattedBitcoinAmount amountMsat={quote.amountMsat} />
@@ -456,7 +461,7 @@ export function RebalanceChannelDialogContent({
                     <div className="font-medium">
                       Fingerprint-bound channel balance evidence
                     </div>
-                    <dl className="grid grid-cols-2 gap-1">
+                    <dl className="grid min-w-0 grid-cols-1 gap-1 [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-left sm:grid-cols-2 sm:[&>dd]:text-right">
                       <dt>Outgoing local → projected</dt>
                       <dd className="text-right">
                         {sats(quote.outgoingLocalSnapshotMsat)} →{" "}
@@ -658,7 +663,7 @@ export function RebalanceChannelDialogContent({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="mt-4">
+        <AlertDialogFooter className="mt-0 shrink-0 border-t p-4 [&>*]:w-full sm:flex-wrap sm:p-6 sm:pt-4 sm:[&>*]:w-auto">
           <AlertDialogCancel onClick={closeDialog}>Close</AlertDialogCancel>
           <LoadingButton
             disabled={Boolean(operation)}
