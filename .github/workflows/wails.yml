@@ -175,6 +175,9 @@ jobs:
       - name: Patch executable RPATH
         if: runner.os == 'macOS'
         run: |
+          otool -l "./build/bin/${{ env.EXEC_NAME }}.app/Contents/MacOS/${{ env.EXEC_NAME }}" | awk '$1 == "path" { print $2 }' | sort -u | while IFS= read -r rpath; do
+            install_name_tool -delete_rpath "$rpath" "./build/bin/${{ env.EXEC_NAME }}.app/Contents/MacOS/${{ env.EXEC_NAME }}"
+          done
           install_name_tool -add_rpath @executable_path/../Frameworks "./build/bin/${{ env.EXEC_NAME }}.app/Contents/MacOS/${{ env.EXEC_NAME }}"
 
       - name: Add macOS perms
@@ -214,6 +217,22 @@ jobs:
           AC_USERNAME: ${{ secrets.APPLE_USERNAME }}
           AC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           AC_PROVIDER: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify macOS application invariants
+        if: >-
+          runner.os == 'macOS' &&
+          (
+            !github.event.pull_request ||
+            (
+              github.event.pull_request.head.repo.full_name == github.repository &&
+              github.actor != 'dependabot[bot]'
+            )
+          )
+        run: |
+          EXPECTED_BUNDLE_ID='com.getalby.Alby Hub' \
+          REQUIRE_NONADHOC_SIGNATURE=1 \
+          ./scripts/verify-darwin-app.sh "./build/bin/${{ env.EXEC_NAME }}.app"
+        shell: bash
 
       - name: Make DMG image for macOS
         if: runner.os == 'macOS'
