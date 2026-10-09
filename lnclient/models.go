@@ -142,15 +142,18 @@ const (
 )
 
 type CircularPaymentReconciliation struct {
-	State                 string
-	OperationID           string
-	PaymentHash           string
-	OutboundPaymentID     string
-	AmountMsat            uint64
-	ActualRoutingFeeMsat  *uint64
-	LatestUpdateTimestamp uint64
-	InboundPaymentStatus  string
-	OutboundPaymentStatus string
+	State                             string
+	OperationID                       string
+	PaymentHash                       string
+	OutboundPaymentID                 string
+	AmountMsat                        uint64
+	ActualRoutingFeeMsat              *uint64
+	LatestUpdateTimestamp             uint64
+	InboundPaymentStatus              string
+	OutboundPaymentStatus             string
+	FailureCode                       string
+	ObservedReceivingChannelIDs       []string
+	UnidentifiedReceivingChannelCount uint32
 }
 
 type CircularRouteHop struct {

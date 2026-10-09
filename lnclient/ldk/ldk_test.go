@@ -249,6 +249,17 @@ func TestReconcileCircularPaymentRecordsRequiresTwoMatchingTerminalLegs(t *testi
 	require.NoError(t, err)
 	require.Equal(t, lnclient.CircularPaymentStateFailed, reconciliation.State)
 	require.Nil(t, reconciliation.ActualRoutingFeeMsat)
+	require.Empty(t, reconciliation.FailureCode)
+
+	failureReason := ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch
+	inbound.CircularFailureReason = &failureReason
+	inbound.CircularObservedReceivingChannelIds = []string{"incoming-channel-a", "incoming-channel-b"}
+	inbound.CircularUnidentifiedReceivingChannelCount = 1
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, "receiving_channel_mismatch", reconciliation.FailureCode)
+	require.Equal(t, []string{"incoming-channel-a", "incoming-channel-b"}, reconciliation.ObservedReceivingChannelIDs)
+	require.Equal(t, uint32(1), reconciliation.UnidentifiedReceivingChannelCount)
 
 	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
 		ldk_node.PaymentStatusPending,
@@ -308,6 +319,25 @@ func TestReconcileCircularPaymentRecordsRejectsContradictionsAndTampering(t *tes
 	)
 	_, err = reconcileTestCircularPayment(inbound, nil, operationID, paymentHash, outboundPaymentID)
 	require.ErrorContains(t, err, "terminal circular inbound payment has no outbound record")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	failureReason := ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch
+	inbound.CircularFailureReason = &failureReason
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "non-failed circular inbound payment has rejection diagnostics")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	outbound.CircularFailureReason = &failureReason
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "outbound payment unexpectedly has receiving-channel diagnostics")
 }
 
 func TestSanitizeChainEndpointForBitcoind(t *testing.T) {
