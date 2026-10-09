@@ -207,7 +207,7 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 - [x] UI controls and deterministic backend enforcement are independently verified. Live route availability and value-moving acceptance remain separate gates.
 - [ ] No live-value test occurs without a fresh approval packet.
 - [ ] Start with the smallest useful explicitly approved test amount.
-- [ ] Independently reconcile actual routes, fees, balances, and persisted operation state.
+- [x] Independently reconcile actual routes, fees, balances, and persisted operation state for the first live exact-route operation. This does not approve another operation.
 - [ ] Keep the feature disabled if any route evidence is unavailable or ambiguous.
 
 ## Upgrade procedure
@@ -631,3 +631,19 @@ Consequence:
 - Build, installation, migration, wallet continuity, embedded-library identity, and non-paying UI safety behavior are accepted for this exact commit. Live route availability and value-moving acceptance remain unproven and separate.
 - Do not attempt a Kraken-return quote until the exact Kraken channel is online and fresh channel state is read again. Any value-moving test still requires a newly generated exact action packet and a separate owner approval immediately before execution.
 - Future official Alby updates may replay these small versioned commits, but compatibility is not automatic: rebase on the new official Hub and LDK baselines, resolve conflicts without weakening invariants, rebuild all native bindings, and repeat deterministic, migration, hash, wallet, and UI verification before installation.
+
+### 2026-10-08 — First live exact-route operation succeeded on the wrong intended destination
+
+Observed:
+
+- The owner manually opened and executed quote `acb5258ba055968d07bc4e5cc4c4c729` at approximately 18:16 Pacific. The intended discussion target was Kraken, but the selected incoming row was another channel to peer `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c`.
+- The exact outgoing channel was `255349693497905514942651862984333935477` (SCID `1065615883472404481`). The exact incoming channel was `192402094963147600483555171836052073466` (SCID/alias `1067078233949798400`). Both channels have the same full peer pubkey; Kraken was not part of the route.
+- The principal was `10,000 sats` (`0.00010000 BTC`). The fixed route quoted `1,010 msat` and settled for exactly `1,010 msat` (`1.01 sats`), below the `2,000-sat` routing-fee cap. Maximum source debit was `10,001.010 sats`.
+- Durable Hub state is `succeeded / succeeded`. Operation ID is `315700ee3d5e2d31c4204089ecdff6de990786b896830ab3d0565c9aa77b854f`, outbound payment ID is `74cf27adfdfff458ae75ddf44cb8aeb03309899b0c42f166b9a626c60cb92d5a`, and terminal evidence hash is `1fd27e653b301967254b6538630ee16353fddf8a7289e72a70987bc26ae3d344`. The database remains healthy and no quote remains in `executing`.
+- Post-operation UI state agrees with the route direction. Outgoing spendable fell from `989,340` to `979,338 sats`. The incoming channel's raw local balance increased from `660` to `10,660 sats`, while its displayed spendable balance remains zero because it is still below the `20,000-sat` local reserve. Kraken remained unchanged at `138,846 sats` spendable and `840,493 sats` receiving. On-chain balance remained `41,883 sats`.
+- The apparent roughly `10,001-sat` drop in the top-level Lightning spendable balance is reserve locking, not a `10,001-sat` economic loss: the returned `10,000 sats` is present on the selected incoming channel but is not yet spendable below its reserve. The actual routing cost was `1.01 sats`.
+
+Consequence:
+
+- This is live proof that the fixed route used the exact selected outgoing and incoming channels, persisted two-leg terminal evidence, charged the reviewed fee, and reconciled successfully. It did not repopulate Kraken or advance the intended inbound-`030ef18b…` / outbound-Kraken liquidity goal.
+- The current UI safety is insufficient for a financially cautious owner: attaching `Rebalance In` to a row plus fingerprint confirmation did not prevent an unintended incoming-channel choice. Before another live attempt, make the target unmistakable in the confirmation step and require an action-specific confirmation that names or includes both exact channel IDs. A new Kraken attempt must use a fresh quote and separate approval packet.
