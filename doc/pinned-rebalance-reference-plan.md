@@ -664,3 +664,19 @@ Consequence:
 
 - The responsive bundle is installed without altering wallet data, but live visual acceptance is intentionally pending owner unlock and inspection of the exact-channel dialog. No quote, invoice, probe, HTLC, payment, or rebalance was created by this deployment.
 - Safety-diagnostic development remains paused until that UI checkpoint is accepted.
+
+### 2026-10-08 — Raw Wails UI deployment reverted after sandbox-path failure
+
+Observed:
+
+- The first `a382994f` bundle was a raw Wails self-signed output. Although deep signature verification passed, its application signature carried no sandbox entitlements and its executable retained a developer-machine LDK `LC_RPATH` instead of `@executable_path/../Frameworks`.
+- On owner unlock, that bundle opened a fresh empty profile at `/Users/kode/Library/Application Support/albyhub` and loaded LDK from the Go module cache. The zero balances and zero channels shown by that process belonged to the empty profile, not to the owner's wallet.
+- The canonical sandbox wallet at `/Users/kode/Library/Containers/com.getalby.Alby-Hub/Data/Library/Application Support/albyhub` remained intact with `integrity_check = ok`, `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=246`, and `local_rebalance_quotes=8`.
+- The empty profile database and faulty raw bundle were preserved in `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-ui-fix-a382994f` for evidence. The known-good prior bundle was restored before another wallet start.
+- After owner unlock, the restored process opened the canonical sandbox database and embedded `/Applications/Alby Hub.app/Contents/Frameworks/libldk_node.dylib`. The live UI again showed all four channels, Lightning spendable `869,446 sats`, receive limit `2,069,233 sats`, and on-chain balance `41,883 sats`; two channels were online and two were offline at observation time.
+- A corrected `a382994f` candidate was prepared offline at `/Users/kode/Development/albyhub-builds/v1.24.1/Alby Hub UI a382994f corrected.app`. It has the five required sandbox/network/file entitlements, an embedded-only LDK rpath, universal arm64/x86_64 executable and library, and a valid deep ad-hoc signature. It is not installed at this checkpoint.
+
+Consequence:
+
+- The responsive source change remains valid, but the first deployment is rejected and must never be distributed. The currently running bundle is the restored known-good pre-UI build.
+- Future installation checks must fail closed unless both the sandbox entitlement and embedded-only LDK rpath are verified before replacement, followed by runtime proof of the canonical database and embedded library after owner unlock.
