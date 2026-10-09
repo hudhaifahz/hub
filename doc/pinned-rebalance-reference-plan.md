@@ -1,6 +1,6 @@
 # Pinned Channel Rebalance Reference Plan
 
-Status: source implementation and deterministic verification are complete through owner confirmation, exact-route submission, restart recovery, and two-leg terminal reconciliation. HTTP, Wails, and UI execution exist only in the uninstalled source build at commit `587f7837`; the currently installed application has not been replaced. No live rebalance is authorized by this plan.
+Status: source implementation and deterministic verification are complete through owner confirmation, exact-route submission, restart recovery, and two-leg terminal reconciliation. The exact build from Hub commit `defe4b32c68044c35318e979dbea6e740d9a39cd` is installed and running with migration, wallet continuity, embedded-library, and UI safety checks recorded below. No live rebalance is authorized by this plan.
 
 This document is the durable checklist and learning log for adding fail-closed channel routing to the Alby Hub rebalance flow. Update it whenever implementation evidence changes an assumption. Do not mark an item complete from code presence alone; require the stated verification evidence.
 
@@ -29,7 +29,7 @@ Allow an owner to request a circular rebalance with:
 - [x] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic. (The local self-payment rejects a wrong or mixed incoming channel before claim; the provider flow remains locked.)
 - [x] Only one rebalance operation may execute at a time. (A database-level partial unique index permits at most one local quote in `executing`, including races between different valid quote IDs.)
 - [ ] A live rebalance always requires a fresh, action-specific owner approval packet.
-- [ ] Tests, builds, deployment, UI presence, live execution, and economic success are reported as separate states.
+- [x] Tests, builds, deployment, UI presence, live execution, and economic success are reported as separate states.
 
 ## Confirmed starting point
 
@@ -204,7 +204,7 @@ Hub terminal writes must compare-and-set only the exact `executing` operation in
 
 - [x] Source is committed and pushed to owner-controlled repositories.
 - [x] Exact installed build commit is recorded.
-- [ ] UI controls and backend enforcement are independently verified.
+- [x] UI controls and deterministic backend enforcement are independently verified. Live route availability and value-moving acceptance remain separate gates.
 - [ ] No live-value test occurs without a fresh approval packet.
 - [ ] Start with the smallest useful explicitly approved test amount.
 - [ ] Independently reconcile actual routes, fees, balances, and persisted operation state.
@@ -609,3 +609,25 @@ Consequence:
 
 - The owner-facing orchestration source gate is closed, but deployment and live acceptance are not. The next permissible step is a separately reviewed build/install checkpoint that proves UI presence, migration, wallet continuity, and the exact embedded source/library hashes without executing a rebalance.
 - A live test still requires a fresh action packet from the newly installed build with current exact channel state, exact principal, eight-decimal BTC equivalent, quoted fee, fee cap, maximum debit, projected balances, expiry, quote ID, route fingerprint, and explicit owner approval immediately before the value-moving confirmation.
+
+### 2026-10-08 — Exact owner-execution build installed and non-paying acceptance completed
+
+Observed:
+
+- Hub commit `defe4b32c68044c35318e979dbea6e740d9a39cd` was clean, matched `origin/codex/upgrade-v1.24.1`, and was built as universal arm64/x86_64 Alby Hub `v1.24.1`. It contains owner-execution implementation commit `587f7837` and pins `github.com/hudhaifahz/ldk-node-go v0.0.0-20261008205838-a3dd5b1fe3bb`.
+- The pinned unsigned universal LDK library SHA-256 is `3399f9446240441f406b7a307b6845415bbf5ea1282b3cebf9f5a689826a7554`. Its quote, prepare, and prepared-send symbols are exported on both architectures. After embedding and ad-hoc signing, the installed library SHA-256 is `f853168d63280736237e84d40f869fd03fabe3e5560c5e067f026c893b68b19a`; the installed executable SHA-256 is `6b1e522a5fea45d615670b1db98083f7de5fc24d921b7a80effdfd339c770d5a`.
+- The installed bundle passes deep signature verification, retains Alby's app-sandbox, client/server network, download, and user-selected-file entitlements, and resolves LDK only through `@executable_path/../Frameworks`.
+- The reproducible archive is `/Users/kode/Development/albyhub-builds/v1.24.1/Alby-Hub-v1.24.1-custom-defe4b32.zip`, SHA-256 `604a0ffce06882e4ed05a721a39a392066b2969e97abac7cbfa83c01dd94b68d`.
+- Before replacement, transaction-safe pre-install snapshots were created. After the exact old process stopped, post-quit snapshots and the complete prior application were preserved at `/Users/kode/Development/albyhub-rollbacks/2026-10-08-before-owner-execution-defe4b32`. Both database snapshots and both live databases returned `integrity_check = ok`.
+- The installed process loads the embedded library and the canonical sandbox databases. Migration `202610080300_local_rebalance_balance_evidence` is recorded, `local_rebalance_quotes` exists, and all eight local/remote balance and reserve evidence columns are non-null `bigint` fields.
+- Wallet continuity counts remained `apps=12`, `app_permissions=94`, `user_configs=16`, `transactions=235`, and `rebalance_quotes=0`; the new `local_rebalance_quotes` table is also empty. The live Settings screen reports `v1.24.1`.
+- After owner unlock, the existing wallet loaded with four channels, Lightning balance `1,467,297 sats`, receive limit `3,460,722 sats`, and on-chain balance `41,883 sats`. Three channels were online. The Kraken channel for peer `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485`, exact channel ID `86157859664272214382561858939519142638`, showed `138,846 sats` spendable and `840,493 sats` receiving but was offline.
+- The current node completed Lightning and on-chain synchronization successfully. Kraken's last recorded direct-connection failures predate this installation, so its offline state is observed peer availability rather than evidence of migration or wallet loss.
+- On an online channel, the live `Rebalance In` dialog visibly states that route discovery creates no invoice, probe, HTLC, or payment. It requires an exact outgoing channel, displays the full incoming pubkey and stable channel ID, lists each candidate outgoing channel with its exact ID and spendable balance, separates principal from routing-fee cap, requires a fresh quote, and keeps `Execute exact route` disabled before the quote-specific confirmation.
+- The Kraken-specific `Rebalance In` action is correctly not offered while Kraken is offline. No route quote was requested, no invoice or HTLC was created, no execution confirmation was entered, and no sats moved.
+
+Consequence:
+
+- Build, installation, migration, wallet continuity, embedded-library identity, and non-paying UI safety behavior are accepted for this exact commit. Live route availability and value-moving acceptance remain unproven and separate.
+- Do not attempt a Kraken-return quote until the exact Kraken channel is online and fresh channel state is read again. Any value-moving test still requires a newly generated exact action packet and a separate owner approval immediately before execution.
+- Future official Alby updates may replay these small versioned commits, but compatibility is not automatic: rebase on the new official Hub and LDK baselines, resolve conflicts without weakening invariants, rebuild all native bindings, and repeat deterministic, migration, hash, wallet, and UI verification before installation.
