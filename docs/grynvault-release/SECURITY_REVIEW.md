@@ -32,6 +32,11 @@ live Lightning payment was used.
 | HTTP and Wails frontend builds | Node 22 / locked Yarn dependencies | Pass |
 | Source-boundary assertions | `scripts/release/check-source-boundaries.sh` | Pass |
 
+An unsigned universal preflight build identified and fixed duplicate runtime
+path processing caused by `otool` reporting each path once per architecture.
+The release script now deduplicates paths before mutation; a fresh exact-commit
+candidate must pass bundle inspection before the signing gate can open.
+
 The secret review removed credential-shaped NWC connection strings inherited
 from upstream source and made the optional Lightning messageboard explicitly
 operator-configured. Those historical values are not reproduced in release
