@@ -43,6 +43,8 @@ rewrites, and remove local build paths before compiling a candidate.
 Because Wails applies an ad-hoc signature to the packaged native library, the
 release script restores the reviewed pinned LDK bytes after packaging and before
 the owner-controlled Developer ID signing step.
+Bundle inspection normalizes identical per-architecture Mach-O metadata before
+requiring one exact runtime path and one exact native-library install name.
 
 The secret review removed credential-shaped NWC connection strings inherited
 from upstream source and made the optional Lightning messageboard explicitly

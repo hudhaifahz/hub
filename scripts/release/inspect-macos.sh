@@ -59,12 +59,12 @@ if ! otool -L "$executable_path" | grep -q '@rpath/libldk_node.dylib'; then
   echo "main executable does not use the expected LDK install name" >&2
   exit 1
 fi
-rpaths="$(otool -l "$executable_path" | awk '$1 == "cmd" && $2 == "LC_RPATH" { getline; getline; print $2 }')"
+rpaths="$(otool -l "$executable_path" | awk '$1 == "cmd" && $2 == "LC_RPATH" { getline; getline; print $2 }' | sort -u)"
 if [[ "$rpaths" != '@executable_path/../Frameworks' ]]; then
   echo "main executable has an unexpected rpath set: ${rpaths:-none}" >&2
   exit 1
 fi
-ldk_install_name="$(otool -D "$ldk_path" | tail -n +2 | tr -d '[:space:]')"
+ldk_install_name="$(otool -D "$ldk_path" | awk '$1 ~ /^@/ { print $1 }' | sort -u)"
 if [[ "$ldk_install_name" != '@rpath/libldk_node.dylib' ]]; then
   echo "embedded LDK has an unexpected install name: $ldk_install_name" >&2
   exit 1
