@@ -117,16 +117,16 @@ The reconciler must reload both records by their independently persisted IDs and
 
 Allowed status matrix:
 
-| Inbound | Outbound | Hub result |
-| --- | --- | --- |
-| Pending | missing | remain `executing`; preparation exists but no durable send record is proven |
-| Pending | Pending | remain `executing`; settlement is unresolved |
-| Succeeded or Failed | Pending | remain `executing`; the other durable leg has not reached terminal state |
-| Pending | Succeeded or Failed | remain `executing`; the other durable leg has not reached terminal state |
-| Succeeded | Succeeded | atomically record `succeeded` with exact amount, fee, identifiers, and terminal timestamp |
-| Failed | Failed | atomically record `failed` with a bounded reason and terminal timestamp |
-| Succeeded | Failed | fail closed as contradictory; retain the active lock for investigation |
-| Failed | Succeeded | fail closed as contradictory; retain the active lock for investigation |
+| Inbound             | Outbound            | Hub result                                                                                |
+| ------------------- | ------------------- | ----------------------------------------------------------------------------------------- |
+| Pending             | missing             | remain `executing`; preparation exists but no durable send record is proven               |
+| Pending             | Pending             | remain `executing`; settlement is unresolved                                              |
+| Succeeded or Failed | Pending             | remain `executing`; the other durable leg has not reached terminal state                  |
+| Pending             | Succeeded or Failed | remain `executing`; the other durable leg has not reached terminal state                  |
+| Succeeded           | Succeeded           | atomically record `succeeded` with exact amount, fee, identifiers, and terminal timestamp |
+| Failed              | Failed              | atomically record `failed` with a bounded reason and terminal timestamp                   |
+| Succeeded           | Failed              | fail closed as contradictory; retain the active lock for investigation                    |
+| Failed              | Succeeded           | fail closed as contradictory; retain the active lock for investigation                    |
 
 The LDK failure handler must make a circular failure two-legged before Hub may accept it: after validating the outbound record's circular metadata, persist the matching inbound record as `Failed` in the same replayable event-handling turn. A persistence error causes event replay rather than partial terminal acceptance.
 
@@ -721,3 +721,125 @@ Observed:
 Pending:
 
 - The application is at its normal password screen. Owner unlock, chain sync, channel visibility, balances, and the responsive exact-channel dialog still require live readback. No quote, invoice, probe, HTLC, payment, or rebalance has been created.
+
+### 2026-10-13 — Clean upstream preparation and isolated hosted companion
+
+Observed:
+
+- Three isolated contribution branches were replayed on current upstream bases
+  and pushed to the owner's forks: Hub base/head
+  `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e` / `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`,
+  LDK base/head `74daaf98c7eeee7bca58c703c103d57affbd928a` /
+  `2dc742a8b2057519e22d757f510e5cc880731b2c`, and LDK Go base/head
+  `5ba434093284d0dc8291e45d2a3d2c1c5a879698` /
+  `a381cacb18562dff960f24a12f43232633f8bc25`.
+- Hub SQLite/PostgreSQL migration and rollback coverage, the full Go suite,
+  race-sensitive owner API tests, frontend lint/build, Wails/HTTP production
+  builds, `govulncheck`, and the frontend production audit pass. Quote,
+  execution, status, and diagnostics remain confined to authenticated full-owner
+  routes and absent from read-only and NWC dispatch.
+- LDK native tests pass `41/41` and UniFFI tests pass `51/51`. The full serial
+  integration fixture still surfaces existing channel-cycle failures. The exact
+  `channel_full_cycle` failure was reproduced unchanged in a clean upstream
+  checkout with the same Bitcoin Core 27.2/electrs binaries: the fixture reaches
+  successful payments, then fails at `tests/common/mod.rs:1139` with event-count
+  assertion `left: 8`, `right: 6`. This is inherited baseline evidence, not a
+  feature-pass claim.
+- Fresh binding generation matches the committed Go output byte for byte; the
+  header difference is generator whitespace only. The reviewed universal
+  macOS library is `43,360,288` bytes, contains `x86_64 arm64`, uses `@rpath`,
+  and has SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+- Draft upstream pull-request bodies are recorded locally in
+  `doc/exact-channel-rebalance-pr-drafts.md`. No public pull request was opened.
+- The Hub contribution now includes the scoped narrow-width containment fix at
+  `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`. Real-component fixtures at 320,
+  375, 768, and 1280 CSS pixels prove no body, dialog, or scroll-region
+  horizontal overflow and keep every action in the viewport. Keyboard order
+  reaches the execution action only after exact confirmation. The fixture
+  screenshots and their SHA-256 manifest contain synthetic identifiers only;
+  actual 200% browser zoom remains an explicit open check.
+- Synthetic operation records subsequently covered executing, succeeded,
+  failed, and exact-recovery views at 320 and 1280 CSS pixels. Terminal states
+  disable both payment actions; recovery presents an exact-retry action that
+  stays disabled without a new exact confirmation. No quote or execution API
+  was invoked by these fixtures.
+- A separate read-only companion was created at
+  `/Users/kode/Development/grynvault-rebalance`. Current Cloudflare guidance
+  changed the hosting default from Railway to a stateless SDK v2 Worker. It has
+  no wallet source, database, storage, secret binding, outbound fetch, or
+  execution method; its release record is `unpublished` and contains no binary
+  URL.
+- The companion advertises MCP revisions `2026-07-28` and `2025-11-25`, exposes
+  exactly five informational tools, applies bounded body/schema/Host/Origin
+  validation, hashed client rate-limit keys, metadata-only logs, and restrictive
+  browser security headers. Thirteen Worker-runtime security tests, typed lint,
+  three TypeScript compilations, generated bindings, dry-run build, clean Node
+  `22.18.0` install, dependency audit, CycloneDX SBOM generation, and Gitleaks
+  `8.29.1` scan pass. This is an internal engineering review, not an independent
+  audit or private-deployment acceptance.
+- The unadvertised Cloudflare provider deployment subsequently passed external
+  TLS/header/schema/hostile-request checks, actual rate-limit denial, and both
+  modern and legacy MCP client negotiation. Accepted Worker version
+  `2867ad4b-9d5d-4136-add7-4bb4bbf3b04e` runs companion source commit
+  `72febac0ce14123a12079b9cd3903602b5214a5a`, and its release endpoint reads
+  back exact reviewed Hub commit
+  `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`;
+  `rebalance.grynvault.com` remains unresolved and untouched.
+- Real-time tailing of the first provider version revealed Cloudflare's ordinary
+  request envelope even though the application log was metadata-only. The test
+  contained only a public reason code and no wallet data. The accepted version
+  disables persisted invocation logs, enables query-string redaction, and
+  documents that an operator-opened real-time tail still carries network
+  metadata.
+
+Consequence:
+
+- All work in this checkpoint was non-paying; no quote, invoice, probe, HTLC,
+  payment, rebalance, wallet migration, or production DNS change occurred.
+- Temporary provider acceptance is complete. The next companion gate is private
+  owner-GitHub preservation and clean CI readback; canonical DNS remains an
+  explicit owner approval gate.
+- The PR branches and bodies are ready for owner review, but opening public
+  upstream pull requests remains a separate explicit approval gate.
+
+### 2026-10-13 — Isolated Portal 04 pre-release staging
+
+Observed:
+
+- The existing dirty Frontier Crown checkout remained untouched. A managed
+  worktree based on clean commit
+  `c6d2691dfa80d58391e5271cb583528f0be51a4d` produced and pushed isolated branch
+  `codex/rebalance-portal-04` at
+  `873833e9364ce693e02e86f129125b712a84d579`.
+- Portal 04 identifies Grynvault Rebalance as an experimental independently
+  maintained Alby Hub fork, warns about backups and real funds, and exposes
+  distinct Download, Verify signature, View source, Release notes,
+  Documentation, and Security report actions.
+- Release readiness is fail closed. Download, signature verification, and
+  release notes remain disabled unless the status is exactly `released` and
+  immutable source, download, signed-manifest, release-note, documentation, and
+  full PGP-fingerprint values are all present. Six gate assertions passed in
+  the repository's generated-JavaScript and TypeScript test discovery.
+- Shared build, web type checking, 26 web tests, production web build, diff
+  validation, Gitleaks directory scanning, and a post-commit diff scan passed.
+  Browser geometry at 320, 375, 768, and 1280 CSS pixels showed no page or card
+  horizontal overflow and kept all three release actions disabled.
+- Portal screenshots, configuration instructions, hashes, and audit evidence
+  are committed under `docs/releases/grynvault-rebalance/`. No owner-test
+  binary, credential, wallet data, deploy preview, production deployment, or
+  public download was created.
+- The unchanged Frontier Crown dependency graph reports 5 Critical and 19 High
+  advisories in the full audit; production-only paths report 2 Critical and 13
+  High. Portal 04 changes no manifest or lockfile. These inherited findings are
+  recorded rather than waived, and they block production deployment until a
+  dedicated remediation branch reaches zero unresolved Critical or High
+  findings for the deployed surface.
+
+Consequence:
+
+- Portal 04 source staging and remote version control are complete, but the
+  card is not live and cannot advertise a download. Dependency remediation,
+  final release identity, owner-controlled signing, exact artifact URLs, deploy
+  preview review, and explicit owner approval remain required before merge or
+  production deployment.

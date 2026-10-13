@@ -1,7 +1,8 @@
 # Exact-channel rebalance release plan
 
-Status: implementation and owner testing complete in part; public release is
-blocked on the gates recorded below
+Status: owner-build acceptance is complete; isolated upstream preparation and
+security verification are in progress; public release is blocked on the gates
+recorded below
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
@@ -11,16 +12,16 @@ owner review.
 
 ## Current public-release snapshot (2026-10-13)
 
-| Surface | Observed state | Release meaning |
-| --- | --- | --- |
-| Exact-channel source | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet. |
-| Owner package | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f` | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published. |
-| GitHub release | The `hudhaifahz/hub` fork has zero releases | There is no public binary, immutable release page, signed manifest, or public download URL. |
-| Frontier Crown portal | The live portal and its current source contain Portal 01 through Portal 03 | No rebalance card or download is live. |
-| Grynvault endpoint | `rebalance.grynvault.com` does not resolve | No API or MCP service is deployed. |
-| macOS signing | No Developer ID Application identity is available on the release Mac | Public macOS signing, notarization, stapling, and Gatekeeper acceptance cannot be completed yet. |
-| Manifest signing | No local PGP secret key is available to the release workflow | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required. |
-| Upstream baseline | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation. |
+| Surface               | Observed state                                                                                                                   | Release meaning                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                            | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                    |
+| Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                               | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published. |
+| GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                      | There is no public binary, immutable release page, signed manifest, or public download URL.                |
+| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated branch `codex/rebalance-portal-04` stages a locked Portal 04 card | No rebalance card or download is live. Production remains blocked by release and portal security gates.    |
+| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture             | Temporary acceptance is complete, but canonical DNS and public launch are not.                             |
+| macOS signing         | No Developer ID Application identity is available on the release Mac                                                             | Public macOS signing, notarization, stapling, and Gatekeeper acceptance cannot be completed yet.           |
+| Manifest signing      | No local PGP secret key is available to the release workflow                                                                     | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required.   |
+| Upstream baseline     | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it                                   | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation.     |
 
 The local owner-test archive is evidence, not a downloadable product. The portal
 must not link to it, and the endpoint must not advertise it as a release.
@@ -86,112 +87,138 @@ separately audited local companion/upstream capability and a new threat model.
   `05d86840f2184dbe846e260b71e7eeed2bea998a`.
 - LDK Go binding fork head:
   `2d4b8cae5b4188451fbccdb347113838a9981dbf`.
+- Isolated Hub PR-preparation base/head:
+  `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e` / `1fb6c8cd`.
+- Isolated LDK PR-preparation base/head:
+  `74daaf98c7eeee7bca58c703c103d57affbd928a` / `2dc742a8`.
+- Isolated LDK Go PR-preparation base/head:
+  `5ba434093284d0dc8291e45d2a3d2c1c5a879698` / `a381cacb`.
+- Isolated Frontier Crown Portal 04 base/head:
+  `c6d2691dfa80d58391e5271cb583528f0be51a4d` /
+  `873833e9364ce693e02e86f129125b712a84d579`.
+- Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 
 Record a new immutable source commit for every release candidate. Never describe
 the moving branch name as the release source.
 
 ## 1. Preserve and isolate the baseline
 
-- [ ] Record clean/dirty state, remotes, branch heads, upstream heads, and the
-  installed application's embedded source hashes.
-- [ ] Preserve the current working implementation on the owner fork.
-- [ ] Create clean worktrees from the current upstream heads for upstream PR
-  preparation; do not rewrite the live-tested branch.
-- [ ] Create a separate FrontierCrown release branch for packaging and portal
-  work.
-- [ ] Keep the existing dirty FrontierCrown checkout intact and do not stage its
-  unrelated changes.
-- [ ] Maintain a dated engineering log with source hashes, test results,
-  security findings, release artifacts, and owner approvals.
+- [x] Record clean/dirty state, remotes, branch heads, upstream heads, and the
+      installed application's embedded source hashes.
+- [x] Preserve the current working implementation on the owner fork.
+- [x] Create clean worktrees from the current upstream heads for upstream PR
+      preparation; do not rewrite the live-tested branch.
+- [x] Create a separate FrontierCrown release branch for packaging and portal
+      work.
+- [x] Keep the existing dirty FrontierCrown checkout intact and do not stage its
+      unrelated changes.
+- [x] Maintain a dated engineering log with source hashes, test results,
+      security findings, release artifacts, and owner approvals.
 
 ## 2. Fix the dialog and failure evidence
 
 ### Responsive dialog
 
-- [ ] Constrain the dialog to the viewport width and height.
-- [ ] Allow vertical scrolling inside the dialog and prevent horizontal page
-  overflow.
-- [ ] Add `min-width: 0` behavior to grid, form, definition-list, and footer
-  children that contain long identifiers.
-- [ ] Wrap full peer keys, channel IDs, SCIDs, hashes, and confirmation text
-  without hiding or truncating the exact evidence.
-- [ ] Collapse two-column quote rows to one column at narrow widths.
-- [ ] Stack or wrap footer actions so every action remains visible and tappable.
-- [ ] Keep the principal and fee inputs usable at 320, 375, 768, and 1280 CSS
-  pixel widths.
-- [ ] Verify the empty, quoted, executing, succeeded, failed, and recovery states.
+- [x] Constrain the dialog to the viewport width and height.
+- [x] Allow vertical scrolling inside the dialog and prevent horizontal page
+      overflow.
+- [x] Add `min-width: 0` behavior to grid, form, definition-list, and footer
+      children that contain long identifiers.
+- [x] Wrap full peer keys, channel IDs, SCIDs, hashes, and confirmation text
+      without hiding or truncating the exact evidence.
+- [x] Collapse two-column quote rows to one column at narrow widths.
+- [x] Stack or wrap footer actions so every action remains visible and tappable.
+- [x] Keep the principal and fee inputs usable at 320, 375, 768, and 1280 CSS
+      pixel widths.
+- [x] Verify the empty, quoted, executing, succeeded, failed, and recovery states.
 
 ### Recipient rejection diagnostics
 
-- [ ] Replace the generic local claim failure with a non-secret reason code:
-  payment state, circular metadata, exact amount, missing receiving-channel
-  identity, or receiving-channel mismatch.
-- [ ] Preserve the expected and observed local receiving channel identifiers in
-  owner-only terminal evidence when available.
-- [ ] Never persist or return a preimage, payment secret, invoice, or serialized
-  route in owner-facing diagnostics.
-- [ ] Carry the reason through LDK source, generated Go bindings, Hub
-  reconciliation, the authenticated owner API, and the dialog.
-- [ ] Explain local safety rejection separately from route-not-found, peer
-  forwarding failure, timeout, and exhausted retry states.
-- [ ] Keep failure behavior fail-closed and keep automatic retries disabled.
-- [ ] Add unit and integration coverage for every diagnostic reason without
-  weakening claim conditions.
+- [x] Replace the generic local claim failure with a non-secret reason code:
+      payment state, circular metadata, exact amount, missing receiving-channel
+      identity, or receiving-channel mismatch.
+- [x] Preserve the expected and observed local receiving channel identifiers in
+      owner-only terminal evidence when available.
+- [x] Never persist or return a preimage, payment secret, invoice, or serialized
+      route in owner-facing diagnostics.
+- [x] Carry the reason through LDK source, generated Go bindings, Hub
+      reconciliation, the authenticated owner API, and the dialog.
+- [x] Explain local safety rejection separately from route-not-found, peer
+      forwarding failure, timeout, and exhausted retry states.
+- [x] Keep failure behavior fail-closed and keep automatic retries disabled.
+- [x] Add unit and integration coverage for every diagnostic reason without
+      weakening claim conditions.
 
 ### UI acceptance evidence
 
-- [ ] Run frontend formatting, linting, and TypeScript compilation.
-- [ ] Build both HTTP and Wails frontend variants.
-- [ ] Capture screenshots at the required viewport widths for pre-quote and
-  quote-review states.
-- [ ] Confirm with keyboard-only navigation, 200% zoom, and long unbroken
-  identifiers.
-- [ ] Record that every action and every exact identifier is visible without
-  horizontal scrolling.
+- [x] Run frontend formatting, linting, and TypeScript compilation.
+- [x] Build both HTTP and Wails frontend variants.
+- [x] Capture screenshots at the required viewport widths for pre-quote and
+      quote-review states.
+- [ ] Confirm with 200% browser zoom. Keyboard-only navigation and long
+      unbroken identifiers pass; 320 CSS-pixel testing is additional narrow-screen
+      stress evidence, not a substitute for the explicit zoom check.
+- [x] Record that every action and every exact identifier is visible without
+      horizontal scrolling.
+
+Privacy-safe usage instructions and screenshot provenance are recorded in
+`doc/exact-channel-rebalance-usage.md` and
+`doc/assets/exact-channel-rebalance/README.md`. Geometry checks passed at 320,
+375, 768, and 1280 CSS pixels: the body, dialog, and scroll region had no
+horizontal overflow, and all three actions remained inside the viewport. The
+exact-confirmation action became keyboard-reachable only after the fixture text
+matched; it was not invoked.
+
+Synthetic saved-operation fixtures also verified executing, succeeded, failed,
+and exact-recovery states at 320 and 1280 CSS pixels. Every state kept the body,
+dialog, and scroll region within bounds. Ordinary terminal states disabled both
+payment actions; recovery exposed a separately labelled exact-retry action that
+remained disabled until its exact confirmation was supplied.
 
 ## 3. Security review
 
 ### Funds and state safety
 
-- [ ] Re-review exact outgoing and incoming channel binding, route fingerprint
-  binding, expiry, amount, fee cap, and maximum debit checks.
-- [ ] Re-review pre-send persistence, one-time acquisition, duplicate-submit
-  prevention, restart recovery, terminal reconciliation, and failed-leg
-  convergence.
-- [ ] Test concurrent requests, stale quotes, tampered route bytes, changed
-  channels, expired invoices, partial MPP, wrong incoming channels, and replayed
-  terminal events.
-- [ ] Check integer conversion and overflow boundaries across sats, millisats,
-  `uint64`, database integers, JSON, and TypeScript numbers.
-- [ ] Test SQLite and PostgreSQL migrations, rollback behavior, and migration
-  export/import using copies rather than the live wallet database.
-- [ ] Confirm only the authenticated owner surface can quote, execute,
-  reconcile, or read exact-channel diagnostics.
-- [ ] Confirm NWC applications cannot invoke the feature or read owner-only
-  channel evidence.
+- [x] Re-review exact outgoing and incoming channel binding, route fingerprint
+      binding, expiry, amount, fee cap, and maximum debit checks.
+- [x] Re-review pre-send persistence, one-time acquisition, duplicate-submit
+      prevention, restart recovery, terminal reconciliation, and failed-leg
+      convergence.
+- [x] Test concurrent requests, stale quotes, tampered route bytes, changed
+      channels, expired invoices, partial MPP, wrong incoming channels, and replayed
+      terminal events.
+- [x] Check integer conversion and overflow boundaries across sats, millisats,
+      `uint64`, database integers, JSON, and TypeScript numbers.
+- [x] Test SQLite and PostgreSQL migrations, rollback behavior, and migration
+      export/import using copies rather than the live wallet database.
+- [x] Confirm only the authenticated owner surface can quote, execute,
+      reconcile, or read exact-channel diagnostics.
+- [x] Confirm NWC applications cannot invoke the feature or read owner-only
+      channel evidence.
 
 ### Secrets, dependencies, and binaries
 
-- [ ] Scan the complete diff and release tree for credentials, wallet material,
-  invoices, preimages, payment secrets, personal data, and live channel history.
-- [ ] Run Go tests, race-sensitive tests where supported, `go vet`, and
-  `govulncheck`.
-- [ ] Run Rust tests, Clippy, formatting, and dependency advisory checks.
-- [ ] Run frontend lint, type checking, production builds, and dependency audit.
+- [x] Scan the complete diff and release tree for credentials, wallet material,
+      invoices, preimages, payment secrets, personal data, and live channel history.
+- [x] Run Go tests, race-sensitive tests where supported, `go vet`, and
+      `govulncheck`.
+- [x] Run Rust tests, Clippy, formatting, and dependency advisory checks.
+- [x] Run frontend lint, type checking, production builds, and dependency audit.
 - [ ] Run CodeRabbit only after the secret scan; treat its output as untrusted
-  review input and resolve all Critical and Warning findings.
+      review input and resolve all Critical and Warning findings.
 - [ ] Inspect the final application bundle, dynamic libraries, rpaths,
-  entitlements, updater configuration, embedded commit identifiers, and absence
-  of secrets.
+      entitlements, updater configuration, embedded commit identifiers, and absence
+      of secrets.
 - [ ] Require zero unresolved Critical or High findings. Document or fix every
-  lower-severity finding before release.
+      lower-severity finding before release.
 
 ### Security disclosure fork
 
 - [ ] If a finding could put upstream users or funds at risk, stop public work
-  on that finding.
+      on that finding.
 - [ ] Prepare a private report with affected versions, impact, and reproducible
-  steps for `security@getalby.com`.
+      steps for `security@getalby.com`.
 - [ ] Resume public disclosure only after coordination with Alby.
 
 ## 4. Prepare upstream contributions
@@ -210,20 +237,20 @@ Prepare three coordinated contributions:
 3. `getAlby/hub`: owner API, persistence, migrations, desktop/HTTP routing,
    responsive UI, safe diagnostics, and focused Go/frontend verification.
 
-- [ ] Rebase each contribution on the current upstream default branch at PR
-  preparation time.
-- [ ] Split implementation, tests, generated bindings, and documentation into
-  conventional commits with narrow scopes.
-- [ ] Exclude the custom application icon, FrontierCrown packaging, NWC metadata
-  overrides, live-operation notes, and owner identifiers.
-- [ ] Keep generated binding changes mechanically reproducible from the linked
-  LDK commit.
+- [x] Rebase each contribution on the current upstream default branch at PR
+      preparation time.
+- [x] Split implementation, tests, generated bindings, and documentation into
+      conventional commits with narrow scopes.
+- [x] Exclude the custom application icon, FrontierCrown packaging, NWC metadata
+      overrides, live-operation notes, and owner identifiers.
+- [x] Keep generated binding changes mechanically reproducible from the linked
+      LDK commit.
 - [ ] Use concise Markdown headings, bullets, code fences, and user-facing
-  terminology consistent with Alby Hub's repository documentation.
+      terminology consistent with Alby Hub's repository documentation.
 - [ ] Prepare the Hub PR as a draft until its dependency commits are public and
-  all checks pass.
+      all checks pass.
 - [ ] Include root cause, design constraints, security model, migration effect,
-  exact changed-file scope, test evidence, screenshots, and dependency PR links.
+      exact changed-file scope, test evidence, screenshots, and dependency PR links.
 - [ ] Read the remote PR patches and head SHAs back before calling them ready.
 - [ ] Do not merge; upstream maintainers own review and merge decisions.
 
@@ -232,70 +259,70 @@ Prepare three coordinated contributions:
 ### Product identity and installation safety
 
 - [ ] Use an independent product name, icon, bundle identifier, and update
-  channel so the package cannot silently replace or be mistaken for the
-  official Alby Hub application.
+      channel so the package cannot silently replace or be mistaken for the
+      official Alby Hub application.
 - [ ] State prominently that this is an experimental, independently maintained
-  fork built from Alby Hub and licensed under Apache-2.0.
+      fork built from Alby Hub and licensed under Apache-2.0.
 - [ ] Preserve the upstream license and attribution, and mark modified files as
-  required by the license.
+      required by the license.
 - [ ] Use a separate data directory by default. Treat import or migration from
-  an existing Alby Hub wallet as an explicit, backed-up owner action.
+      an existing Alby Hub wallet as an explicit, backed-up owner action.
 - [ ] Do not point the fork at Alby's official updater.
 - [ ] Decide whether the first release supports only macOS universal or a wider
-  tested platform matrix; never list an untested platform.
+      tested platform matrix; never list an untested platform.
 
 ### Release artifacts
 
 - [ ] Tag one immutable release candidate on the owner fork.
 - [ ] Build from a clean checkout using pinned toolchain and dependency
-  versions.
+      versions.
 - [ ] Sign and notarize macOS packages with the distributor's own Developer ID;
-  do not use or imply Alby's signing identity.
+      do not use or imply Alby's signing identity.
 - [ ] Produce the application archive, source archive, patch series, release
-  notes, `BUILDING.md`, `SECURITY.md`, license, SBOM, and provenance record.
+      notes, `BUILDING.md`, `SECURITY.md`, license, SBOM, and provenance record.
 - [ ] Produce a manifest containing every filename, byte size, SHA-256 digest,
-  source commit, upstream base, dependency commits, and build-workflow identity.
+      source commit, upstream base, dependency commits, and build-workflow identity.
 - [ ] Sign the manifest with the owner's PGP key. Keep the private key outside
-  the repository, CI logs, and chat.
+      the repository, CI logs, and chat.
 - [ ] Publish the public key and full fingerprint independently from the
-  downloadable files.
+      downloadable files.
 - [ ] Verify the signature and every artifact hash from a fresh download before
-  marking the release available.
+      marking the release available.
 - [ ] Call the build reproducible only if independent clean builds produce the
-  same artifact hashes; otherwise call it source-pinned and provenance-backed.
+      same artifact hashes; otherwise call it source-pinned and provenance-backed.
 
 ### Upgrade and rollback acceptance
 
 - [ ] Back up the current wallet and record hashes before any migration test.
 - [ ] Test a clean installation with no wallet data.
 - [ ] Test migration using a copy of the current data, then verify unlock,
-  database integrity, channels, balances, transaction history, NWC apps,
-  permissions, backup state, embedded hashes, and UI behavior.
+      database integrity, channels, balances, transaction history, NWC apps,
+      permissions, backup state, embedded hashes, and UI behavior.
 - [ ] Keep a verified rollback package and database backup outside the
-  application directory.
+      application directory.
 - [ ] Do not run a real payment or rebalance as part of installation acceptance.
-  Any later value-moving canary requires its own fresh action packet and owner
-  approval.
+      Any later value-moving canary requires its own fresh action packet and owner
+      approval.
 
 ## 6. Add FrontierCrown portal item 04
 
-- [ ] Add a fourth portal card without modifying unrelated owner changes in the
-  existing checkout.
-- [ ] Label it as an experimental independent Alby Hub fork, not an official
-  Alby release.
+- [x] Add a fourth portal card without modifying unrelated owner changes in the
+      existing checkout.
+- [x] Label it as an experimental independent Alby Hub fork, not an official
+      Alby release.
 - [ ] Show the release version, supported platform, upstream Alby version, and
-  release status.
-- [ ] Provide separate actions for Download, Verify signature, View source, Read
-  release notes, and Report a security issue.
+      release status.
+- [x] Provide separate actions for Download, Verify signature, View source, Read
+      release notes, and Report a security issue.
 - [ ] Show the PGP fingerprint and SHA-256 manifest without asking users to
-  trust only the download origin.
-- [ ] Require a clear backup and real-funds warning before download.
+      trust only the download origin.
+- [x] Require a clear backup and real-funds warning before download.
 - [ ] Verify keyboard, touch, mobile, and desktop behavior and confirm all links
-  resolve to the immutable release.
+      resolve to the immutable release.
 - [ ] Deploy only after a separate review of the exact portal diff and target
-  release URLs.
+      release URLs.
 - [ ] Read the live portal and download back from the public origin before
-  declaring them available.
+      declaring them available.
 
 ## 7. Public release communication
 
@@ -305,29 +332,29 @@ are publicly readable and the security gate is green.
 ### Nostr
 
 - [ ] Prepare a source-backed release announcement that states what was built,
-  why exact-channel enforcement matters, what was tested, and what remains
-  experimental.
+      why exact-channel enforcement matters, what was tested, and what remains
+      experimental.
 - [ ] Include the source, release, verification, portal, and upstream PR links.
 - [ ] Exclude private node identifiers, balances, wallet history, and operational
-  routing strategy.
+      routing strategy.
 - [ ] Show the exact event content, kind, tags, and timestamp policy as
-  `PREPARED - NOT SIGNED - NOT PUBLISHED`.
+      `PREPARED - NOT SIGNED - NOT PUBLISHED`.
 - [ ] Obtain separate owner approval for signing and publication through the
-  owner-controlled Nostr signer.
+      owner-controlled Nostr signer.
 - [ ] Read the event back from at least one target relay before calling it live.
 
 ### Stacker News
 
 - [ ] Use the canonical public release article or Nostr article as the link.
 - [ ] Check for an existing submission of the exact URL immediately before
-  posting.
+      posting.
 - [ ] Select one relevant territory and prepare a short factual description.
 - [ ] Keep any crosspost-to-Nostr option disabled if the source is already on
-  Nostr.
+      Nostr.
 - [ ] Show the exact title, URL, territory, description, and current posting fee
-  before requesting approval.
+      before requesting approval.
 - [ ] Obtain separate approval for the exact fee and never retry an ambiguous
-  payment.
+      payment.
 - [ ] Verify the post is publicly readable, not pending, and paid exactly once.
 
 ## 8. Deploy `rebalance.grynvault.com` as a non-custodial companion
@@ -380,9 +407,17 @@ inferred, and unsupported states instead of inventing wallet state.
 
 `grynvault.com` is currently served from the separate `Grynvault/btc_jv`
 Netlify project and its authoritative DNS is in Route 53. Keep the root site
-untouched. Deploy the companion as an isolated service, preferably a small
-Railway service using the existing Grynvault operating pattern, then create only
-the exact Route 53 record required for `rebalance.grynvault.com`.
+untouched. Deploy the companion as an isolated stateless Cloudflare Worker. Use
+an unadvertised provider hostname for private acceptance, then create only the
+exact Route 53 delegation or record required for
+`rebalance.grynvault.com` after a separate owner approval.
+
+This supersedes the initial Railway default. Current Cloudflare Agents guidance
+uses SDK v2 `createMcpHandler` for new stateless MCP servers; the companion
+needs neither a database nor Durable Objects, and the Worker boundary provides
+native request limits, rate-limit bindings, preview versions, and a small
+deployment surface. This is an implementation choice, not permission to change
+production DNS.
 
 Do not configure a Cloudflare Worker custom domain unless the zone or delegated
 subdomain is first placed under Cloudflare DNS; the current AWS nameservers do
@@ -392,77 +427,111 @@ canonical Grynvault hostname after TLS is valid.
 
 ### Hosted-service security gate
 
-- [ ] Put the service in a dedicated repository or isolated workspace with no
-  wallet source tree, release signing secrets, or production database access.
-- [ ] Pin the MCP specification version and publish supported protocol versions.
-- [ ] Validate method, content type, origin, request size, schema, reason-code
-  enum, and all release identifiers; reject unknown fields where practical.
-- [ ] Add per-IP and per-tool rate limits, timeouts, structured secret-redacting
-  logs, generic errors, and request IDs that contain no submitted data.
-- [ ] Set HSTS, CSP, `X-Content-Type-Options`, restrictive CORS, and a minimal
-  permissions policy; do not permit browser credentials on public endpoints.
-- [ ] Generate an SBOM, run dependency and secret scans, review the deploy diff,
-  and require zero unresolved Critical or High findings.
-- [ ] Test malformed JSON, oversized payloads, header spoofing, method confusion,
-  SSRF/path traversal attempts, cache poisoning, rate-limit bypass, and MCP tool
-  name/argument confusion.
-- [ ] Keep `/healthz` shallow; separately verify every public endpoint, TLS,
-  security headers, and response schema from outside the deployment platform.
-- [ ] Publish a security contact, privacy statement, uptime disclaimer, and a
-  clear statement that no wallet credentials should ever be submitted.
+- [x] Put the service in a dedicated repository or isolated workspace with no
+      wallet source tree, release signing secrets, or production database access.
+- [x] Pin the MCP specification version and publish supported protocol versions.
+- [x] Validate method, content type, origin, request size, schema, reason-code
+      enum, and all release identifiers; reject unknown fields where practical.
+- [x] Add per-IP and per-tool rate limits, timeouts, structured secret-redacting
+      logs, generic errors, and request IDs that contain no submitted data.
+- [x] Set HSTS, CSP, `X-Content-Type-Options`, restrictive CORS, and a minimal
+      permissions policy; do not permit browser credentials on public endpoints.
+- [x] Generate an SBOM, run dependency and secret scans, review the deploy diff,
+      and require zero unresolved Critical or High findings.
+- [x] Test malformed JSON, oversized payloads, header spoofing, method confusion,
+      SSRF/path traversal attempts, cache poisoning, rate-limit bypass, and MCP tool
+      name/argument confusion.
+- [x] Keep `/healthz` shallow; separately verify every public endpoint, TLS,
+      security headers, and response schema from outside the deployment platform.
+- [x] Publish a security contact, privacy statement, uptime disclaimer, and a
+      clear statement that no wallet credentials should ever be submitted.
+
+Implementation evidence on 2026-10-13:
+
+- isolated repository: `/Users/kode/Development/grynvault-rebalance`;
+- exact packages: `agents@0.28.1`, MCP server/client `2.3.1`,
+  `@modelcontextprotocol/sdk@1.32.1`, `wrangler@4.150.0`, and
+  `@cloudflare/vitest-plugin@1.4.1`;
+- HTTP and MCP schemas accept no wallet connection, credentials, invoices,
+  routes, channel identifiers, balances, or logs, and release status remains
+  truthfully `unpublished` with no artifact URL;
+- strict formatting, typed lint, generated bindings, three TypeScript
+  compilations, 13 Worker-runtime boundary tests, and the Wrangler dry-run
+  bundle pass;
+- a clean install/check under Node `22.18.0`, dependency audit, CycloneDX SBOM,
+  and Gitleaks `8.29.1` scan pass with no vulnerability or secret finding;
+- `docs/SECURITY-REVIEW.md` records the trust boundary, tests, and residuals;
+  `docs/PROVIDER-ACCEPTANCE.md` records the external provider readback.
+- active temporary provider version
+  `2867ad4b-9d5d-4136-add7-4bb4bbf3b04e` serves companion source commit
+  `72febac0ce14123a12079b9cd3903602b5214a5a` on
+  `grynvault-rebalance-companion.hudhaifahz.workers.dev`; external TLS, HTTP
+  schemas, security headers, hostile-request handling, actual rate limiting,
+  and modern/legacy MCP negotiation passed, and the release endpoint reads
+  back exact reviewed Hub commit
+  `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`;
+- the first acceptance version revealed that Cloudflare invocation logs include
+  ordinary request-envelope metadata. No wallet data was sent. Commit
+  `0c44a0e` disabled persisted invocation logs and enabled query-string
+  redaction before the accepted version was deployed. Real-time operator
+  tailing remains an explicit metadata-bearing diagnostic action.
 
 ## 9. Execution sequence and approval gates
 
 ### Wave A — close owner-build acceptance
 
-- [ ] Unlock the currently installed diagnostic build through the owner UI.
-- [ ] Read back chain sync, all channel identities/statuses, balances, canonical
-  database path, embedded library hash, migration, and responsive dialog states.
-- [ ] Perform no payment or rebalance during this acceptance wave.
+- [x] Unlock the currently installed diagnostic build through the owner UI.
+- [x] Read back chain sync, all channel identities/statuses, balances, canonical
+      database path, embedded library hash, migration, and responsive dialog states.
+- [x] Perform no payment or rebalance during this acceptance wave.
 
 ### Wave B — prepare clean upstream contributions
 
-- [ ] Create isolated clean worktrees for the three PRs in Section 4.
+- [x] Create isolated clean worktrees for the three PRs in Section 4.
 - [ ] Rebase against the then-current upstream commits, rerun the complete test
-  and audit matrix, and prepare draft PR bodies and screenshots.
+      and audit matrix, and prepare draft PR bodies and screenshots.
 - [ ] Stop for owner review before opening any public PR or security disclosure.
 
 ### Wave C — create the independently identified release candidate
 
 - [ ] Approve a product name, bundle identifier, icon, data directory, updater
-  policy, platform matrix, and migration/rollback UX.
+      policy, platform matrix, and migration/rollback UX.
 - [ ] Make a clean release tag and build all artifacts from that tag.
 - [ ] Obtain an owner-controlled Developer ID signing path and PGP signing key;
-  keep their private material outside source, logs, and chat.
+      keep their private material outside source, logs, and chat.
 - [ ] Sign, notarize, staple, hash, manifest, PGP-sign, and verify from a fresh
-  download and a clean macOS profile before calling it a release candidate.
+      download and a clean macOS profile before calling it a release candidate.
 
 ### Wave D — build and privately accept the companion
 
-- [ ] Implement only the HTTP/MCP functions in Section 8 with fixture data.
-- [ ] Deploy to a temporary provider hostname, run the hosted-service security
-  gate, and verify no wallet-execution path or credential field exists.
+- [x] Implement only the HTTP/MCP functions in Section 8 with fixture data.
+- [x] Deploy to a temporary provider hostname, run the hosted-service security
+      gate, and verify no wallet-execution path or credential field exists.
 - [ ] Add the exact Route 53 record only after private acceptance, then verify
-  canonical TLS and all endpoints externally.
+      canonical TLS and all endpoints externally.
 
 ### Wave E — stage the portal and release pages
 
+- [x] Stage Portal 04 on isolated branch `codex/rebalance-portal-04` at
+      `873833e9364ce693e02e86f129125b712a84d579`; keep every release action locked
+      unless status, immutable source/download/manifest/notes/docs URLs, and the
+      full signing fingerprint are present.
 - [ ] Store binaries on the immutable GitHub release, not in the portal Git
-  repository or Netlify bundle.
+      repository or Netlify bundle.
 - [ ] Add Portal 04 in an isolated branch and point it only to the verified
-  GitHub assets, signed manifest, source tag, release notes, security contact,
-  and `rebalance.grynvault.com` documentation.
+      GitHub assets, signed manifest, source tag, release notes, security contact,
+      and `rebalance.grynvault.com` documentation.
 - [ ] Review the exact portal diff and a deploy preview. Stop for owner approval
-  before merging or deploying the public card.
+      before merging or deploying the public card.
 
 ### Wave F — public launch
 
 - [ ] Publish the immutable release and read every artifact back from its public
-  URL; then activate Portal 04 and read the live portal back.
+      URL; then activate Portal 04 and read the live portal back.
 - [ ] Open the upstream PR chain only after its separate owner review.
 - [ ] Prepare exact Nostr and Stacker News payloads with final URLs and claims.
-  Signing a Nostr event and paying a Stacker News posting fee each require their
-  own final owner approval and independent readback.
+      Signing a Nostr event and paying a Stacker News posting fee each require their
+      own final owner approval and independent readback.
 
 ## 10. Small-business experiment
 
@@ -503,4 +572,3 @@ The project is complete only when all of the following are true:
   News items; and
 - final URLs, hashes, signatures, source commits, PR numbers, and publication
   evidence are appended to the engineering log.
-

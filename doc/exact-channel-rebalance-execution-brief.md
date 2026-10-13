@@ -31,10 +31,17 @@ milestones.
 - Frontier Crown portal: `/Users/kode/Development/CrownFrontier`
   - GitHub: `Grynvault/frontierCrown`
   - Preserve unrelated dirty changes.
+  - Isolated Portal 04 worktree:
+    `/Users/kode/.codex/worktrees/rebalance-portal-04/CrownFrontier`
+  - Branch/head: `codex/rebalance-portal-04` /
+    `873833e9364ce693e02e86f129125b712a84d579`
 - Grynvault root site: `/Users/kode/Development/btc_jv`
   - GitHub: `Grynvault/btc_jv`
   - This repository serves `grynvault.com`. Do not deploy the Frontier Crown
     frontend over it.
+- Hosted companion: `/Users/kode/Development/grynvault-rebalance`
+  - Dedicated read-only Cloudflare Worker repository; no wallet source,
+    credentials, storage, database, or execution binding.
 
 ## Proposed defaults
 
@@ -45,8 +52,10 @@ Use these unless current evidence reveals a conflict:
 - Independent name, icon, bundle identifier, data directory, and updater
 - Immutable release assets in GitHub Releases under `hudhaifahz`
 - Companion service at `rebalance.grynvault.com`
-- Isolated Railway deployment and a narrowly scoped Route 53 record
-- Current stable MCP Streamable HTTP protocol
+- Isolated stateless Cloudflare Worker on an unadvertised provider hostname,
+  followed only after private acceptance by narrowly scoped canonical DNS
+- MCP SDK v2 with modern revision `2026-07-28` and stateless Streamable HTTP
+  compatibility revision `2025-11-25` explicitly pinned
 - Open-source release followed by a paid installation, migration, recovery, or
   diagnostic-support experiment
 
