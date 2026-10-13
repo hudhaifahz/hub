@@ -16,6 +16,7 @@ frontend/wailsjs
 package.json.md5
 
 build/bin
+build/appicon.png
 
 *.log
 
