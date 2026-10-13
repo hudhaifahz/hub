@@ -12,16 +12,16 @@ owner review.
 
 ## Current public-release snapshot (2026-10-13)
 
-| Surface               | Observed state                                                                                                                   | Release meaning                                                                                            |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                            | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                    |
-| Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                               | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published. |
-| GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                      | There is no public binary, immutable release page, signed manifest, or public download URL.                |
-| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated branch `codex/rebalance-portal-04` stages a locked Portal 04 card | No rebalance card or download is live. Production remains blocked by release and portal security gates.    |
-| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture             | Temporary acceptance is complete, but canonical DNS and public launch are not.                             |
-| macOS signing         | No Developer ID Application identity is available on the release Mac                                                             | Public macOS signing, notarization, stapling, and Gatekeeper acceptance cannot be completed yet.           |
-| Manifest signing      | No local PGP secret key is available to the release workflow                                                                     | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required.   |
-| Upstream baseline     | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it                                   | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation.     |
+| Surface               | Observed state                                                                                                                                                                        | Release meaning                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                                                                                 | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                                             |
+| Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                    | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                          |
+| GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                           | There is no public binary, immutable release page, signed manifest, or public download URL.                                         |
+| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` stages the locked Portal 04 card with 0 High/Critical audit findings | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates. |
+| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture                                                                  | Temporary acceptance is complete, but canonical DNS and public launch are not.                                                      |
+| macOS signing         | No Developer ID Application identity is available on the release Mac                                                                                                                  | Public macOS signing, notarization, stapling, and Gatekeeper acceptance cannot be completed yet.                                    |
+| Manifest signing      | No local PGP secret key is available to the release workflow                                                                                                                          | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required.                            |
+| Upstream baseline     | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it                                                                                        | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation.                              |
 
 The local owner-test archive is evidence, not a downloadable product. The portal
 must not link to it, and the endpoint must not advertise it as a release.
@@ -96,6 +96,9 @@ separately audited local companion/upstream capability and a new threat model.
 - Isolated Frontier Crown Portal 04 base/head:
   `c6d2691dfa80d58391e5271cb583528f0be51a4d` /
   `873833e9364ce693e02e86f129125b712a84d579`.
+- Isolated Frontier Crown security-remediation head:
+  `7054c902890772f34e1d1a9533ec5463862d2e45` on
+  `codex/rebalance-portal-security`.
 - Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 
@@ -516,6 +519,11 @@ Implementation evidence on 2026-10-13:
       `873833e9364ce693e02e86f129125b712a84d579`; keep every release action locked
       unless status, immutable source/download/manifest/notes/docs URLs, and the
       full signing fingerprint are present.
+- [x] Remediate the inherited Frontier Crown dependency findings on isolated
+      branch `codex/rebalance-portal-security` at
+      `7054c902890772f34e1d1a9533ec5463862d2e45`; full and production audits now
+      contain 0 Critical and 0 High findings, complete tests/builds pass, and
+      the remaining Moderate/Low development-tool findings are documented.
 - [ ] Store binaries on the immutable GitHub release, not in the portal Git
       repository or Netlify bundle.
 - [ ] Add Portal 04 in an isolated branch and point it only to the verified

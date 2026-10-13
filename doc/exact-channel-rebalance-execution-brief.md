@@ -33,8 +33,10 @@ milestones.
   - Preserve unrelated dirty changes.
   - Isolated Portal 04 worktree:
     `/Users/kode/.codex/worktrees/rebalance-portal-04/CrownFrontier`
-  - Branch/head: `codex/rebalance-portal-04` /
+  - Portal baseline branch/head: `codex/rebalance-portal-04` /
     `873833e9364ce693e02e86f129125b712a84d579`
+  - Security branch/head: `codex/rebalance-portal-security` /
+    `7054c902890772f34e1d1a9533ec5463862d2e45`
 - Grynvault root site: `/Users/kode/Development/btc_jv`
   - GitHub: `Grynvault/btc_jv`
   - This repository serves `grynvault.com`. Do not deploy the Frontier Crown

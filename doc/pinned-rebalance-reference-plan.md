@@ -843,3 +843,47 @@ Consequence:
   final release identity, owner-controlled signing, exact artifact URLs, deploy
   preview review, and explicit owner approval remain required before merge or
   production deployment.
+
+### 2026-10-13 — Portal dependency remediation and responsive regression proof
+
+Observed:
+
+- The dedicated Frontier Crown branch `codex/rebalance-portal-security` was
+  committed and pushed at
+  `7054c902890772f34e1d1a9533ec5463862d2e45`; remote readback returned the same
+  hash. The original Portal 04 baseline remains independently preserved at
+  `873833e9364ce693e02e86f129125b712a84d579`.
+- Patched Worker/MCP packages, explicit transitive overrides, Drizzle Kit
+  `0.31.11`, and a Tailwind 3 to 4.3 migration reduce the full dependency audit
+  from 5 Critical and 19 High findings to 0 Critical and 0 High. The
+  production-only audit also contains 0 Critical and 0 High findings.
+- One Moderate and one Low `esbuild` development-server advisory remain
+  documented. The Moderate path is under Drizzle Kit's deprecated
+  `@esbuild-kit` loader; the Low path is a Windows-only development-server
+  issue under `tsx`. Neither affected development server is exposed by the
+  deployed application. A global `esbuild 0.28.1` override was tested and
+  rejected because it broke Vite's production browser transform.
+- The complete workspace lint passed. Source tests passed with Worker 4/4,
+  server 85 passed plus 2 skipped, and web 26/26. The Worker dry-run, shared and
+  server TypeScript builds, and web production build passed. A frozen-lockfile
+  install confirmed lockfile consistency.
+- Live pre-migration OAuth readback and local 1.2-provider readback preserve the
+  same canonical `/mcp` resource, five-scope catalogue, S256 PKCE boundary, and
+  unauthenticated required-scope challenge. The provider migration does not
+  re-enable plain PKCE.
+- Browser geometry repeated after the Tailwind migration at 320, 375, 768, and
+  1280 CSS pixels. Body and Portal 04 card widths stayed within each viewport;
+  Signing remained Pending; Download, Verify, and Notes remained visible and
+  disabled.
+- Gitleaks `8.29.1` scanned the 26.73 MB working directory and the exact 308.24
+  KB commit diff with no leak finding. No package, DNS record, production
+  deployment, wallet operation, or payment was created.
+
+Consequence:
+
+- The inherited Critical/High portal dependency blocker is closed on the
+  isolated branch, but this is an internal review rather than an independent
+  audit or production approval.
+- Portal 04 remains locked and unpublished. Final immutable release metadata,
+  a deploy preview, exact diff/link review, and separate owner approval remain
+  required before merge or public deployment.
