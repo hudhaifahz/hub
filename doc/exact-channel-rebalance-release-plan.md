@@ -1,10 +1,47 @@
 # Exact-channel rebalance release plan
 
-Status: planning only
+Status: implementation and owner testing complete in part; public release is
+blocked on the gates recorded below
 
 This checklist does not authorize a payment, deployment, pull request, release,
 signature, or public post. Each public or value-moving action requires a separate
 owner review.
+
+## Current public-release snapshot (2026-10-13)
+
+| Surface | Observed state | Release meaning |
+| --- | --- | --- |
+| Exact-channel source | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet. |
+| Owner package | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f` | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published. |
+| GitHub release | The `hudhaifahz/hub` fork has zero releases | There is no public binary, immutable release page, signed manifest, or public download URL. |
+| Frontier Crown portal | The live portal and its current source contain Portal 01 through Portal 03 | No rebalance card or download is live. |
+| Grynvault endpoint | `rebalance.grynvault.com` does not resolve | No API or MCP service is deployed. |
+| macOS signing | No Developer ID Application identity is available on the release Mac | Public macOS signing, notarization, stapling, and Gatekeeper acceptance cannot be completed yet. |
+| Manifest signing | No local PGP secret key is available to the release workflow | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required. |
+| Upstream baseline | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation. |
+
+The local owner-test archive is evidence, not a downloadable product. The portal
+must not link to it, and the endpoint must not advertise it as a release.
+
+## Product split and non-custodial boundary
+
+Ship two related but deliberately different products:
+
+1. **Local exact-channel software.** The independently named desktop fork (and,
+   if accepted, the upstream Alby/LDK changes) performs quote creation,
+   first-hop binding, final-channel binding, invoice/payment handling, execution,
+   and reconciliation inside the owner's Hub process.
+2. **Hosted release and diagnostic service.** `rebalance.grynvault.com` publishes
+   verified release metadata, compatibility information, documentation, and
+   sanitized diagnostic explanations through HTTP and MCP. It never receives
+   wallet credentials or executes a payment.
+
+A hosted service cannot truthfully replace the local patch for stock Alby Hub.
+The remote service does not control the user's LDK route builder or recipient
+claim logic and therefore cannot atomically enforce both exact channels. Do not
+offer an `execute_rebalance` tool, accept an NWC connection, or market the hosted
+service as forced routing. If remote execution is ever explored, it requires a
+separately audited local companion/upstream capability and a new threat model.
 
 ## Goals
 
@@ -40,13 +77,13 @@ owner review.
 
 - Alby Hub upstream release: `v1.24.1` at `7b4488571c5717939d17b199cdd69e93c2a671e8`.
 - Installed owner-build source baseline: Hub commit
-  `defe4b32c68044c35318e979dbea6e740d9a39cd`.
+  `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`.
 - Current Hub documentation head:
-  `d4d162b5e30d59a28be01c58564fd38e35cb9f42`.
+  `4e515474bf67c2f8cc5f8ada7d9bfbedcd313592` before this plan update.
 - LDK source fork head:
-  `16630beab3f3fdc21b6927b3f5585ddd9c3a502b`.
+  `05d86840f2184dbe846e260b71e7eeed2bea998a`.
 - LDK Go binding fork head:
-  `a3dd5b1fe3bbb9fa8b5f2361248961d1614005bd`.
+  `2d4b8cae5b4188451fbccdb347113838a9981dbf`.
 
 Record a new immutable source commit for every release candidate. Never describe
 the moving branch name as the release source.
@@ -290,6 +327,164 @@ are publicly readable and the security gate is green.
 - [ ] Obtain separate approval for the exact fee and never retry an ambiguous
   payment.
 - [ ] Verify the post is publicly readable, not pending, and paid exactly once.
+
+## 8. Deploy `rebalance.grynvault.com` as a non-custodial companion
+
+### Version-one scope
+
+The first hosted service is intentionally read-only and stateless with respect
+to wallets. Its public HTTP surface is:
+
+- `GET /` — human-readable product boundary, installation guide, risk notice,
+  source links, security contact, and release status;
+- `GET /healthz` — process health only, with no wallet or release secrets;
+- `GET /v1/releases/latest` — immutable artifact URLs, byte sizes, SHA-256
+  hashes, source/upstream/dependency commits, supported platforms, signing
+  fingerprint, and release status;
+- `GET /v1/compatibility/{hubVersion}` — tested/untested/unsupported status and
+  the exact evidence record; and
+- `POST /v1/diagnostics/explain` — explanation of a closed, documented reason
+  code without uploading invoices, routes, keys, balances, or wallet logs.
+
+Expose the same bounded functions at `/mcp` using the current stable MCP
+Streamable HTTP specification:
+
+- `get_latest_release`;
+- `check_compatibility`;
+- `verify_release_manifest`;
+- `explain_rebalance_failure`; and
+- `get_rebalance_prerequisites`.
+
+MCP tool descriptions must explicitly say that calls are informational and
+cannot quote, sign, pay, route, or rebalance. Results must identify observed,
+inferred, and unsupported states instead of inventing wallet state.
+
+### Prohibited inputs and behavior
+
+- Never request or accept seeds, passwords, recovery material, macaroons, NWC
+  connection strings, API tokens, private keys, preimages, payment secrets,
+  invoices, serialized routes, or complete wallet databases/logs.
+- Never proxy Hub owner APIs or expose a user's Hub to the public Internet.
+- Never retain full pubkeys, channel IDs, balances, or failure payloads by
+  default. If a future opt-in support flow needs them, design separate consent,
+  redaction, retention, deletion, and access controls first.
+- Never let release metadata point to a mutable branch, `latest` object, or
+  unsigned artifact. Each item must resolve to an immutable release asset and
+  be covered by the signed manifest.
+- Never execute a Lightning payment, rebalance, swap, channel open/close, or
+  signer action. Those remain local and require action-time owner approval.
+
+### Hosting and DNS
+
+`grynvault.com` is currently served from the separate `Grynvault/btc_jv`
+Netlify project and its authoritative DNS is in Route 53. Keep the root site
+untouched. Deploy the companion as an isolated service, preferably a small
+Railway service using the existing Grynvault operating pattern, then create only
+the exact Route 53 record required for `rebalance.grynvault.com`.
+
+Do not configure a Cloudflare Worker custom domain unless the zone or delegated
+subdomain is first placed under Cloudflare DNS; the current AWS nameservers do
+not satisfy that prerequisite. A temporary provider hostname may be used for
+private acceptance, but all public manifests and portal links must use the
+canonical Grynvault hostname after TLS is valid.
+
+### Hosted-service security gate
+
+- [ ] Put the service in a dedicated repository or isolated workspace with no
+  wallet source tree, release signing secrets, or production database access.
+- [ ] Pin the MCP specification version and publish supported protocol versions.
+- [ ] Validate method, content type, origin, request size, schema, reason-code
+  enum, and all release identifiers; reject unknown fields where practical.
+- [ ] Add per-IP and per-tool rate limits, timeouts, structured secret-redacting
+  logs, generic errors, and request IDs that contain no submitted data.
+- [ ] Set HSTS, CSP, `X-Content-Type-Options`, restrictive CORS, and a minimal
+  permissions policy; do not permit browser credentials on public endpoints.
+- [ ] Generate an SBOM, run dependency and secret scans, review the deploy diff,
+  and require zero unresolved Critical or High findings.
+- [ ] Test malformed JSON, oversized payloads, header spoofing, method confusion,
+  SSRF/path traversal attempts, cache poisoning, rate-limit bypass, and MCP tool
+  name/argument confusion.
+- [ ] Keep `/healthz` shallow; separately verify every public endpoint, TLS,
+  security headers, and response schema from outside the deployment platform.
+- [ ] Publish a security contact, privacy statement, uptime disclaimer, and a
+  clear statement that no wallet credentials should ever be submitted.
+
+## 9. Execution sequence and approval gates
+
+### Wave A — close owner-build acceptance
+
+- [ ] Unlock the currently installed diagnostic build through the owner UI.
+- [ ] Read back chain sync, all channel identities/statuses, balances, canonical
+  database path, embedded library hash, migration, and responsive dialog states.
+- [ ] Perform no payment or rebalance during this acceptance wave.
+
+### Wave B — prepare clean upstream contributions
+
+- [ ] Create isolated clean worktrees for the three PRs in Section 4.
+- [ ] Rebase against the then-current upstream commits, rerun the complete test
+  and audit matrix, and prepare draft PR bodies and screenshots.
+- [ ] Stop for owner review before opening any public PR or security disclosure.
+
+### Wave C — create the independently identified release candidate
+
+- [ ] Approve a product name, bundle identifier, icon, data directory, updater
+  policy, platform matrix, and migration/rollback UX.
+- [ ] Make a clean release tag and build all artifacts from that tag.
+- [ ] Obtain an owner-controlled Developer ID signing path and PGP signing key;
+  keep their private material outside source, logs, and chat.
+- [ ] Sign, notarize, staple, hash, manifest, PGP-sign, and verify from a fresh
+  download and a clean macOS profile before calling it a release candidate.
+
+### Wave D — build and privately accept the companion
+
+- [ ] Implement only the HTTP/MCP functions in Section 8 with fixture data.
+- [ ] Deploy to a temporary provider hostname, run the hosted-service security
+  gate, and verify no wallet-execution path or credential field exists.
+- [ ] Add the exact Route 53 record only after private acceptance, then verify
+  canonical TLS and all endpoints externally.
+
+### Wave E — stage the portal and release pages
+
+- [ ] Store binaries on the immutable GitHub release, not in the portal Git
+  repository or Netlify bundle.
+- [ ] Add Portal 04 in an isolated branch and point it only to the verified
+  GitHub assets, signed manifest, source tag, release notes, security contact,
+  and `rebalance.grynvault.com` documentation.
+- [ ] Review the exact portal diff and a deploy preview. Stop for owner approval
+  before merging or deploying the public card.
+
+### Wave F — public launch
+
+- [ ] Publish the immutable release and read every artifact back from its public
+  URL; then activate Portal 04 and read the live portal back.
+- [ ] Open the upstream PR chain only after its separate owner review.
+- [ ] Prepare exact Nostr and Stacker News payloads with final URLs and claims.
+  Signing a Nostr event and paying a Stacker News posting fee each require their
+  own final owner approval and independent readback.
+
+## 10. Small-business experiment
+
+Treat this as validation-stage infrastructure, not yet a routing-liquidity
+business. The first customer is a self-hosting Alby/LDK operator who already has
+one channel with enough outbound liquidity and another with enough inbound
+liquidity, and wants auditable control over which two channels a circular
+rebalance uses. Exclude custodial-wallet users and operators seeking guaranteed
+routes or guaranteed profit.
+
+Start with one open-source offer: verified builds, compatibility records,
+diagnostic help, and migration/rollback documentation. Test willingness to pay
+with a bounded support membership or paid installation/recovery session after
+the free release is trustworthy. Do not charge per rebalance or operate customer
+wallets in version one. Evidence of repeated support demand can justify a later
+managed monitoring product; evidence of demand for inbound liquidity belongs in
+a separate LSPS2/LSP product with its own capital, legal, security, and unit-
+economics review.
+
+Track weekly: verified downloads, successful clean installs, compatible upgrade
+tests, support requests, diagnostic resolutions, upstream review progress, paid
+support conversions, support time per user, and security incidents. Stop or
+change the offer if operators will not install a third-party fork, support cost
+exceeds revenue, or upstream adoption makes the fork unnecessary.
 
 ## Completion evidence
 
