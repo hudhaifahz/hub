@@ -507,6 +507,8 @@ type LocalCircularRoutePath struct {
 }
 
 type LocalRebalanceQuoteResponse struct {
+	QuoteId                        string                   `json:"quoteId"`
+	RouteFingerprint               string                   `json:"routeFingerprint"`
 	AmountMsat                     uint64                   `json:"amountMsat"`
 	TotalRoutingFeeMsat            uint64                   `json:"totalRoutingFeeMsat"`
 	MaxRoutingFeeMsat              uint64                   `json:"maxRoutingFeeMsat"`
@@ -520,6 +522,7 @@ type LocalRebalanceQuoteResponse struct {
 	OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
 	IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
 	Paths                          []LocalCircularRoutePath `json:"paths"`
+	ExpiresAt                      time.Time                `json:"expiresAt"`
 	ExecutionEnabled               bool                     `json:"executionEnabled"`
 	BlockedReason                  string                   `json:"blockedReason"`
 }
