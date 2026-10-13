@@ -69,7 +69,7 @@ cp "${ldk_module_dir}/ldk_node/universal-macos/libldk_node.dylib" "$frameworks_p
 
 while IFS= read -r existing_rpath; do
   [[ -z "$existing_rpath" ]] || install_name_tool -delete_rpath "$existing_rpath" "$executable_path"
-done < <(otool -l "$executable_path" | awk '$1 == "cmd" && $2 == "LC_RPATH" { getline; getline; print $2 }')
+done < <(otool -l "$executable_path" | awk '$1 == "cmd" && $2 == "LC_RPATH" { getline; getline; print $2 }' | sort -u)
 install_name_tool -add_rpath @executable_path/../Frameworks "$executable_path"
 chmod +x "$executable_path"
 
