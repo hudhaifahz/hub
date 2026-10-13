@@ -31,22 +31,35 @@ type Props = {
   closeDialog(): void;
 };
 
-type RebalanceQuote = {
-  quoteId: string;
+type LocalRouteHop = {
+  nodePubkey: string;
+  shortChannelId: string;
+  feeMsat: number;
+  cltvDelta: number;
+};
+
+type LocalRoutePath = {
+  hops: LocalRouteHop[];
   amountMsat: number;
-  providerFeeMsat: number;
-  maxProviderFeeMsat: number;
+  feeMsat: number;
+};
+
+type RebalanceQuote = {
+  amountMsat: number;
+  totalRoutingFeeMsat: number;
   maxRoutingFeeMsat: number;
   maxTotalDebitMsat: number;
   outgoingChannelId: string;
   outgoingNodePubkey: string;
+  outgoingShortChannelId: string;
   incomingChannelId: string;
   incomingNodePubkey: string;
+  incomingShortChannelId: string;
   outgoingSpendableSnapshotMsat: number;
   incomingReceivableSnapshotMsat: number;
-  expiresAt: string;
+  paths: LocalRoutePath[];
   executionEnabled: boolean;
-  blockedReason?: string;
+  blockedReason: string;
 };
 
 function channelIdentity(channel: Channel) {
@@ -63,7 +76,6 @@ export function RebalanceChannelDialogContent({
   );
   const [outgoingChannelId, setOutgoingChannelId] = React.useState("");
   const [amountSat, setAmountSat] = React.useState("");
-  const [maxProviderFeeSat, setMaxProviderFeeSat] = React.useState("2500");
   const [maxRoutingFeeSat, setMaxRoutingFeeSat] = React.useState("1000");
   const [isQuoting, setQuoting] = React.useState(false);
   const [quote, setQuote] = React.useState<RebalanceQuote>();
@@ -86,7 +98,7 @@ export function RebalanceChannelDialogContent({
     setQuote(undefined);
     try {
       const response = await request<RebalanceQuote>(
-        "/api/channels/rebalance/quote",
+        "/api/channels/rebalance/local-quote",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,7 +108,6 @@ export function RebalanceChannelDialogContent({
             incomingChannelId: incomingChannel.id,
             incomingNodePubkey: incomingChannel.remotePubkey,
             amountMsat: Number(amountSat) * 1000,
-            maxProviderFeeMsat: Number(maxProviderFeeSat) * 1000,
             maxRoutingFeeMsat: Number(maxRoutingFeeSat) * 1000,
           }),
         }
@@ -121,8 +132,8 @@ export function RebalanceChannelDialogContent({
           <AlertDialogDescription asChild>
             <div className="space-y-4 text-left">
               <p>
-                Choose both exact channels and separate fee limits. Creating a
-                quote does not pay it.
+                Choose both exact channels. This searches the local routing
+                graph only; it creates no invoice, probe, HTLC, or payment.
               </p>
 
               <div className="space-y-2">
@@ -180,7 +191,7 @@ export function RebalanceChannelDialogContent({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="rebalance-amount">Principal (sats)</Label>
                   <Input
@@ -192,21 +203,6 @@ export function RebalanceChannelDialogContent({
                     value={amountSat}
                     onChange={(event) => {
                       setAmountSat(event.target.value);
-                      setQuote(undefined);
-                    }}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="provider-fee-cap">Provider fee cap</Label>
-                  <Input
-                    id="provider-fee-cap"
-                    type="number"
-                    required
-                    min={0}
-                    step={1}
-                    value={maxProviderFeeSat}
-                    onChange={(event) => {
-                      setMaxProviderFeeSat(event.target.value);
                       setQuote(undefined);
                     }}
                   />
@@ -236,10 +232,10 @@ export function RebalanceChannelDialogContent({
                     <dd className="text-right">
                       <FormattedBitcoinAmount amountMsat={quote.amountMsat} />
                     </dd>
-                    <dt>Provider fee</dt>
+                    <dt>Estimated routing fee</dt>
                     <dd className="text-right">
                       <FormattedBitcoinAmount
-                        amountMsat={quote.providerFeeMsat}
+                        amountMsat={quote.totalRoutingFeeMsat}
                       />
                     </dd>
                     <dt>Routing fee cap</dt>
@@ -255,10 +251,34 @@ export function RebalanceChannelDialogContent({
                       />
                     </dd>
                   </dl>
-                  <p className="text-xs text-muted-foreground">
-                    Quote {quote.quoteId} · expires{" "}
-                    {new Date(quote.expiresAt).toLocaleString()}
-                  </p>
+                  <div className="rounded-md bg-muted p-3 text-xs">
+                    <div className="break-all">
+                      First hop SCID: {quote.outgoingShortChannelId}
+                    </div>
+                    <div className="break-all">
+                      Final hop SCID/alias: {quote.incomingShortChannelId}
+                    </div>
+                  </div>
+                  {quote.paths.map((path, pathIndex) => (
+                    <div
+                      className="space-y-1 rounded-md border p-3 text-xs"
+                      key={`${pathIndex}:${path.feeMsat}`}
+                    >
+                      <div className="font-medium">
+                        Path {pathIndex + 1} · {path.hops.length} hops ·{" "}
+                        {path.feeMsat.toLocaleString()} msat fee
+                      </div>
+                      {path.hops.map((hop, hopIndex) => (
+                        <div
+                          className="break-all text-muted-foreground"
+                          key={`${hopIndex}:${hop.shortChannelId}`}
+                        >
+                          {hopIndex + 1}. {hop.nodePubkey} via SCID{" "}
+                          {hop.shortChannelId}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -267,8 +287,8 @@ export function RebalanceChannelDialogContent({
                 <AlertTitle>Payment execution remains locked</AlertTitle>
                 <AlertDescription>
                   {quote?.blockedReason ||
-                    "The incoming-channel claim must be proven atomic before this build is allowed to move sats."}{" "}
-                  A quote cannot spend funds.
+                    "Local circular-route execution is not implemented or authorized."}{" "}
+                  This route result cannot spend funds.
                 </AlertDescription>
               </Alert>
             </div>
@@ -277,7 +297,7 @@ export function RebalanceChannelDialogContent({
         <AlertDialogFooter className="mt-4">
           <AlertDialogCancel onClick={closeDialog}>Close</AlertDialogCancel>
           <LoadingButton loading={isQuoting} type="submit">
-            Create non-paying quote
+            Find local route
           </LoadingButton>
           <LoadingButton disabled type="button" variant="destructive">
             <LockIcon /> Execute locked

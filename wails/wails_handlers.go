@@ -583,6 +583,21 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: quoteRebalanceResponse, Error: ""}
+	case "POST /api/channels/rebalance/local-quote":
+		quoteLocalRebalanceRequest := &api.QuoteLocalRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), quoteLocalRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  route,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		quoteLocalRebalanceResponse, err := app.api.QuoteLocalRebalance(ctx, quoteLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: quoteLocalRebalanceResponse, Error: ""}
 	case "POST /api/channels/rebalance/execute":
 		executeRebalanceRequest := &api.ExecuteRebalanceRequest{}
 		err := json.Unmarshal([]byte(body), executeRebalanceRequest)
