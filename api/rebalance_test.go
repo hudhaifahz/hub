@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -184,6 +185,8 @@ func TestAcquireLocalRebalanceQuoteForExecutionIsAtomicAndSingleUse(t *testing.T
 	var persisted db.LocalRebalanceQuote
 	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
 	require.Equal(t, "executing", persisted.State)
+	require.Equal(t, localRebalancePhaseAcquired, persisted.ExecutionPhase)
+	require.Equal(t, deriveLocalRebalanceOperationId(quote.ID, fingerprint), persisted.OperationId)
 	require.Nil(t, persisted.ExecutedAt)
 }
 
@@ -278,6 +281,234 @@ func TestAcquireLocalRebalanceQuoteForExecutionRejectsMismatchExpiryAndTampering
 	require.ErrorContains(t, err, "persisted route material")
 	require.NoError(t, gormDB.First(&tamperedRoute, "id = ?", tamperedRoute.ID).Error)
 	require.Equal(t, "quoted", tamperedRoute.State)
+}
+
+type recordingCircularPaymentExecutor struct {
+	prepareCalls  int
+	sendCalls     int
+	lastExpiry    uint32
+	lastOperation string
+	prepared      *lnclient.PreparedCircularPayment
+	prepareErr    error
+	sendErr       error
+}
+
+func (executor *recordingCircularPaymentExecutor) PrepareCircularPayment(
+	_ uint64, expirySeconds uint32, operationID string, _ string, _ string, _ uint64,
+) (*lnclient.PreparedCircularPayment, error) {
+	executor.prepareCalls++
+	executor.lastExpiry = expirySeconds
+	executor.lastOperation = operationID
+	if executor.prepareErr != nil {
+		return nil, executor.prepareErr
+	}
+	prepared := *executor.prepared
+	prepared.OperationID = operationID
+	prepared.OutboundPaymentID, _ = deriveCircularOutboundPaymentId(operationID)
+	executor.prepared.OutboundPaymentID = prepared.OutboundPaymentID
+	return &prepared, nil
+}
+
+func (executor *recordingCircularPaymentExecutor) SendPreparedCircularPayment(
+	operationID string, _ *lnclient.CircularRouteQuote,
+) (string, error) {
+	executor.sendCalls++
+	executor.lastOperation = operationID
+	if executor.sendErr != nil {
+		return "", executor.sendErr
+	}
+	return executor.prepared.OutboundPaymentID, nil
+}
+
+func TestRunLocalRebalanceExecutionPersistsExactPreparedAndSubmittedState(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "execute-quote", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	result, err := theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, localRebalancePhaseSubmitted, result.Phase)
+	require.Equal(t, deriveLocalRebalanceOperationId(quote.ID, fingerprint), result.OperationId)
+	require.Equal(t, strings.Repeat("a", 64), result.PaymentHash)
+	expectedOutboundPaymentId, err := deriveCircularOutboundPaymentId(result.OperationId)
+	require.NoError(t, err)
+	require.Equal(t, expectedOutboundPaymentId, result.OutboundPaymentId)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+	require.Equal(t, uint32(60), executor.lastExpiry)
+
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, "executing", persisted.State)
+	require.Equal(t, localRebalancePhaseSubmitted, persisted.ExecutionPhase)
+	require.Equal(t, result.OperationId, persisted.OperationId)
+	require.Equal(t, result.PaymentHash, persisted.PreparedPaymentHash)
+	require.Equal(t, result.OutboundPaymentId, persisted.OutboundPaymentId)
+	require.NotNil(t, persisted.PreparedAt)
+	require.NotNil(t, persisted.SubmittedAt)
+	require.Nil(t, persisted.ExecutedAt)
+
+	recovered, err := theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now.Add(time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, result, recovered)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+}
+
+func TestRunLocalRebalanceExecutionRetriesOnlySameOperationAfterSubmissionUncertainty(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "recovery-quote", now.Add(time.Minute))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = localRebalancePhasePrepared
+	quote.PreparedPaymentHash = strings.Repeat("a", 64)
+	quote.OutboundPaymentId, err = deriveCircularOutboundPaymentId(quote.OperationId)
+	require.NoError(t, err)
+	quote.PreparedAt = &now
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	result, err := theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, quote.OperationId, result.OperationId)
+	require.Equal(t, quote.OutboundPaymentId, result.OutboundPaymentId)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+	require.Equal(t, quote.OperationId, executor.lastOperation)
+
+	// Model a crash after LDK accepted the exact send but before Hub recorded the submitted phase.
+	require.NoError(t, gormDB.Model(&db.LocalRebalanceQuote{}).Where("id = ?", quote.ID).Updates(map[string]interface{}{
+		"execution_phase": localRebalancePhasePrepared,
+		"submitted_at":    nil,
+	}).Error)
+	recovered, err := theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now.Add(time.Second), executor)
+	require.NoError(t, err)
+	require.Equal(t, result, recovered)
+	require.Equal(t, 2, executor.prepareCalls)
+	require.Equal(t, 2, executor.sendCalls)
+	require.Equal(t, quote.OperationId, executor.lastOperation)
+}
+
+func TestRunLocalRebalanceExecutionUsesExpiredQuoteOnlyForRecovery(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "expired-recovery", now.Add(-time.Second))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = localRebalancePhasePrepared
+	quote.PreparedPaymentHash = strings.Repeat("a", 64)
+	quote.OutboundPaymentId, err = deriveCircularOutboundPaymentId(quote.OperationId)
+	require.NoError(t, err)
+	quote.PreparedAt = &now
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	_, err = theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), executor.lastExpiry)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Equal(t, 1, executor.sendCalls)
+}
+
+func TestRunLocalRebalanceExecutionDoesNotCreateExpiredPreparation(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "expired-acquired", now.Add(-time.Second))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = localRebalancePhaseAcquired
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	executor.prepareErr = errors.New("no prepared operation exists")
+
+	_, err = theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.ErrorContains(t, err, "failed to prepare local rebalance")
+	require.Equal(t, uint32(0), executor.lastExpiry)
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Zero(t, executor.sendCalls)
+
+	var persisted db.LocalRebalanceQuote
+	require.NoError(t, gormDB.First(&persisted, "id = ?", quote.ID).Error)
+	require.Equal(t, localRebalancePhaseAcquired, persisted.ExecutionPhase)
+	require.Empty(t, persisted.PreparedPaymentHash)
+	require.Empty(t, persisted.OutboundPaymentId)
+}
+
+func TestRunLocalRebalanceExecutionRejectsTamperedSubmittedIdentifiers(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "tampered-submitted", now.Add(time.Minute))
+	quote.State = "executing"
+	quote.OperationId = deriveLocalRebalanceOperationId(quote.ID, fingerprint)
+	quote.ExecutionPhase = localRebalancePhaseSubmitted
+	quote.PreparedPaymentHash = "not-a-payment-hash"
+	quote.OutboundPaymentId, err = deriveCircularOutboundPaymentId(quote.OperationId)
+	require.NoError(t, err)
+	quote.PreparedAt = &now
+	quote.SubmittedAt = &now
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+
+	_, err = theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.ErrorContains(t, err, "missing persisted payment identifiers")
+	require.Zero(t, executor.prepareCalls)
+	require.Zero(t, executor.sendCalls)
+}
+
+func TestRunLocalRebalanceExecutionRejectsMismatchedPreparationBeforeSend(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	gormDB, err := test_db.NewDB(t)
+	require.NoError(t, err)
+	t.Cleanup(func() { test_db.CloseDB(gormDB) })
+	theAPI := &api{db: gormDB}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	quote, fingerprint := testPersistedLocalRebalanceQuote(t, "mismatch-execution", now.Add(time.Minute))
+	require.NoError(t, gormDB.Create(&quote).Error)
+	executor := testCircularPaymentExecutor(&quote)
+	executor.prepared.LastHopChannelID = "wrong-channel"
+
+	_, err = theAPI.runLocalRebalanceExecution(quote.ID, fingerprint, now, executor)
+	require.ErrorContains(t, err, "exact incoming channel")
+	require.Equal(t, 1, executor.prepareCalls)
+	require.Zero(t, executor.sendCalls)
+}
+
+func testCircularPaymentExecutor(quote *db.LocalRebalanceQuote) *recordingCircularPaymentExecutor {
+	firstHopShortChannelId, _ := strconv.ParseUint(quote.OutgoingShortChannelId, 10, 64)
+	lastHopShortChannelId, _ := strconv.ParseUint(quote.IncomingShortChannelId, 10, 64)
+	return &recordingCircularPaymentExecutor{prepared: &lnclient.PreparedCircularPayment{
+		PaymentHash:            strings.Repeat("a", 64),
+		OutboundPaymentID:      strings.Repeat("b", 64),
+		AmountMsat:             quote.AmountMsat,
+		MaxRoutingFeeMsat:      quote.MaxRoutingFeeMsat,
+		FirstHopChannelID:      quote.OutgoingChannelId,
+		FirstHopShortChannelID: firstHopShortChannelId,
+		LastHopChannelID:       quote.IncomingChannelId,
+		LastHopShortChannelID:  lastHopShortChannelId,
+	}}
 }
 
 func testPersistedLocalRebalanceQuote(

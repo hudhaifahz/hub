@@ -114,6 +114,26 @@ type CircularRouteQuoter interface {
 	QuoteCircularRoute(amountMsat uint64, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*CircularRouteQuote, error)
 }
 
+// PreparedCircularPaymentClient is implemented only by backends that can durably prepare and
+// submit a circular payment using an exact caller-reviewed route. Both methods must be idempotent
+// for the same operation ID and must fail closed on any changed parameter or route.
+type PreparedCircularPaymentClient interface {
+	PrepareCircularPayment(amountMsat uint64, expirySeconds uint32, operationID string, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*PreparedCircularPayment, error)
+	SendPreparedCircularPayment(operationID string, quote *CircularRouteQuote) (string, error)
+}
+
+type PreparedCircularPayment struct {
+	PaymentHash            string
+	OperationID            string
+	OutboundPaymentID      string
+	AmountMsat             uint64
+	MaxRoutingFeeMsat      uint64
+	FirstHopChannelID      string
+	FirstHopShortChannelID uint64
+	LastHopChannelID       string
+	LastHopShortChannelID  uint64
+}
+
 type CircularRouteHop struct {
 	NodeId          string
 	ShortChannelId  uint64

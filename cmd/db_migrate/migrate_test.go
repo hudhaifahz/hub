@@ -81,6 +81,13 @@ func TestMigrate(t *testing.T) {
 			requireCount[db.Swap](t, env.dest, 1)
 			requireCount[db.Forward](t, env.dest, 1)
 			requireCount[db.LocalRebalanceQuote](t, env.dest, 1)
+			var migratedQuote db.LocalRebalanceQuote
+			require.NoError(t, env.dest.First(&migratedQuote, "id = ?", "local-quote-1").Error)
+			require.Equal(t, "prepared", migratedQuote.ExecutionPhase)
+			require.Equal(t, "operation-id", migratedQuote.OperationId)
+			require.Equal(t, "payment-hash", migratedQuote.PreparedPaymentHash)
+			require.Equal(t, "outbound-payment-id", migratedQuote.OutboundPaymentId)
+			require.NotNil(t, migratedQuote.PreparedAt)
 			requireCount[db.UserConfig](t, env.dest, 1)
 		})
 	}
@@ -247,9 +254,10 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 	}
 	create(t, tx, forward1)
 
+	preparedAt := baseTime.Add(time.Minute)
 	localRebalanceQuote1 := &db.LocalRebalanceQuote{
 		ID:                             "local-quote-1",
-		State:                          "quoted",
+		State:                          "executing",
 		RequestHash:                    "request-hash",
 		RouteFingerprint:               "route-fingerprint",
 		AmountMsat:                     20_000_000,
@@ -265,9 +273,14 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 		OutgoingSpendableSnapshotMsat:  989_340_000,
 		IncomingReceivableSnapshotMsat: 840_710_000,
 		RouteJson:                      `[{"hops":[]}]`,
+		OperationId:                    "operation-id",
+		ExecutionPhase:                 "prepared",
+		PreparedPaymentHash:            "payment-hash",
+		OutboundPaymentId:              "outbound-payment-id",
 		ExpiresAt:                      baseTime.Add(5 * time.Minute),
 		CreatedAt:                      baseTime,
 		UpdatedAt:                      baseTime,
+		PreparedAt:                     &preparedAt,
 	}
 	create(t, tx, localRebalanceQuote1)
 }
