@@ -102,7 +102,8 @@ separately audited local companion/upstream capability and a new threat model.
   `codex/rebalance-portal-security`.
 - Independent Grynvault release-preparation head:
   `c41a5e1773030da5fccc174386edc8730423b4a3` on
-  `codex/grynvault-rebalance-release`; the owner-fork remote readback matches.
+  `codex/grynvault-rebalance-release`; the owner-fork remote readback matches and
+  macOS GitHub Actions run `38483312899` passed.
 - Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 

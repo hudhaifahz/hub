@@ -976,6 +976,13 @@ Observed:
   `c41a5e1773030da5fccc174386edc8730423b4a3` moves the unchanged check matrix to
   the supported macOS target rather than claiming or manufacturing unreviewed
   Linux support; its fresh remote run is the authoritative acceptance gate.
+- GitHub Actions run `38483312899` then completed successfully against exact
+  commit `c41a5e1773030da5fccc174386edc8730423b4a3` on `macos-14`. It passed the
+  source-boundary checks, frontend lint/type/format/build and production audit,
+  actionlint, complete Go suite, focused API/Wails race suite, `go vet`,
+  `govulncheck 1.9.0`, and Gitleaks `8.30.1` tracked-tree scan. The earlier
+  Ubuntu link failure is retained as evidence that Linux is not a supported
+  artifact target for this release.
 - Packaging exposed and corrected four build-system issues before signing:
   duplicate per-architecture runtime-path output, generated Wails bindings in
   formatting scope, retained build output, and Wails ad-hoc resigning of the

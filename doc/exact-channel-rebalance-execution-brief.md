@@ -64,7 +64,9 @@ The independent release branch is committed and pushed at
 `c41a5e1773030da5fccc174386edc8730423b4a3`. Its independently named universal
 macOS preflight bundle passed exact-commit inspection with the reviewed LDK
 library hash, isolated bundle identifier/data directory/updater, and no
-current-tree secret finding. The preflight remains unsigned and was not
+current-tree secret finding. GitHub Actions run `38483312899` passed the same
+source, frontend, Go, race, vet, vulnerability, and secret checks on the
+supported macOS runner. The preflight remains unsigned and was not
 installed or launched. Resume at the owner-controlled signing prerequisites and
 immutable release-tag decision only after reviewing the recorded evidence. Do
 not sign, notarize, install, publish, deploy, change DNS, open public pull
