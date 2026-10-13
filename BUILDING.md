@@ -31,6 +31,10 @@ Public source artifacts contain the clean tagged tree. Patch-series attachments
 are intentionally not produced because a patch can reproduce credential-shaped
 text removed from upstream source.
 
+The tagged source tree also includes the end-user guide at
+`docs/grynvault-release/USAGE.md`; its screenshots and provenance are pinned to
+an immutable documentation commit rather than copied from a moving branch.
+
 ## Non-paying local verification
 
 Run these commands only against a clean checkout and never point `WORK_DIR` or
