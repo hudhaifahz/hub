@@ -363,13 +363,13 @@ are publicly readable and the security gate is green.
 The unsigned template and its final-verification gates are recorded in
 `doc/exact-channel-rebalance-launch-drafts.md`.
 
-- [ ] Prepare a source-backed release announcement that states what was built,
+- [x] Prepare a source-backed release announcement that states what was built,
       why exact-channel enforcement matters, what was tested, and what remains
       experimental.
 - [ ] Include the source, release, verification, portal, and upstream PR links.
-- [ ] Exclude private node identifiers, balances, wallet history, and operational
+- [x] Exclude private node identifiers, balances, wallet history, and operational
       routing strategy.
-- [ ] Show the exact event content, kind, tags, and timestamp policy as
+- [x] Show the exact event content, kind, tags, and timestamp policy as
       `PREPARED - NOT SIGNED - NOT PUBLISHED`.
 - [ ] Obtain separate owner approval for signing and publication through the
       owner-controlled Nostr signer.
@@ -383,8 +383,8 @@ are recorded in `doc/exact-channel-rebalance-launch-drafts.md`.
 - [ ] Use the canonical public release article or Nostr article as the link.
 - [ ] Check for an existing submission of the exact URL immediately before
       posting.
-- [ ] Select one relevant territory and prepare a short factual description.
-- [ ] Keep any crosspost-to-Nostr option disabled if the source is already on
+- [x] Select one relevant territory and prepare a short factual description.
+- [x] Keep any crosspost-to-Nostr option disabled if the source is already on
       Nostr.
 - [ ] Show the exact title, URL, territory, description, and current posting fee
       before requesting approval.
