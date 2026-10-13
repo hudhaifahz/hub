@@ -80,6 +80,7 @@ func TestMigrate(t *testing.T) {
 			requireCount[db.Transaction](t, env.dest, 1)
 			requireCount[db.Swap](t, env.dest, 1)
 			requireCount[db.Forward](t, env.dest, 1)
+			requireCount[db.LocalRebalanceQuote](t, env.dest, 1)
 			requireCount[db.UserConfig](t, env.dest, 1)
 		})
 	}
@@ -245,6 +246,30 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 		UpdatedAt:                   baseTime,
 	}
 	create(t, tx, forward1)
+
+	localRebalanceQuote1 := &db.LocalRebalanceQuote{
+		ID:                             "local-quote-1",
+		State:                          "quoted",
+		RequestHash:                    "request-hash",
+		RouteFingerprint:               "route-fingerprint",
+		AmountMsat:                     20_000_000,
+		TotalRoutingFeeMsat:            17_062,
+		MaxRoutingFeeMsat:              1_000_000,
+		MaxTotalDebitMsat:              20_017_062,
+		OutgoingChannelId:              "outgoing-channel",
+		OutgoingNodePubkey:             "outgoing-peer",
+		OutgoingShortChannelId:         "101",
+		IncomingChannelId:              "incoming-channel",
+		IncomingNodePubkey:             "incoming-peer",
+		IncomingShortChannelId:         "202",
+		OutgoingSpendableSnapshotMsat:  989_340_000,
+		IncomingReceivableSnapshotMsat: 840_710_000,
+		RouteJson:                      `[{"hops":[]}]`,
+		ExpiresAt:                      baseTime.Add(5 * time.Minute),
+		CreatedAt:                      baseTime,
+		UpdatedAt:                      baseTime,
+	}
+	create(t, tx, localRebalanceQuote1)
 }
 
 func requireCount[T any](t *testing.T, tx *gorm.DB, expected int64) {
