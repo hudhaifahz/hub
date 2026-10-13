@@ -273,7 +273,9 @@ Prepare three coordinated contributions:
       all checks pass.
 - [x] Include root cause, design constraints, security model, migration effect,
       exact changed-file scope, test evidence, screenshots, and dependency PR links.
-- [ ] Read the remote PR patches and head SHAs back before calling them ready.
+- [x] Read the pushed contribution-branch patches and head SHAs back before
+      calling the prepared drafts ready. Repeat against the numbered PRs after
+      owner-approved creation.
 - [ ] Do not merge; upstream maintainers own review and merge decisions.
 
 ## 5. Build the FrontierCrown distribution

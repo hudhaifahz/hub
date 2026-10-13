@@ -934,6 +934,16 @@ Observed:
   `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go at
   `5ba434093284d0dc8291e45d2a3d2c1c5a879698`. Each prepared contribution still
   has that exact commit as its merge base.
+- Independent remote-branch patch readback produced these binary/full-index
+  SHA-256 records: Hub, 27 files,
+  `d43b91992acb2c61dbf504aa4c3cf06ff48c6ecf25ac8898f859208bc68d8d2b`;
+  LDK Node, 10 files,
+  `7c7ceaef3802d420a34a7b3933dc66733902727c734f1470a79ce99fc6344f17`;
+  LDK Node Go, 3 files,
+  `7f556be0e15be9cd52b75a6c625ead45c50ae78c3e4d6f0dd32864767ec326d3`.
+  Their remote heads and merge bases match the recorded local preparation
+  branches. No upstream PR was opened; numbered-PR patch readback remains a
+  post-approval requirement.
 - The product is isolated as `Grynvault Rebalance` with bundle identifier
   `com.grynvault.rebalance`, default data directory `grynvault-rebalance`,
   single-instance port `21421`, a Grynvault icon, and a Grynvault compatibility
