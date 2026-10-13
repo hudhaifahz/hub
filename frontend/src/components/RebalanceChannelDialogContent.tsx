@@ -310,7 +310,7 @@ export function RebalanceChannelDialogContent({
   }
 
   return (
-    <AlertDialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 max-w-2xl overflow-hidden p-0">
+    <AlertDialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 w-[calc(100%-2rem)] max-w-2xl overflow-hidden p-0">
       <form
         className="flex max-h-[calc(100dvh-2rem)] min-h-0 min-w-0 flex-col"
         onSubmit={createQuote}
@@ -318,7 +318,7 @@ export function RebalanceChannelDialogContent({
         <AlertDialogHeader className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-6 pb-4">
           <AlertDialogTitle>Exact-channel rebalance</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="min-w-0 space-y-4 text-left">
+            <div className="min-w-0 w-full max-w-full space-y-4 text-left">
               <p>
                 Choose both exact channels. This searches the local routing
                 graph and saves an expiring review record; it creates no
@@ -335,7 +335,7 @@ export function RebalanceChannelDialogContent({
                     setQuote(undefined);
                   }}
                 >
-                  <SelectTrigger className="min-w-0 [&>span]:truncate">
+                  <SelectTrigger className="min-w-0 w-full max-w-full [&>span]:truncate">
                     <SelectValue placeholder="Select exact outgoing channel" />
                   </SelectTrigger>
                   <SelectContent>
@@ -675,14 +675,21 @@ export function RebalanceChannelDialogContent({
                 <Alert variant="destructive">
                   <AlertTriangleIcon className="h-4 w-4" />
                   <AlertTitle>This action moves funds</AlertTitle>
-                  <AlertDescription>
+                  <AlertDescription className="min-w-0 break-words">
                     One fixed-route payment will debit at most{" "}
                     {Math.ceil(quote.maxTotalDebitMsat / 1000).toLocaleString()}{" "}
-                    sats from channel {quote.outgoingChannelId}, return{" "}
+                    sats from channel{" "}
+                    <span className="break-all">
+                      {quote.outgoingChannelId},
+                    </span>{" "}
+                    return{" "}
                     {Math.floor(quote.amountMsat / 1000).toLocaleString()} sats
-                    through channel {quote.incomingChannelId}, use no automatic
-                    fallback route, and remain locked until both durable payment
-                    records agree.
+                    through channel{" "}
+                    <span className="break-all">
+                      {quote.incomingChannelId},
+                    </span>{" "}
+                    use no automatic fallback route, and remain locked until
+                    both durable payment records agree.
                   </AlertDescription>
                 </Alert>
               )}
