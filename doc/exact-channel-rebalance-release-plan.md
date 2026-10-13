@@ -3,6 +3,8 @@
 Status: implementation and owner testing complete in part; public release is
 blocked on the gates recorded below
 
+Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
+
 This checklist does not authorize a payment, deployment, pull request, release,
 signature, or public post. Each public or value-moving action requires a separate
 owner review.
