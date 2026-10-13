@@ -50,6 +50,9 @@ milestones.
 - Hosted companion: `/Users/kode/Development/grynvault-rebalance`
   - Dedicated read-only Cloudflare Worker repository; no wallet source,
     credentials, storage, database, or execution binding.
+  - Private GitHub: `hudhaifahz/grynvault-rebalance`
+  - Main head: `71d3c4dbfd159efc45b4761f1cf36ca4bc75f99c`
+  - Clean GitHub Actions run: `38482199397`
 - Independent release worktree:
   `/Users/kode/Development/grynvault-rebalance-release`
   - Branch: `codex/grynvault-rebalance-release`
@@ -57,14 +60,15 @@ milestones.
 
 ## Current resume checkpoint
 
-The independent release worktree contains uncommitted Grynvault branding,
-identity isolation, release documentation, and packaging/inspection scripts.
-The service and Wails Go tests pass. Frontend validation currently stops because
-the fresh worktree has not generated its Wails bindings. Resume by generating
-the bindings with pinned Wails `v2.16.0` without launching or installing the
-application, then run the remaining non-paying build, lint, security, packaging,
-and artifact-inspection checks. Do not tag, sign, notarize, install, publish,
-deploy, change DNS, open public pull requests, or move sats at this checkpoint.
+The independent release branch is committed and pushed at
+`c41a5e1773030da5fccc174386edc8730423b4a3`. Its independently named universal
+macOS preflight bundle passed exact-commit inspection with the reviewed LDK
+library hash, isolated bundle identifier/data directory/updater, and no
+current-tree secret finding. The preflight remains unsigned and was not
+installed or launched. Resume at the owner-controlled signing prerequisites and
+immutable release-tag decision only after reviewing the recorded evidence. Do
+not sign, notarize, install, publish, deploy, change DNS, open public pull
+requests, or move sats at this checkpoint.
 
 ## Proposed defaults
 

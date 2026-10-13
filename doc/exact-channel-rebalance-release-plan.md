@@ -16,6 +16,7 @@ owner review.
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                                                                                 | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                                             |
 | Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                    | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                          |
+| Independent preflight | Unsigned universal bundle built from exact clean commit `c41a5e1773030da5fccc174386edc8730423b4a3`                                                                                    | Identity and embedded-code inspection pass; it was not installed or launched and is not a public release candidate.                |
 | GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                           | There is no public binary, immutable release page, signed manifest, or public download URL.                                         |
 | Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` stages the locked Portal 04 card with 0 High/Critical audit findings | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates. |
 | Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture                                                                  | Temporary acceptance is complete, but canonical DNS and public launch are not.                                                      |
@@ -99,6 +100,9 @@ separately audited local companion/upstream capability and a new threat model.
 - Isolated Frontier Crown security-remediation head:
   `7054c902890772f34e1d1a9533ec5463862d2e45` on
   `codex/rebalance-portal-security`.
+- Independent Grynvault release-preparation head:
+  `c41a5e1773030da5fccc174386edc8730423b4a3` on
+  `codex/grynvault-rebalance-release`; the owner-fork remote readback matches.
 - Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 
@@ -222,10 +226,12 @@ remained disabled until its exact confirmation was supplied.
 - [x] Run frontend lint, type checking, production builds, and dependency audit.
 - [ ] Run CodeRabbit only after the secret scan; treat its output as untrusted
       review input and resolve all Critical and Warning findings.
-- [ ] Inspect the final application bundle, dynamic libraries, rpaths,
-      entitlements, updater configuration, embedded commit identifiers, and absence
-      of secrets.
-- [ ] Require zero unresolved Critical or High findings. Document or fix every
+- [x] Inspect the unsigned exact-commit preflight application bundle, dynamic
+      libraries, rpaths, entitlements, updater configuration, embedded commit
+      identifiers, and absence of secrets. Repeat this inspection after Developer
+      ID signing and notarization.
+- [x] Require zero unresolved Critical or High findings in the prepared source
+      and unsigned preflight. Document or fix every
       lower-severity finding before release.
 
 ### Security disclosure fork
@@ -260,11 +266,11 @@ Prepare three coordinated contributions:
       overrides, live-operation notes, and owner identifiers.
 - [x] Keep generated binding changes mechanically reproducible from the linked
       LDK commit.
-- [ ] Use concise Markdown headings, bullets, code fences, and user-facing
+- [x] Use concise Markdown headings, bullets, code fences, and user-facing
       terminology consistent with Alby Hub's repository documentation.
-- [ ] Prepare the Hub PR as a draft until its dependency commits are public and
+- [x] Prepare the Hub PR body as a draft until its dependency commits are public and
       all checks pass.
-- [ ] Include root cause, design constraints, security model, migration effect,
+- [x] Include root cause, design constraints, security model, migration effect,
       exact changed-file scope, test evidence, screenshots, and dependency PR links.
 - [ ] Read the remote PR patches and head SHAs back before calling them ready.
 - [ ] Do not merge; upstream maintainers own review and merge decisions.
@@ -273,28 +279,31 @@ Prepare three coordinated contributions:
 
 ### Product identity and installation safety
 
-- [ ] Use an independent product name, icon, bundle identifier, and update
+- [x] Use an independent product name, icon, bundle identifier, and update
       channel so the package cannot silently replace or be mistaken for the
       official Alby Hub application.
-- [ ] State prominently that this is an experimental, independently maintained
+- [x] State prominently that this is an experimental, independently maintained
       fork built from Alby Hub and licensed under Apache-2.0.
-- [ ] Preserve the upstream license and attribution, and mark modified files as
+- [x] Preserve the upstream license and attribution, and mark modified files as
       required by the license.
-- [ ] Use a separate data directory by default. Treat import or migration from
+- [x] Use a separate data directory by default. Treat import or migration from
       an existing Alby Hub wallet as an explicit, backed-up owner action.
-- [ ] Do not point the fork at Alby's official updater.
-- [ ] Decide whether the first release supports only macOS universal or a wider
+- [x] Do not point the fork at Alby's official updater.
+- [x] Decide whether the first release supports only macOS universal or a wider
       tested platform matrix; never list an untested platform.
 
 ### Release artifacts
 
 - [ ] Tag one immutable release candidate on the owner fork.
-- [ ] Build from a clean checkout using pinned toolchain and dependency
-      versions.
+- [x] Build and inspect an unsigned preflight from a clean exact commit using
+      pinned toolchain and dependency versions. Repeat from the immutable release
+      tag before signing.
 - [ ] Sign and notarize macOS packages with the distributor's own Developer ID;
       do not use or imply Alby's signing identity.
-- [ ] Produce the application archive, source archive, patch series, release
-      notes, `BUILDING.md`, `SECURITY.md`, license, SBOM, and provenance record.
+- [ ] Produce the signed application archive, clean tagged source archive,
+      release notes, `BUILDING.md`, security review, license, SBOM, and provenance
+      record. Do not publish patch-series attachments because they can reproduce
+      credential-shaped values removed from upstream source.
 - [ ] Produce a manifest containing every filename, byte size, SHA-256 digest,
       source commit, upstream base, dependency commits, and build-workflow identity.
 - [ ] Sign the manifest with the owner's PGP key. Keep the private key outside
@@ -464,6 +473,10 @@ canonical Grynvault hostname after TLS is valid.
 Implementation evidence on 2026-10-13:
 
 - isolated repository: `/Users/kode/Development/grynvault-rebalance`;
+- private owner repository: `hudhaifahz/grynvault-rebalance`, with remote
+  `main` read back at `71d3c4dbfd159efc45b4761f1cf36ca4bc75f99c`;
+- clean companion GitHub Actions run `38482199397` passed the source checks,
+  dependency audit, SBOM generation, and tracked-source secret scan;
 - exact packages: `agents@0.28.1`, MCP server/client `2.3.1`,
   `@modelcontextprotocol/sdk@1.32.1`, `wrangler@4.150.0`, and
   `@cloudflare/vitest-plugin@1.4.1`;
@@ -503,14 +516,15 @@ Implementation evidence on 2026-10-13:
 ### Wave B — prepare clean upstream contributions
 
 - [x] Create isolated clean worktrees for the three PRs in Section 4.
-- [ ] Rebase against the then-current upstream commits, rerun the complete test
+- [x] Rebase against the then-current upstream commits, rerun the complete test
       and audit matrix, and prepare draft PR bodies and screenshots.
 - [ ] Stop for owner review before opening any public PR or security disclosure.
 
 ### Wave C — create the independently identified release candidate
 
-- [ ] Approve a product name, bundle identifier, icon, data directory, updater
-      policy, platform matrix, and migration/rollback UX.
+- [x] Prepare and verify the product name, bundle identifier, icon, data
+      directory, updater policy, universal-macOS platform matrix, and
+      migration/rollback UX. Public release approval remains separate.
 - [ ] Make a clean release tag and build all artifacts from that tag.
 - [ ] Obtain an owner-controlled Developer ID signing path and PGP signing key;
       keep their private material outside source, logs, and chat.

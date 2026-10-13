@@ -10,6 +10,13 @@ Open in dependency order: LDK Node, LDK Node Go, then Hub. Replace each
 
 Title: `feat(payments): add exact-channel circular payment primitives`
 
+### Root cause
+
+The existing high-level payment API can route through an unrestricted first
+hop, while ordinary invoice claim handling does not bind a circular payment to
+one required receiving channel. UI selection or post-payment observation cannot
+provide atomic enforcement.
+
 ### Summary
 
 - add a non-paying circular route quote that binds every path to one exact local
@@ -59,6 +66,14 @@ The public UniFFI surface is extended without changing existing methods.
 - restart and duplicate-payment behavior;
 - backward-compatible payment-store serialization.
 
+### Changed-file scope
+
+The change is confined to the UniFFI definition, node builder/data store,
+payment/event implementation, payment-store serialization, public types, and
+their focused tests: `bindings/ldk_node.udl`, `src/builder.rs`,
+`src/data_store.rs`, `src/event.rs`, `src/lib.rs`, `src/payment/`, and
+`src/types.rs`.
+
 Branch head: `2dc742a8b2057519e22d757f510e5cc880731b2c`
 
 ## 2. `getAlby/ldk-node-go`
@@ -66,6 +81,12 @@ Branch head: `2dc742a8b2057519e22d757f510e5cc880731b2c`
 Title: `feat(bindings): expose exact-channel circular payment APIs`
 
 Depends on: `<ldk-node PR>`
+
+### Root cause
+
+Hub cannot consume the new exact-channel primitives until the mechanically
+generated Go/C bindings and matching native library expose the same reviewed
+LDK source interface.
 
 ### Summary
 
@@ -86,6 +107,12 @@ Depends on: `<ldk-node PR>`
 - `go test ./...` passes;
 - secret scan reports no findings.
 
+### Changed-file scope
+
+Only generated binding outputs and the matching universal macOS library change:
+`ldk_node/ldk_node.go`, `ldk_node/ldk_node.h`, and
+`ldk_node/universal-macos/libldk_node.dylib`.
+
 Branch head: `a381cacb18562dff960f24a12f43232633f8bc25`
 
 ## 3. `getAlby/hub`
@@ -93,6 +120,12 @@ Branch head: `a381cacb18562dff960f24a12f43232633f8bc25`
 Title: `feat(rebalance): add fail-closed exact-channel circular rebalancing`
 
 Depends on: `<ldk-node PR>`, `<ldk-node-go PR>`
+
+### Root cause
+
+The retired provider-backed flow cannot satisfy this local use case, and the
+stock Hub payment surface has no atomic way to bind both the first and final
+channels of a circular payment. A UI-only preference would therefore be unsafe.
 
 ### Summary
 
@@ -126,7 +159,8 @@ also applies and rolls back every rebalance migration on both engines.
 
 ### Verification
 
-- `go test ./...` and `go test -race ./...` pass with Go 1.27.2;
+- `go test ./...` and the focused owner API/Wails race suite pass with Go
+  1.27.2;
 - `govulncheck ./...` reports zero reachable vulnerabilities after the targeted
   `x/net` and gRPC updates;
 - frontend lint, TypeScript, HTTP build, and Wails production build pass;
@@ -145,6 +179,15 @@ identifiers or balances.
 Screenshot provenance and the user flow are recorded in
 `doc/exact-channel-rebalance-usage.md` and
 `doc/assets/exact-channel-rebalance/README.md` on the release-documentation
-branch.
+branch. The real component also passes explicit 200% browser zoom with synthetic
+identifiers and no payment action.
+
+### Changed-file scope
+
+The change is confined to owner API models/handlers/tests, rebalance database
+models and append-only migrations/tests, authenticated HTTP and Wails routing,
+the LDK adapter/interface, exact dependency pins, and the two channel-dialog
+components listed in the branch diff. It adds no NWC method or read-only API
+route.
 
 Branch head: `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`

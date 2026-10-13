@@ -792,6 +792,10 @@ Observed:
   disables persisted invocation logs, enables query-string redaction, and
   documents that an operator-opened real-time tail still carries network
   metadata.
+- The companion is preserved in the private owner repository
+  `hudhaifahz/grynvault-rebalance`; remote `main` readback matches local commit
+  `71d3c4dbfd159efc45b4761f1cf36ca4bc75f99c`. GitHub Actions run
+  `38482199397` completed successfully.
 
 Consequence:
 
@@ -916,3 +920,78 @@ Consequence:
   320, 375, 768, and 1280 CSS-pixel geometry evidence.
 - This is fixture UI acceptance only; it does not replace installed-app wallet
   continuity, signed-package, or public-release acceptance.
+
+### 2026-10-13 — Independent release preflight and secret remediation
+
+Observed:
+
+- The independent release branch is committed and pushed to
+  `hudhaifahz/hub` as `codex/grynvault-rebalance-release` at
+  `c41a5e1773030da5fccc174386edc8730423b4a3`; remote ref readback returned the
+  same commit.
+- A fresh fetch immediately before the owner gate found no upstream-base drift:
+  Hub remained at `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node at
+  `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go at
+  `5ba434093284d0dc8291e45d2a3d2c1c5a879698`. Each prepared contribution still
+  has that exact commit as its merge base.
+- The product is isolated as `Grynvault Rebalance` with bundle identifier
+  `com.grynvault.rebalance`, default data directory `grynvault-rebalance`,
+  single-instance port `21421`, a Grynvault icon, and a Grynvault compatibility
+  endpoint rather than Alby's official updater.
+- A current-tree Gitleaks `8.30.1` scan initially found two inherited
+  credential-shaped NWC strings and example authorization values. The NWC
+  strings were removed, the optional messageboard now requires the operator to
+  supply `VITE_LIGHTNING_MESSAGEBOARD_NWC_URL`, and the Phoenix examples now
+  require an externally supplied authorization value. A fresh current-tree scan
+  reports zero findings. Patch-series release attachments were removed because
+  they could reproduce deleted values from upstream history.
+- Go `1.27.2` unit/integration tests, the focused API/Wails race suite, `go vet`,
+  `govulncheck 1.9.0`, the frontend lint/type/format/build suite, the production
+  dependency audit, actionlint `1.7.7`, and the source-boundary assertions pass.
+  `govulncheck` reports zero reachable vulnerabilities. The no-fix
+  `pgproto3/v2` advisory and uncalled `x/crypto/openpgp` notice remain recorded;
+  the reachable `klauspost/compress` advisory was removed by updating to
+  `1.18.7`.
+- Automatic release publication workflows and inherited Alby signing files were
+  removed. The remaining macOS release workflow is manual-only, validates an
+  explicitly requested immutable tag, uses read-only permissions, refuses to
+  sign without its explicit `build_release` gate and Grynvault owner secrets,
+  and does not publish a GitHub release.
+- An unsigned universal preflight bundle was built from the exact clean commit
+  using temporary local preflight identifier `preflight-c41a5e17`. Inspection
+  passed for
+  product name, bundle identifier, `x86_64 arm64` executable and library slices,
+  the sole embedded-library runtime path, embedded source/tag metadata, and
+  reviewed LDK SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+  The rendered Info.plist is valid and the source tree remained clean.
+- The first remote source check at commit
+  `4d76ee1646111498a55f5613a1a5c36c7f838d84` exposed one CI-only portability
+  defect: the source-boundary script assumed `rg`, which is not installed on
+  GitHub's Ubuntu runner. Commit
+  `79587228fe3b3af492156df71ea790b03d59d292` uses standard recursive `grep`
+  checks instead; the same boundary test passes locally. That remote run then
+  proved the Ubuntu worker could not link the new exact-channel Go bindings
+  against the older upstream Linux native library. Commit
+  `c41a5e1773030da5fccc174386edc8730423b4a3` moves the unchanged check matrix to
+  the supported macOS target rather than claiming or manufacturing unreviewed
+  Linux support; its fresh remote run is the authoritative acceptance gate.
+- Packaging exposed and corrected four build-system issues before signing:
+  duplicate per-architecture runtime-path output, generated Wails bindings in
+  formatting scope, retained build output, and Wails ad-hoc resigning of the
+  native library. The build now normalizes universal metadata and restores the
+  reviewed LDK bytes before the owner-controlled signing step.
+- The preflight was not installed, launched, Developer ID signed, notarized,
+  stapled, tagged as a release, or published. The inherited Bark macOS
+  deployment-target linker warning remains documented.
+
+Consequence:
+
+- The independent source, identity isolation, non-paying security matrix, and
+  exact-commit unsigned-bundle inspection gates are prepared and remotely
+  durable. This internal review is not an independent third-party audit.
+- The next release gate requires owner review of the immutable tag and access
+  to owner-controlled Developer ID/notarization and PGP signing paths. Public
+  PRs, release publication, canonical DNS, Portal 04 deployment, Nostr signing,
+  Stacker News submission, live-wallet migration, and all Lightning value
+  movement remain separately gated.
