@@ -358,6 +358,9 @@ are publicly readable and the security gate is green.
 
 ### Nostr
 
+The unsigned template and its final-verification gates are recorded in
+`doc/exact-channel-rebalance-launch-drafts.md`.
+
 - [ ] Prepare a source-backed release announcement that states what was built,
       why exact-channel enforcement matters, what was tested, and what remains
       experimental.
@@ -371,6 +374,9 @@ are publicly readable and the security gate is green.
 - [ ] Read the event back from at least one target relay before calling it live.
 
 ### Stacker News
+
+The unsubmitted link-post template and its duplicate, fee, and settlement gates
+are recorded in `doc/exact-channel-rebalance-launch-drafts.md`.
 
 - [ ] Use the canonical public release article or Nostr article as the link.
 - [ ] Check for an existing submission of the exact URL immediately before

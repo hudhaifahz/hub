@@ -16,6 +16,7 @@ Read these files completely before acting:
 - `AGENTS.md`
 - `doc/exact-channel-rebalance-release-plan.md`
 - `doc/pinned-rebalance-reference-plan.md`
+- `doc/exact-channel-rebalance-launch-drafts.md`
 - `doc/macos-package-safety.md`
 - `/Users/kode/Development/btc_jv/AGENTS.md`
 
