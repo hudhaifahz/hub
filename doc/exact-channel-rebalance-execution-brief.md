@@ -3,6 +3,12 @@
 Use this brief to resume and complete the Grynvault exact-channel rebalance
 release. It supplements, but does not replace, the detailed release checklist.
 
+## Reusable goal prompt
+
+Complete the Grynvault exact-channel rebalance release by following this brief;
+keep its records current and stop only at its explicit owner approval or
+signing gates.
+
 ## Read first
 
 Read these files completely before acting:
@@ -44,6 +50,21 @@ milestones.
 - Hosted companion: `/Users/kode/Development/grynvault-rebalance`
   - Dedicated read-only Cloudflare Worker repository; no wallet source,
     credentials, storage, database, or execution binding.
+- Independent release worktree:
+  `/Users/kode/Development/grynvault-rebalance-release`
+  - Branch: `codex/grynvault-rebalance-release`
+  - Base: `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`
+
+## Current resume checkpoint
+
+The independent release worktree contains uncommitted Grynvault branding,
+identity isolation, release documentation, and packaging/inspection scripts.
+The service and Wails Go tests pass. Frontend validation currently stops because
+the fresh worktree has not generated its Wails bindings. Resume by generating
+the bindings with pinned Wails `v2.16.0` without launching or installing the
+application, then run the remaining non-paying build, lint, security, packaging,
+and artifact-inspection checks. Do not tag, sign, notarize, install, publish,
+deploy, change DNS, open public pull requests, or move sats at this checkpoint.
 
 ## Proposed defaults
 
