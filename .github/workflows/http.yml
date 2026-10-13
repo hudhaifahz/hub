@@ -1,241 +1,68 @@
-name: HTTP build - Linux and MacOS
+name: Grynvault source compatibility checks
+
 on:
   push:
     branches:
-      - master
+      - codex/grynvault-rebalance-release
   pull_request:
-    types: [opened, synchronize]
-  workflow_call:
-    inputs:
-      build-release:
-        description: "Build full-featured http release (codesigning, notarization, etc.)"
-        type: boolean
-    secrets:
-      APPLE_DEVELOPER_CERTIFICATE_P12_BASE64:
-        required: true
-      APPLE_DEVELOPER_CERTIFICATE_PASSWORD:
-        required: true
-      APPLE_PASSWORD:
-        required: true
-      APPLE_TEAM_ID:
-        required: true
-      APPLE_USERNAME:
-        required: true
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          [
-            {
-              arch: x86_64,
-              alby_arch: x86_64-unknown-linux-gnu,
-              os: ubuntu-22.04,
-            },
-            {
-              arch: armv6,
-              alby_arch: arm-unknown-linux-gnueabihf,
-              os: ubuntu-22.04,
-            },
-            {
-              arch: aarch64,
-              alby_arch: aarch64-unknown-linux-gnu,
-              os: ubuntu-22.04,
-            },
-            { arch: darwin/universal, os: macos-14 },
-          ]
-    runs-on: ${{ matrix.build.os }}
-
+  checks:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Setup
-        run: |
-          echo "EXEC_NAME=albyhub" >> $GITHUB_ENV
-          if [ "${{ runner.os }}" == "macOS" ]; then
-            echo "PACKAGE_NAME=albyhub-Server-MacOS" >> $GITHUB_ENV
-          else
-            echo "PACKAGE_NAME=albyhub-Server-Linux-${{ matrix.build.arch }}" >> $GITHUB_ENV
-          fi
-
-      - uses: actions/checkout@v4
-        name: Check out code
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf gcc
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
-      - name: Install macOS Wails deps
-        if: runner.os == 'macOS'
-        run: |
-          brew install Bearer/tap/gon
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.x
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install pinned tools and dependencies
         shell: bash
-
-      - name: Setup GoLang
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: "./go.mod"
-
-      - name: Get dependencies
-        run: go get -v -t -d ./...
-
-      - name: Setup NodeJS
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-
-      - name: Run tests
-        run: mkdir frontend/dist && touch frontend/dist/tmp && go test ./...
-
-      - name: Build frontend
         run: |
+          set -euo pipefail
+          npm install --global yarn@1.22.22
+          go mod download
           cd frontend
-          yarn install
+          yarn install --frozen-lockfile
+
+      - name: Check frontend and release workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/release/check-source-boundaries.sh
+          cd frontend
+          yarn prepare:http
+          yarn lint:js
+          yarn tsc:compile
+          yarn format
           yarn build:http
+          yarn audit --groups dependencies
+          cd ..
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml
+
+      - name: Run Go tests and security checks
         shell: bash
-
-      - name: Create build directory
         run: |
-          mkdir -p ./build/bin/${{ env.PACKAGE_NAME }}/lib
-
-      - name: Install ARM6 cross-compiler
-        if: matrix.build.arch == 'armv6'
-        run: |
-          wget -nv https://github.com/getAlby/gcc-arm-linux-gnueabihf/releases/download/v1.0.0/armv6-unknown-linux-gnueabihf.tar.bz2
-          tar -xf armv6-unknown-linux-gnueabihf.tar.bz2
-          echo "GOOS=linux" >> $GITHUB_ENV
-          echo "GOARCH=arm" >> $GITHUB_ENV
-          echo "GOARM=6" >> $GITHUB_ENV
-          echo "CC=$GITHUB_WORKSPACE/armv6-unknown-linux-gnueabihf/bin/armv6-unknown-linux-gnueabihf-gcc" >> $GITHUB_ENV
-          echo "GOTAGS=-tags netgo" >> $GITHUB_ENV
-
-      - name: Install ARM64 cross-compiler
-        if: matrix.build.arch == 'aarch64'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo "GOOS=linux" >> $GITHUB_ENV
-          echo "GOARCH=arm64" >> $GITHUB_ENV
-          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "GOTAGS=-tags netgo" >> $GITHUB_ENV
-
-      - name: Build Binary for Linux and MacOS
-        env:
-          CGO_ENABLED: 1
-          TAG: ${{ github.ref_name }}
-        run: go build ${{ env.GOTAGS }} -o build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }} -ldflags "-X 'github.com/getAlby/hub/version.Tag=${{ env.TAG }}'" cmd/http/main.go
-
-      - name: Import Code-Signing Certificates for macOS
-        if: >-
-          runner.os == 'macOS' &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        uses: Apple-Actions/import-codesign-certs@v3
-        with:
-          # The certificates in a PKCS12 file encoded as a base64 string
-          p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
-          # The password used to import the PKCS12 file.
-          p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
-
-      - name: Copy shared libraries to the output directory
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p ./build/bin/${{ env.PACKAGE_NAME }}/lib
-          cp `go list -m -f "{{.Dir}}" github.com/getAlby/ldk-node-go`/ldk_node/${{ matrix.build.alby_arch }}/libldk_node.so ./build/bin/${{ env.PACKAGE_NAME }}/lib/
-        shell: bash
-
-      - name: Patch executable RPATH
-        if: runner.os == 'Linux'
-        run: |
-          patchelf --force-rpath --set-rpath '$ORIGIN/../lib' ./build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}
-
-      - name: Copy shared libraries to the output directory
-        if: runner.os == 'macOS'
-        run: |
-          cp `go list -m -f "{{.Dir}}" github.com/getAlby/ldk-node-go`/ldk_node/universal-macos/libldk_node.dylib ./build/bin/${{ env.PACKAGE_NAME }}/lib/
-        shell: bash
-
-      - name: Patch executable RPATH
-        if: runner.os == 'macOS'
-        run: |
-          install_name_tool -add_rpath @executable_path/../lib ./build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}
-
-      - name: Add permissions
-        run: |
-          chmod +x build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}
-        shell: bash
-
-      - name: Sign the MacOS binary and libraries
-        if: >-
-          runner.os == 'macOS' &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        run: |
-          /usr/bin/codesign -s "Developer ID Application: Alby Inc." -f -v --deep --timestamp --options runtime ./build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}
-          /usr/bin/codesign -s "Developer ID Application: Alby Inc." -f -v --deep --timestamp --options runtime ./build/bin/${{ env.PACKAGE_NAME }}/lib/*.dylib
-        env:
-          AC_USERNAME: ${{ secrets.APPLE_USERNAME }}
-          AC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          AC_PROVIDER: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Make output tar archive to keep file permissions
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p ./build/out
-          tar -cjf ./build/out/${{ env.PACKAGE_NAME }}.tar.bz2 -C ./build/bin/${{ env.PACKAGE_NAME }} .
-
-      - name: Make output zip archive to keep file permissions
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p ./build/out
-          cd ./build/bin/${{ env.PACKAGE_NAME }}
-          zip -r ../../out/${{ env.PACKAGE_NAME }} ./*
-          cd ../../..
-
-      - name: Notarize the zip file
-        if: >-
-          runner.os == 'macOS' &&
-          inputs.build-release &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        run: |
-          echo "Notarizing Zip Files"
-          gon -log-level=info -log-json ./build/darwin/http/gon-notarize.json
-        env:
-          AC_USERNAME: ${{ secrets.APPLE_USERNAME }}
-          AC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          AC_PROVIDER: ${{ secrets.APPLE_TEAM_ID }}
-
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
-        with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: |
-            ./build/out/${{ env.PACKAGE_NAME }}.tar.bz2
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'macOS'
-        with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: |
-            ./build/out/${{ env.PACKAGE_NAME }}.zip
-          if-no-files-found: error
+          set -euo pipefail
+          go test ./...
+          go test -race ./api ./wails
+          go vet ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose ./...
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir . --no-banner --redact=100

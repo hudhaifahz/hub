@@ -1,289 +1,178 @@
-name: Wails build - all platforms
+name: Grynvault Rebalance macOS candidate
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    types: [opened, synchronize]
-
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      build-release:
-        description: "Build full-featured release (codesigning, notarization, etc.)"
+      release_tag:
+        description: Immutable release tag to build
+        required: true
+        type: string
+      build_release:
+        description: Sign and notarize a private release candidate
+        required: true
+        default: false
         type: boolean
-    secrets:
-      APPLE_DEVELOPER_CERTIFICATE_P12_BASE64:
-        required: true
-      APPLE_DEVELOPER_CERTIFICATE_PASSWORD:
-        required: true
-      APPLE_PASSWORD:
-        required: true
-      APPLE_TEAM_ID:
-        required: true
-      APPLE_USERNAME:
-        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grynvault-rebalance-${{ inputs.release_tag }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          [
-            { platform: linux/amd64, os: ubuntu-22.04 },
-            { platform: linux/amd64, os: ubuntu-24.04 },
-            { platform: windows/amd64, os: windows-2022 },
-            { platform: darwin/universal, os: macos-14 },
-          ]
-    runs-on: ${{ matrix.build.os }}
+    runs-on: macos-14
     env:
-      TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      APP_NAME: Grynvault Rebalance
+      APP_PATH: build/bin/Grynvault Rebalance.app
+      DMG_PATH: build/out/Grynvault-Rebalance-macOS-universal-candidate.dmg
     steps:
-      - name: Setup
-        shell: bash
-        run: |
-          echo "EXEC_NAME=Alby Hub" >> $GITHUB_ENV
-          if [ "${{ matrix.build.os }}" == "ubuntu-24.04" ]; then
-            echo "PACKAGE_NAME=albyhub-Desktop-Linux-Ubuntu-24.04" >> $GITHUB_ENV
-            echo "LIBWEBKIT2GTK=libwebkit2gtk-4.1-dev" >> $GITHUB_ENV
-          else
-            echo "PACKAGE_NAME=albyhub-Desktop-${{ runner.os }}" >> $GITHUB_ENV
-            echo "LIBWEBKIT2GTK=libwebkit2gtk-4.0-dev" >> $GITHUB_ENV
-          fi
-
-      - uses: actions/checkout@v4
+      - name: Check out the requested tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
           submodules: recursive
+          persist-credentials: false
 
-      - name: Install dependencies
-        if: runner.os == 'Linux'
+      - name: Verify immutable source selection
+        id: source
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "release tag contains unsupported characters" >&2
+            exit 1
+          fi
+          source_commit="$(git rev-parse HEAD)"
+          tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          test "$source_commit" = "$tag_commit"
+          test -z "$(git status --porcelain=v1)"
+          echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
 
-      - name: Setup GoLang
-        uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version-file: "./go.mod"
+          go-version-file: go.mod
+          cache: true
 
-      - name: Get dependencies
-        run: go get -v -t -d ./...
-
-      - name: Setup NodeJS
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.x"
+          node-version: 22.x
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+      - name: Install pinned build tools
         shell: bash
-
-      - name: Install Linux Wails deps
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install libgtk-3-0 ${{ env.LIBWEBKIT2GTK }} gcc-aarch64-linux-gnu
-        shell: bash
-
-      - name: Install macOS Wails deps
-        if: runner.os == 'macOS'
         run: |
-          brew install create-dmg
-          brew install Bearer/tap/gon
-        shell: bash
+          set -euo pipefail
+          npm install --global yarn@1.22.22
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+          go mod download
 
-      - name: Wails Doctor
-        working-directory: .
-        run: wails doctor
+      - name: Run non-paying tests and security checks
         shell: bash
-
-      # On Windows, we need the shared libraries to be found in the same directory
-      # as the executable. Wails build will fail otherwise.
-      - name: Copy shared libraries
-        if: runner.os == 'Windows'
         run: |
-          cp `go list -m -f "{{.Dir}}" github.com/getAlby/ldk-node-go`/ldk_node/x86_64-pc-windows-msvc/ldk_node.dll ./
+          set -euo pipefail
+          ./scripts/release/check-source-boundaries.sh
+          go test ./service ./wails
+          go vet ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose ./...
+          go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir . --no-banner --redact=100
+
+      - name: Build unsigned candidate from the tag
         shell: bash
+        run: ./scripts/release/build-macos.sh "$RELEASE_TAG"
 
-      - name: Copy appicon in place
-        run: mkdir -p build && cp appicon.png build
+      - name: Inspect unsigned candidate
         shell: bash
+        run: >-
+          ./scripts/release/inspect-macos.sh
+          "$APP_PATH"
+          "$RELEASE_TAG"
+          "${{ steps.source.outputs.commit }}"
 
-      - name: Build App
-        if: runner.os == 'macOS'
-        run: wails build --platform darwin/universal -webview2 embed -o "${{ env.EXEC_NAME }}" -tags "wails" -ldflags "-X 'github.com/getAlby/hub/version.Tag=${{ env.TAG }}' -extldflags '-Wl,-headerpad_max_install_names'"
+      - name: Validate signing inputs
+        if: inputs.build_release
         shell: bash
-
-      - name: Build App
-        if: runner.os == 'Linux' && matrix.build.os != 'ubuntu-24.04'
-        run: wails build --platform linux/amd64 -webview2 embed -o "${{ env.EXEC_NAME }}" -tags "wails" -ldflags "-X 'github.com/getAlby/hub/version.Tag=${{ env.TAG }}'"
-        shell: bash
-
-      - name: Build App
-        if: runner.os == 'Linux' && matrix.build.os == 'ubuntu-24.04'
-        run: wails build --platform linux/amd64 -webview2 embed -o "${{ env.EXEC_NAME }}" -tags "wails,webkit2_41" -ldflags "-X 'github.com/getAlby/hub/version.Tag=${{ env.TAG }}'"
-        shell: bash
-
-      - name: Build Windows App
-        if: runner.os == 'Windows'
-        run: wails build --platform windows/amd64 -webview2 embed -o "${{ env.EXEC_NAME }}.exe" -tags "wails" -ldflags "-X 'github.com/getAlby/hub/version.Tag=${{ env.TAG }}'"
-        shell: bash
-
-      - name: Import Code-Signing Certificates for macOS
-        if: >-
-          runner.os == 'macOS' &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        uses: Apple-Actions/import-codesign-certs@v3
-        with:
-          # The certificates in a PKCS12 file encoded as a base64 string
-          p12-file-base64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
-          # The password used to import the PKCS12 file.
-          p12-password: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
-
-      - name: Copy DLLs to the output directory
-        if: runner.os == 'Windows'
-        run: |
-          cp ldk_node.dll ./build/bin/
-        shell: bash
-
-      - name: Copy shared libraries to the output directory and adjust directory structure
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p ./build/bin/${{ env.PACKAGE_NAME }}/lib
-          cp `go list -m -f "{{.Dir}}" github.com/getAlby/ldk-node-go`/ldk_node/x86_64-unknown-linux-gnu/libldk_node.so ./build/bin/${{ env.PACKAGE_NAME }}/lib/
-          mkdir -p ./build/bin/${{ env.PACKAGE_NAME }}/bin
-          mv "./build/bin/${{ env.EXEC_NAME }}" ./build/bin/${{ env.PACKAGE_NAME }}/bin/
-        shell: bash
-
-      - name: Patch executable RPATH
-        if: runner.os == 'Linux'
-        run: |
-          patchelf --force-rpath --set-rpath '$ORIGIN/../lib' "./build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}"
-
-      - name: Copy shared libraries to the output directory
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p "./build/bin/${{ env.EXEC_NAME }}.app/Contents/Frameworks"
-          cp `go list -m -f "{{.Dir}}" github.com/getAlby/ldk-node-go`/ldk_node/universal-macos/libldk_node.dylib "./build/bin/${{ env.EXEC_NAME }}.app/Contents/Frameworks/"
-        shell: bash
-
-      - name: Patch executable RPATH
-        if: runner.os == 'macOS'
-        run: |
-          install_name_tool -add_rpath @executable_path/../Frameworks "./build/bin/${{ env.EXEC_NAME }}.app/Contents/MacOS/${{ env.EXEC_NAME }}"
-
-      - name: Add macOS perms
-        if: runner.os == 'macOS'
-        run: chmod +x "build/bin/${{ env.EXEC_NAME }}.app/Contents/MacOS/${{ env.EXEC_NAME }}"
-        shell: bash
-
-      - name: Add Linux perms
-        if: runner.os  == 'Linux'
-        run: chmod +x "build/bin/${{ env.PACKAGE_NAME }}/bin/${{ env.EXEC_NAME }}"
-        shell: bash
-
-      # Store everything in a tar archive to preserve permissions
-      # (specifically, the executable bit on the app executable).
-      - name: Make output tar archive
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p ./build/out
-          tar -cjf ./build/out/${{ env.PACKAGE_NAME }}.tar.bz2 -C ./build/bin .
-          rm -Rf ./build/bin/*
-          mv ./build/out/${{ env.PACKAGE_NAME }}.tar.bz2 ./build/bin/
-
-      - name: Sign the macOS binary
-        if: >-
-          runner.os == 'macOS' &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        run: |
-          echo "Signing Package"
-          /usr/bin/codesign -s "Developer ID Application: Alby Inc." -f -v --deep --timestamp --options runtime --entitlements ./build/darwin/entitlements.plist "./build/bin/${{ env.EXEC_NAME }}.app"
         env:
-          AC_USERNAME: ${{ secrets.APPLE_USERNAME }}
-          AC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          AC_PROVIDER: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Make DMG image for macOS
-        if: runner.os == 'macOS'
+          CERTIFICATE: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.GRYNVAULT_APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.GRYNVAULT_APPLE_TEAM_ID }}
+          APPLE_USERNAME: ${{ secrets.GRYNVAULT_APPLE_USERNAME }}
+          SIGNING_IDENTITY: ${{ secrets.GRYNVAULT_APPLE_SIGNING_IDENTITY }}
         run: |
-          mkdir -p ./build/out
-          create-dmg --volname "Alby Hub" --background "./build/darwin/dmgcover.png" --window-pos 200 120 --window-size 800 400 --icon-size 80 --icon "${{ env.EXEC_NAME }}.app" 200 160 --hide-extension "${{ env.EXEC_NAME }}.app" --app-drop-link 600 160 "./build/out/${{ env.PACKAGE_NAME }}.dmg" "./build/bin/${{ env.EXEC_NAME }}.app"
-          rm -Rf ./build/bin/*
-          mv ./build/out/${{ env.PACKAGE_NAME }}.dmg ./build/bin/
+          set -euo pipefail
+          for required in CERTIFICATE CERTIFICATE_PASSWORD APPLE_PASSWORD APPLE_TEAM_ID APPLE_USERNAME SIGNING_IDENTITY; do
+            if [[ -z "${!required}" ]]; then
+              echo "missing required Grynvault signing input: $required" >&2
+              exit 1
+            fi
+          done
 
-      - name: Generate gon-notarize.json
-        if: runner.os == 'macOS'
-        run: |
-          cat > ./build/darwin/gon-notarize.json << EOF
-          {
-            "notarize": [
-              {
-                "path": "./build/bin/${PACKAGE_NAME}.dmg",
-                "bundle_id": "com.getalby.AlbyHub"
-              }
-            ]
-          }
-          EOF
+      - name: Import Grynvault signing certificate
+        if: inputs.build_release
+        uses: Apple-Actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
+        with:
+          p12-file-base64: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
 
-      - name: Notarize the DMG image
-        if: >-
-          runner.os == 'macOS' &&
-          (
-            !github.event.pull_request ||
-            (
-              github.event.pull_request.head.repo.full_name == github.repository &&
-              github.actor != 'dependabot[bot]'
-            )
-          )
-        run: |
-          echo "Notarizing Zip Files"
-          gon -log-level=info -log-json ./build/darwin/gon-notarize.json
-        env:
-          AC_USERNAME: ${{ secrets.APPLE_USERNAME }}
-          AC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          AC_PROVIDER: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Make Windows ZIP archive
-        if: runner.os == 'Windows'
-        run: |
-          mkdir -p ./build/out
-          7z a -tzip ./build/out/${{ env.PACKAGE_NAME }}.zip ./build/bin/*
-          rm -Rf ./build/bin/*
-          mv ./build/out/${{ env.PACKAGE_NAME }}.zip ./build/bin/
+      - name: Sign and inspect the application
+        if: inputs.build_release
         shell: bash
+        env:
+          SIGNING_IDENTITY: ${{ secrets.GRYNVAULT_APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$APP_PATH/Contents/Frameworks/libldk_node.dylib"
+          codesign --force --timestamp --options runtime --entitlements build/darwin/entitlements.plist --sign "$SIGNING_IDENTITY" "$APP_PATH"
+          ./scripts/release/inspect-macos.sh "$APP_PATH" "$RELEASE_TAG" "${{ steps.source.outputs.commit }}" --require-developer-id
 
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'Linux'
-        with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: |
-            ./build/bin/${{ env.PACKAGE_NAME }}.tar.bz2
-          if-no-files-found: error
+      - name: Create, notarize, and staple the candidate disk image
+        if: inputs.build_release
+        shell: bash
+        env:
+          APPLE_PASSWORD: ${{ secrets.GRYNVAULT_APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.GRYNVAULT_APPLE_TEAM_ID }}
+          APPLE_USERNAME: ${{ secrets.GRYNVAULT_APPLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/out
+          hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH"
+          xcrun notarytool submit "$DMG_PATH" --apple-id "$APPLE_USERNAME" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
+          shasum -a 256 "$DMG_PATH" > "${DMG_PATH}.sha256"
 
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'macOS'
-        with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: |
-            ./build/bin/${{ env.PACKAGE_NAME }}.dmg
-          if-no-files-found: error
+      - name: Archive unsigned internal evidence
+        if: ${{ !inputs.build_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/out
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "build/out/UNSIGNED-INTERNAL-Grynvault-Rebalance-${RELEASE_TAG}.zip"
 
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'Windows'
+      - name: Upload unsigned internal evidence
+        if: ${{ !inputs.build_release }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: |
-            ./build/bin/${{ env.PACKAGE_NAME }}.zip
+          name: UNSIGNED-INTERNAL-Grynvault-Rebalance-${{ inputs.release_tag }}-${{ steps.source.outputs.commit }}
+          path: build/out/UNSIGNED-INTERNAL-Grynvault-Rebalance-${{ inputs.release_tag }}.zip
           if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload private signed candidate
+        if: inputs.build_release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: PRIVATE-CANDIDATE-Grynvault-Rebalance-${{ inputs.release_tag }}-${{ steps.source.outputs.commit }}
+          path: |
+            ${{ env.DMG_PATH }}
+            ${{ env.DMG_PATH }}.sha256
+          if-no-files-found: error
+          retention-days: 7

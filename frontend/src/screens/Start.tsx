@@ -73,7 +73,7 @@ export default function Start() {
         <TwoColumnLayoutHeader
           title="Start"
           pageTitle="Start"
-          description="Enter your password to unlock and start Alby Hub."
+          description="Enter your password to unlock and start Grynvault Rebalance."
         />
         <form onSubmit={onSubmit}>
           <div className="grid gap-4">
@@ -95,7 +95,7 @@ export default function Start() {
             </LoadingButton>
             {loading && (
               <p className="text-muted-foreground text-xs text-center">
-                Starting Alby Hub may take a few minutes.
+                Starting Grynvault Rebalance may take a few minutes.
               </p>
             )}
           </div>

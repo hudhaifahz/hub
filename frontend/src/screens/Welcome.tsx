@@ -38,15 +38,15 @@ export function Welcome() {
 
   return (
     <Container>
-      <title>Welcome · Alby Hub</title>
+      <title>Welcome · Grynvault Rebalance</title>
       <div className="grid text-center gap-5">
         <div className="grid gap-2">
           <h1 className="font-semibold text-2xl font-headline">
-            Welcome to Alby Hub
+            Welcome to Grynvault Rebalance
           </h1>
           <p className="text-muted-foreground">
-            A powerful, all-in-one bitcoin lightning wallet with the superpower
-            of connecting to applications.
+            An experimental independent Alby Hub fork with exact-channel
+            rebalance controls.
           </p>
         </div>
         <div className="grid gap-2">

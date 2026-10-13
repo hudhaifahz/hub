@@ -3,6 +3,7 @@ import { Outlet } from "react-router";
 import { AppSidebar } from "src/components/AppSidebar";
 import { Banner } from "src/components/Banner";
 import { CommandPalette } from "src/components/CommandPalette";
+import { GrynvaultForkNotice } from "src/components/GrynvaultForkNotice";
 import { SidebarInset, SidebarProvider } from "src/components/ui/sidebar";
 import {
   CommandPaletteProvider,
@@ -37,6 +38,7 @@ function AppLayoutInner() {
         )}
       >
         <SidebarProvider className="flex flex-col">
+          <GrynvaultForkNotice />
           {showBanner && <Banner onDismiss={dismissBanner} />}
           <div className="flex flex-1">
             <AppSidebar />

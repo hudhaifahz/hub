@@ -35,7 +35,7 @@ export default function AlbyAuthRedirect() {
 
   return !info || info.oauthRedirect || !url ? (
     <>
-      <title>Connect your Alby Account · Alby Hub</title>
+      <title>Connect your Alby Account · Grynvault Rebalance</title>
       <Loading />
     </>
   ) : (

@@ -64,7 +64,7 @@ func NewService(ctx context.Context) (*service, error) {
 	logger.Logger.Info("AlbyHub " + version.Tag)
 
 	if appConfig.Workdir == "" {
-		appConfig.Workdir = filepath.Join(xdg.DataHome, "/albyhub")
+		appConfig.Workdir = defaultWorkdir(xdg.DataHome)
 		logger.Logger.WithField("workdir", appConfig.Workdir).Info("No workdir specified, using default")
 	}
 	// make sure workdir exists

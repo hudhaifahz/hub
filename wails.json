@@ -1,17 +1,18 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "Alby Hub",
-  "outputfilename": "Alby Hub",
+  "name": "Grynvault Rebalance",
+  "outputfilename": "Grynvault Rebalance",
   "frontend:install": "yarn install",
   "frontend:build": "yarn build:wails",
   "frontend:dev:watcher": "yarn dev:wails",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "Alby Contributors",
-    "email": "hello@getalby.com"
+    "name": "Grynvault and Alby Contributors",
+    "email": "security@grynvault.com"
   },
   "info": {
-    "companyName": "Alby Inc.",
-    "productName": "Alby Hub"
+    "companyName": "Grynvault",
+    "productName": "Grynvault Rebalance",
+    "comments": "Experimental independently maintained fork built from Alby Hub"
   }
 }
