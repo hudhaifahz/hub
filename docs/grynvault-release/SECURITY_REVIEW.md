@@ -36,6 +36,8 @@ An unsigned universal preflight build identified and fixed duplicate runtime
 path processing caused by `otool` reporting each path once per architecture.
 The release script now deduplicates paths before mutation; a fresh exact-commit
 candidate must pass bundle inspection before the signing gate can open.
+Generated Wails bindings are excluded from source formatting checks, and the
+release build fails if packaging changes any tracked file.
 
 The secret review removed credential-shaped NWC connection strings inherited
 from upstream source and made the optional Lightning messageboard explicitly

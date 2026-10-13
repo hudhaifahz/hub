@@ -41,7 +41,6 @@ export VITE_GRYNVAULT_SOURCE_URL="$source_url"
   yarn lint:js
   yarn tsc:compile
   yarn format
-  yarn build:wails
 )
 
 if [[ -n "$(git status --porcelain=v1)" ]]; then
@@ -58,6 +57,11 @@ go run github.com/wailsapp/wails/v2/cmd/wails@v2.16.0 build \
   -o "Grynvault Rebalance" \
   -tags "wails" \
   -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -extldflags '-Wl,-headerpad_max_install_names'"
+
+if [[ -n "$(git status --porcelain=v1 --untracked-files=no)" ]]; then
+  echo "release build changed tracked files in the tagged checkout" >&2
+  exit 1
+fi
 
 app_path="build/bin/Grynvault Rebalance.app"
 frameworks_path="${app_path}/Contents/Frameworks"
