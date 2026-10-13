@@ -14,6 +14,15 @@ The confirmation files show the exact typed-confirmation gate without invoking
 the execution action. The executing, succeeded, failed, and recovery files show
 synthetic saved-operation records; no execution request was made.
 
+An additional interactive accessibility check used Brave's explicit 200% zoom
+on the quote and recovery fixtures. It verified full internal scrolling,
+document-level horizontal containment, wrapping of complete identifiers, a
+visible sticky footer, and keyboard-only focus movement between the labelled
+confirmation field and enabled controls. That check did not create a separate
+committed screenshot because the existing images already record the same
+privacy-safe component states; its measured geometry is recorded in the release
+plan and engineering log.
+
 ## SHA-256
 
 ```text

@@ -887,3 +887,32 @@ Consequence:
 - Portal 04 remains locked and unpublished. Final immutable release metadata,
   a deploy preview, exact diff/link review, and separate owner approval remain
   required before merge or public deployment.
+
+### 2026-10-13 — Explicit 200% browser-zoom acceptance
+
+Observed:
+
+- Brave rendered the real `RebalanceChannelDialogContent` synthetic quote and
+  recovery fixtures at an explicit 200% browser zoom. Retina
+  `devicePixelRatio` changed from 2 to 4 and returned to 2 after reset.
+- At the resulting 756 CSS-pixel viewport, document client width and scroll
+  width were both 756 pixels. The 510-pixel review region scrolled to its full
+  1,181-pixel maximum without creating document-level horizontal overflow.
+- Full quote, route, peer, channel, operation, and payment identifiers wrapped
+  in the review record. The deliberately summarized channel selector remained
+  clipped by design while the full identities remained available immediately
+  below it.
+- Close, Find local route, and Execute/Retry exact route remained visible in
+  the fixed footer at the top, middle, and bottom of the internal scroll.
+  Keyboard-only focus moved between the labelled exact-confirmation field and
+  enabled Close control; disabled payment controls were correctly omitted from
+  the focus loop.
+- No quote, execution, HTLC, payment, or wallet request was made. The localhost
+  origin was reset to 100% and the temporary Brave tab was closed.
+
+Consequence:
+
+- The explicit 200% zoom acceptance gate is closed in addition to the existing
+  320, 375, 768, and 1280 CSS-pixel geometry evidence.
+- This is fixture UI acceptance only; it does not replace installed-app wallet
+  continuity, signed-package, or public-release acceptance.

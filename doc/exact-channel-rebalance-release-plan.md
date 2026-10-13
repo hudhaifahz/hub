@@ -159,7 +159,7 @@ the moving branch name as the release source.
 - [x] Build both HTTP and Wails frontend variants.
 - [x] Capture screenshots at the required viewport widths for pre-quote and
       quote-review states.
-- [ ] Confirm with 200% browser zoom. Keyboard-only navigation and long
+- [x] Confirm with 200% browser zoom. Keyboard-only navigation and long
       unbroken identifiers pass; 320 CSS-pixel testing is additional narrow-screen
       stress evidence, not a substitute for the explicit zoom check.
 - [x] Record that every action and every exact identifier is visible without
@@ -172,6 +172,18 @@ Privacy-safe usage instructions and screenshot provenance are recorded in
 horizontal overflow, and all three actions remained inside the viewport. The
 exact-confirmation action became keyboard-reachable only after the fixture text
 matched; it was not invoked.
+
+The explicit browser-zoom check used Brave at 200% on the real component's
+synthetic quote and recovery fixtures. Retina `devicePixelRatio` increased from
+2 to 4; the effective viewport was 756 CSS pixels wide, and document client and
+scroll widths both remained 756 pixels. The 510-pixel-wide internal review
+region scrolled from 0 through its 1,181-pixel maximum while the three footer
+actions remained visible inside the viewport. Full quote, operation, payment,
+peer, and channel identifiers used `break-all` wrapping. Keyboard-only focus
+moved between the labelled confirmation field and the enabled Close control;
+disabled payment controls were correctly skipped. No execution control was
+invoked. The localhost origin was then restored to 100% zoom and the temporary
+browser tab was closed.
 
 Synthetic saved-operation fixtures also verified executing, succeeded, failed,
 and exact-recovery states at 320 and 1280 CSS pixels. Every state kept the body,
