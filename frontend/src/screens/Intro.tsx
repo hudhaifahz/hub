@@ -63,7 +63,7 @@ export function Intro() {
 
   return (
     <>
-      <title>Welcome · Alby Hub</title>
+      <title>Welcome · Grynvault Rebalance</title>
       <Carousel className={cn("w-full bg-background")} setApi={setApi}>
         <div
           className="w-full h-full absolute top-0 left-0 bg-no-repeat"
@@ -85,11 +85,11 @@ export function Intro() {
             <div className="flex flex-col justify-center items-center h-screen p-5">
               <div className="flex flex-col gap-4 text-center max-w-lg">
                 <div className="text-4xl font-extrabold text-foreground">
-                  Welcome to Alby Hub
+                  Welcome to Grynvault Rebalance
                 </div>
                 <div className="text-2xl text-muted-foreground font-semibold">
-                  A powerful, all-in-one bitcoin lightning wallet with the
-                  superpower of connecting to applications.
+                  An experimental independent Alby Hub fork with exact-channel
+                  rebalance controls.
                 </div>
                 <div className="mt-20">
                   <Button onClick={() => api?.scrollNext()} size="lg">

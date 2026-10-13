@@ -5,6 +5,7 @@ import ExternalLink from "src/components/ExternalLink";
 import { useAlbyInfo } from "src/hooks/useAlbyInfo";
 import { useAlbyMe } from "src/hooks/useAlbyMe";
 import { useInfo } from "src/hooks/useInfo";
+import { GRYNVAULT_UPDATE_URL } from "src/lib/grynvault";
 
 export function Banner({ onDismiss }: { onDismiss: () => void }) {
   const { data: info } = useInfo();
@@ -48,14 +49,15 @@ export function Banner({ onDismiss }: { onDismiss: () => void }) {
 
   return (
     <div className="fixed w-full bg-foreground text-background z-20 py-2 text-sm flex items-center justify-center">
-      <ExternalLink
-        to={`https://getalby.com/update/hub?version=${info?.version}`}
-        className="w-full px-12 md:px-24"
-      >
+      <ExternalLink to={GRYNVAULT_UPDATE_URL} className="w-full px-12 md:px-24">
         <p className="line-clamp-2 md:block whitespace-normal md:whitespace-nowrap overflow-hidden text-ellipsis text-center">
-          <span className="font-semibold mr-2">Update Available</span>
+          <span className="font-semibold mr-2">
+            Upstream Alby Hub update available
+          </span>
           <span>•</span>
-          <span className="ml-2">{albyInfo.hub.latestReleaseNotes}</span>
+          <span className="ml-2">
+            Review Grynvault compatibility before updating
+          </span>
         </p>
       </ExternalLink>
       <XIcon

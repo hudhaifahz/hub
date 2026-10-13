@@ -1,3 +1,13 @@
+> [!WARNING]
+> **Grynvault Rebalance is an experimental, independently maintained fork of
+> Alby Hub. It is not an official Alby release.** The first public build is
+> limited to universal macOS and uses a separate application identity and data
+> directory. Back up your wallet before any explicit import or migration.
+
+See [BUILDING.md](./BUILDING.md), [MIGRATION.md](./MIGRATION.md), and
+[RELEASE_NOTES.md](./RELEASE_NOTES.md) for the Grynvault distribution. The
+upstream Alby Hub documentation follows unchanged below.
+
 <img alt="Alby Hub Logo" src="./doc/logo.svg" width="400">
 
 <br/>
@@ -178,7 +188,7 @@ Make sure to update your RPC password below (`docker exec boltz-bitcoind cat /ap
     LDK_BITCOIND_RPC_HOST="127.0.0.1"
     LDK_BITCOIND_RPC_PORT="18443"
     LDK_BITCOIND_RPC_USER="__cookie__"
-    LDK_BITCOIND_RPC_PASSWORD="f7460d81974b000b63e46c0e880243cf28bbaf93938b6e38494628f1f1700f23"
+    LDK_BITCOIND_RPC_PASSWORD="local"
     # or use esplora
     #LDK_ESPLORA_SERVER=http://localhost:4002/api
     NETWORK="regtest"

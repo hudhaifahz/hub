@@ -2,6 +2,8 @@ module github.com/getAlby/hub
 
 go 1.26.2
 
+toolchain go1.27.2
+
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/btcsuite/btcd v0.25.1-0.20260310163610-1c55c7c18179
@@ -121,7 +123,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kcalvinalvin/anet v0.0.0-20251112173137-d8ddc1f6dbee // indirect
 	github.com/kkdai/bstream v1.0.0 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/leaanthony/go-ansi-parser v1.6.1 // indirect

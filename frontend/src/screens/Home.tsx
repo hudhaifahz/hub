@@ -48,7 +48,9 @@ function Home() {
         <NewArrivalsWidget />
         <AppOfTheDayWidget />
         <SupportAlbyWidget />
-        <LightningMessageboardWidget />
+        {import.meta.env.VITE_LIGHTNING_MESSAGEBOARD_NWC_URL && (
+          <LightningMessageboardWidget />
+        )}
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">

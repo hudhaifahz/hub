@@ -1061,7 +1061,13 @@ func reconcileCircularPaymentRecords(
 	if !ok || outbound.Id != outboundPaymentID || outbound.Direction != ldk_node.PaymentDirectionOutbound || outbound.AmountMsat == nil || *outbound.AmountMsat != amountMsat {
 		return nil, errors.New("prepared circular outbound payment record does not match the operation")
 	}
-	if outboundKind.Hash != paymentHash || outboundKind.Secret == nil || *outboundKind.Secret != *inboundKind.Secret || outboundKind.Bolt11Invoice == nil || *outboundKind.Bolt11Invoice != *inboundKind.Bolt11Invoice || outboundKind.RequiredSendingChannelId == nil || *outboundKind.RequiredSendingChannelId != firstHopChannelID || outboundKind.RequiredReceivingChannelId == nil || *outboundKind.RequiredReceivingChannelId != lastHopChannelID || outboundKind.CircularOperationId == nil || *outboundKind.CircularOperationId != operationID || outboundKind.CircularOutboundPaymentId == nil || *outboundKind.CircularOutboundPaymentId != outboundPaymentID || outboundKind.CircularMaxRoutingFeeMsat == nil || *outboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat || (outboundKind.Preimage != nil && *outboundKind.Preimage != *inboundKind.Preimage) {
+	if outboundKind.Hash != paymentHash || outboundKind.Secret == nil {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	if *outboundKind.Secret != *inboundKind.Secret {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	if outboundKind.Bolt11Invoice == nil || *outboundKind.Bolt11Invoice != *inboundKind.Bolt11Invoice || outboundKind.RequiredSendingChannelId == nil || *outboundKind.RequiredSendingChannelId != firstHopChannelID || outboundKind.RequiredReceivingChannelId == nil || *outboundKind.RequiredReceivingChannelId != lastHopChannelID || outboundKind.CircularOperationId == nil || *outboundKind.CircularOperationId != operationID || outboundKind.CircularOutboundPaymentId == nil || *outboundKind.CircularOutboundPaymentId != outboundPaymentID || outboundKind.CircularMaxRoutingFeeMsat == nil || *outboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat || (outboundKind.Preimage != nil && *outboundKind.Preimage != *inboundKind.Preimage) {
 		return nil, errors.New("prepared circular outbound payment binding is invalid")
 	}
 	outboundStatus, err := ldkPaymentStatusName(outbound.Status)

@@ -22,14 +22,14 @@ var appIcon []byte
 
 func main() {
 	// Get a port lock on a rare port to prevent the app running twice
-	listener, err := net.Listen("tcp", "0.0.0.0:21420")
+	listener, err := net.Listen("tcp", "127.0.0.1:21421")
 	if err != nil {
-		log.Println("Another instance of Alby Hub is already running.")
+		log.Println("Another instance of Grynvault Rebalance is already running.")
 		return
 	}
 	defer listener.Close()
 
-	log.Info("Alby Hub starting in WAILS mode")
+	log.Info("Grynvault Rebalance starting in WAILS mode")
 	ctx, cancel := context.WithCancel(context.Background())
 	svc, err := service.NewService(ctx)
 	if err != nil {
@@ -46,5 +46,5 @@ func main() {
 	cancel()
 	svc.Shutdown()
 	logger.Logger.Info("Service exited")
-	logger.Logger.Info("Alby Hub needs to stay online to send and receive transactions. Channels may be closed if your hub stays offline for an extended period of time.")
+	logger.Logger.Info("Grynvault Rebalance needs to stay online to send and receive transactions. Channels may be closed if your hub stays offline for an extended period of time.")
 }
