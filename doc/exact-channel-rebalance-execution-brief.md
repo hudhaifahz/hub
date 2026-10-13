@@ -62,16 +62,18 @@ milestones.
 ## Current resume checkpoint
 
 The independent release branch is committed and pushed at
-`c7fa8688a15a48a3e35a98f10db45cc266be5fa4`. Its independently named universal
+`28e4f42b32f7b1401304b345ba36186d82c8cb8d`. GitHub Actions run
+`38485346043` passed the source, frontend, Go, race, vet, vulnerability, and
+secret checks on the supported macOS runner. Its independently named universal
 macOS preflight bundle passed exact-commit inspection with the reviewed LDK
-library hash, isolated bundle identifier/data directory/updater, and no
-current-tree secret finding. The prior product-code head passed GitHub Actions
-run `38483312899`; a fresh run for the documentation-only usage-guide head is
-pending. The workflow covers the same
-source, frontend, Go, race, vet, vulnerability, and secret checks on the
-supported macOS runner. The preflight remains unsigned and was not
-installed or launched. Resume at the owner-controlled signing prerequisites and
-immutable release-tag decision only after reviewing the recorded evidence. Do
+library hash, isolated bundle identifier/data directory/updater, and exact
+embedded source hash. The three prepared upstream bases remain unchanged at
+Hub `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node
+`74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go
+`5ba434093284d0dc8291e45d2a3d2c1c5a879698`. The preflight remains unsigned
+and was not installed or launched. CodeRabbit review is still blocked on
+owner-controlled login. Resume by completing that review, then stop at the
+owner-controlled signing prerequisites and immutable release-tag decision. Do
 not sign, notarize, install, publish, deploy, change DNS, open public pull
 requests, or move sats at this checkpoint.
 

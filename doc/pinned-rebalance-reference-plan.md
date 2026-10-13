@@ -1003,6 +1003,24 @@ Observed:
   same identity, architecture, runtime-path, embedded-source, and reviewed-LDK
   inspection under temporary local identifier `preflight-c7fa8688`; it was not
   installed or launched.
+- Final documentation head
+  `28e4f42b32f7b1401304b345ba36186d82c8cb8d` links that guide from the root
+  README and was pushed with matching remote-ref readback. GitHub Actions run
+  `38485346043` completed successfully against that exact head. A fresh
+  universal macOS preflight under temporary local identifier
+  `preflight-28e4f42b` passed product name, bundle identifier, `x86_64 arm64`
+  executable and library slices, sole embedded-library runtime path, embedded
+  tag/source metadata, valid Info.plist, and reviewed LDK SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+  The temporary tag was deleted; the bundle was not installed or launched.
+- Fresh remote readback found no upstream-base drift: Hub remains
+  `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node remains
+  `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go remains
+  `5ba434093284d0dc8291e45d2a3d2c1c5a879698`.
+- CodeRabbit CLI `0.7.1` still reports `signed out`; no review was claimed or
+  waived. The next owner action is local `coderabbit auth login`, after which
+  the exact final source head must be reviewed and every Critical or Warning
+  finding resolved or documented before the release-tag gate.
 - Packaging exposed and corrected four build-system issues before signing:
   duplicate per-architecture runtime-path output, generated Wails bindings in
   formatting scope, retained build output, and Wails ad-hoc resigning of the
