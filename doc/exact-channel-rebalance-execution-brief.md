@@ -15,6 +15,7 @@ Read these files completely before acting:
 
 - `AGENTS.md`
 - `doc/exact-channel-rebalance-release-plan.md`
+- `doc/exact-channel-rebalance-release-gate.md`
 - `doc/pinned-rebalance-reference-plan.md`
 - `doc/exact-channel-rebalance-launch-drafts.md`
 - `doc/macos-package-safety.md`
