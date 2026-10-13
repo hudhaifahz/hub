@@ -4,7 +4,8 @@
 > limited to universal macOS and uses a separate application identity and data
 > directory. Back up your wallet before any explicit import or migration.
 
-See [BUILDING.md](./BUILDING.md), [MIGRATION.md](./MIGRATION.md), and
+See [the usage guide](./docs/grynvault-release/USAGE.md),
+[BUILDING.md](./BUILDING.md), [MIGRATION.md](./MIGRATION.md), and
 [RELEASE_NOTES.md](./RELEASE_NOTES.md) for the Grynvault distribution. The
 upstream Alby Hub documentation follows unchanged below.
 
