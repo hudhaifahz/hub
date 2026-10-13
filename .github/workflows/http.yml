@@ -13,7 +13,10 @@ permissions:
 
 jobs:
   checks:
-    runs-on: ubuntu-22.04
+    # The first Grynvault release supports universal macOS only. The pinned Go
+    # binding includes the reviewed exact-channel native library for macOS;
+    # upstream Linux libraries do not yet expose those symbols.
+    runs-on: macos-14
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
