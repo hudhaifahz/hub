@@ -67,6 +67,7 @@ type LDKService struct {
 }
 
 var _ lnclient.PinnedPaymentClient = (*LDKService)(nil)
+var _ lnclient.CircularRouteQuoter = (*LDKService)(nil)
 
 const resetRouterKey = "ResetRouter"
 const maxInvoiceExpiry = 24 * time.Hour
@@ -799,6 +800,65 @@ func (ls *LDKService) SendPaymentSyncWithFirstHop(invoice string, firstHopChanne
 			}
 		}
 	}
+}
+
+// QuoteCircularRoute asks LDK to construct a candidate circular route with exact local first- and
+// last-hop channels. The underlying method is pathfinding-only: it does not create an invoice,
+// send a probe or HTLC, or write to the payment store.
+func (ls *LDKService) QuoteCircularRoute(amountMsat uint64, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.CircularRouteQuote, error) {
+	if amountMsat == 0 {
+		return nil, errors.New("circular route quote amount must be positive")
+	}
+	if firstHopChannelID == "" || lastHopChannelID == "" {
+		return nil, errors.New("circular route quote requires exact first- and last-hop channel IDs")
+	}
+	if firstHopChannelID == lastHopChannelID {
+		return nil, errors.New("circular route quote requires two distinct channels")
+	}
+
+	routeParameters := &ldk_node.RouteParametersConfig{
+		MaxTotalRoutingFeeMsat:          &maxRoutingFeeMsat,
+		MaxChannelSaturationPowerOfHalf: ls.cfg.GetEnv().LDKMaxChannelSaturationPowerOfHalf,
+		MaxPathCount:                    ls.cfg.GetEnv().LDKMaxPathCount,
+		MaxTotalCltvExpiryDelta:         1008,
+	}
+	quote, err := ls.node.Bolt11Payment().QuoteCircularRoute(
+		amountMsat,
+		firstHopChannelID,
+		lastHopChannelID,
+		routeParameters,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("LDK could not construct the exact circular route: %w", err)
+	}
+
+	paths := make([]lnclient.CircularRoutePath, 0, len(quote.Paths))
+	for _, path := range quote.Paths {
+		hops := make([]lnclient.CircularRouteHop, 0, len(path.Hops))
+		for _, hop := range path.Hops {
+			hops = append(hops, lnclient.CircularRouteHop{
+				NodeId:          hop.NodeId,
+				ShortChannelId:  hop.ShortChannelId,
+				FeeMsat:         hop.FeeMsat,
+				CltvExpiryDelta: hop.CltvExpiryDelta,
+			})
+		}
+		paths = append(paths, lnclient.CircularRoutePath{
+			Hops:       hops,
+			AmountMsat: path.AmountMsat,
+			FeeMsat:    path.FeeMsat,
+		})
+	}
+
+	return &lnclient.CircularRouteQuote{
+		AmountMsat:             quote.AmountMsat,
+		TotalRoutingFeeMsat:    quote.TotalRoutingFeeMsat,
+		FirstHopChannelId:      quote.FirstHopUserChannelId,
+		FirstHopShortChannelId: quote.FirstHopShortChannelId,
+		LastHopChannelId:       quote.LastHopUserChannelId,
+		LastHopShortChannelId:  quote.LastHopShortChannelId,
+		Paths:                  paths,
+	}, nil
 }
 
 func (ls *LDKService) SendKeysend(amountMsat uint64, destination string, custom_records []lnclient.TLVRecord, preimage string) (*lnclient.PayKeysendResponse, error) {
