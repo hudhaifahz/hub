@@ -73,6 +73,9 @@ executable_path="${app_path}/Contents/MacOS/Grynvault Rebalance"
 ldk_module_dir="$(go list -m -f '{{.Dir}}' github.com/getAlby/ldk-node-go)"
 
 mkdir -p "$frameworks_path"
+if [[ -e "$frameworks_path/libldk_node.dylib" ]]; then
+  chmod u+w "$frameworks_path/libldk_node.dylib"
+fi
 cp "${ldk_module_dir}/ldk_node/universal-macos/libldk_node.dylib" "$frameworks_path/"
 chmod u+w "$frameworks_path/libldk_node.dylib"
 
