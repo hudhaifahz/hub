@@ -52,6 +52,10 @@ mkdir -p build
 cp appicon.png build/appicon.png
 
 go run github.com/wailsapp/wails/v2/cmd/wails@v2.16.0 build \
+  -clean \
+  -m \
+  -nosyncgomod \
+  -trimpath \
   --platform darwin/universal \
   -webview2 embed \
   -o "Grynvault Rebalance" \

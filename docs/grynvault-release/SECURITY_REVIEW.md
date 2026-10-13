@@ -38,6 +38,8 @@ The release script now deduplicates paths before mutation; a fresh exact-commit
 candidate must pass bundle inspection before the signing gate can open.
 Generated Wails bindings are excluded from source formatting checks, and the
 release build fails if packaging changes any tracked file.
+Wails is also required to clean its generated binary directory, skip module-file
+rewrites, and remove local build paths before compiling a candidate.
 
 The secret review removed credential-shaped NWC connection strings inherited
 from upstream source and made the optional Lightning messageboard explicitly
