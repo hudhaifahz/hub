@@ -993,6 +993,16 @@ Observed:
   `govulncheck 1.9.0`, and Gitleaks `8.30.1` tracked-tree scan. The earlier
   Ubuntu link failure is retained as evidence that Linux is not a supported
   artifact target for this release.
+- Release documentation commit
+  `c7fa8688a15a48a3e35a98f10db45cc266be5fa4` adds an end-user guide at
+  `docs/grynvault-release/USAGE.md`. It explains the prerequisites, non-paying
+  route search, exact confirmation, unresolved-state handling, and liquidity
+  limits, and embeds three synthetic screenshots pinned to immutable engineering
+  commit `e5442b98bcc21752d8362ec54348cf6ee9acff2b`. All three raw image URLs return
+  JPEG content successfully. A fresh exact-commit unsigned bundle passes the
+  same identity, architecture, runtime-path, embedded-source, and reviewed-LDK
+  inspection under temporary local identifier `preflight-c7fa8688`; it was not
+  installed or launched.
 - Packaging exposed and corrected four build-system issues before signing:
   duplicate per-architecture runtime-path output, generated Wails bindings in
   formatting scope, retained build output, and Wails ad-hoc resigning of the

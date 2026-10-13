@@ -62,10 +62,12 @@ milestones.
 ## Current resume checkpoint
 
 The independent release branch is committed and pushed at
-`c41a5e1773030da5fccc174386edc8730423b4a3`. Its independently named universal
+`c7fa8688a15a48a3e35a98f10db45cc266be5fa4`. Its independently named universal
 macOS preflight bundle passed exact-commit inspection with the reviewed LDK
 library hash, isolated bundle identifier/data directory/updater, and no
-current-tree secret finding. GitHub Actions run `38483312899` passed the same
+current-tree secret finding. The prior product-code head passed GitHub Actions
+run `38483312899`; a fresh run for the documentation-only usage-guide head is
+pending. The workflow covers the same
 source, frontend, Go, race, vet, vulnerability, and secret checks on the
 supported macOS runner. The preflight remains unsigned and was not
 installed or launched. Resume at the owner-controlled signing prerequisites and
