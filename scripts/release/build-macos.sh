@@ -74,6 +74,7 @@ ldk_module_dir="$(go list -m -f '{{.Dir}}' github.com/getAlby/ldk-node-go)"
 
 mkdir -p "$frameworks_path"
 cp "${ldk_module_dir}/ldk_node/universal-macos/libldk_node.dylib" "$frameworks_path/"
+chmod u+w "$frameworks_path/libldk_node.dylib"
 
 while IFS= read -r existing_rpath; do
   [[ -z "$existing_rpath" ]] || install_name_tool -delete_rpath "$existing_rpath" "$executable_path"
