@@ -41,6 +41,9 @@ Universal macOS only. Public availability requires a Grynvault Developer ID
 signature, Apple notarization and stapling, a PGP-signed artifact manifest,
 fresh-download verification, and independent readback of every published URL.
 
+See `docs/grynvault-release/USAGE.md` for the non-paying quote flow, exact
+confirmation boundary, failure interpretation, and privacy-safe screenshots.
+
 ## Attribution
 
 Built from Alby Hub and licensed under Apache-2.0. This is an experimental
