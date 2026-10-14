@@ -32,7 +32,7 @@ jobs:
       - name: Check out the requested tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: refs/tags/${{ inputs.release_tag }}
           fetch-depth: 0
           submodules: recursive
           persist-credentials: false
@@ -46,8 +46,13 @@ jobs:
             echo "release tag contains unsupported characters" >&2
             exit 1
           fi
+          tag_ref="refs/tags/${RELEASE_TAG}"
+          if ! git show-ref --verify --quiet "$tag_ref"; then
+            echo "release tag ref does not exist: $tag_ref" >&2
+            exit 1
+          fi
           source_commit="$(git rev-parse HEAD)"
-          tag_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          tag_commit="$(git rev-parse --verify "${tag_ref}^{commit}")"
           test "$source_commit" = "$tag_commit"
           test -z "$(git status --porcelain=v1)"
           echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
