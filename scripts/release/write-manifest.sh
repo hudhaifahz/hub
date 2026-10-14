@@ -24,7 +24,8 @@ if [[ -n "$(git status --porcelain=v1)" ]]; then
 fi
 
 source_commit="$(git rev-parse HEAD)"
-tag_commit="$(git rev-list -n 1 "$release_tag" 2>/dev/null || true)"
+tag_ref="refs/tags/${release_tag}"
+tag_commit="$(git rev-parse --verify "${tag_ref}^{commit}" 2>/dev/null || true)"
 if [[ -z "$tag_commit" || "$tag_commit" != "$source_commit" ]]; then
   echo "release tag must exist locally and resolve to HEAD" >&2
   exit 1
