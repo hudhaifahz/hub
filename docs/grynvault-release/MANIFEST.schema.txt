@@ -8,6 +8,9 @@ ldk_node_go_commit=a381cacb18562dff960f24a12f43232633f8bc25
 build_workflow=.github/workflows/wails.yml@<40-hex source commit>
 platform=macos-universal
 bundle_identifier=com.grynvault.rebalance
+distribution=unsigned-experimental
+apple_signing=absent
+apple_notarization=absent
 pgp_fingerprint=<full owner-approved fingerprint>
 
 For every artifact, append one tab-separated line:

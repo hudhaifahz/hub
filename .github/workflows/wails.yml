@@ -7,11 +7,15 @@ on:
         description: Immutable release tag to build
         required: true
         type: string
-      build_release:
-        description: Sign and notarize a private release candidate
+      distribution_mode:
+        description: Candidate mode; no mode publishes a GitHub release
         required: true
-        default: false
-        type: boolean
+        default: unsigned-internal
+        type: choice
+        options:
+          - unsigned-internal
+          - unsigned-experimental
+          - developer-id-private
 
 permissions:
   contents: read
@@ -28,6 +32,7 @@ jobs:
       APP_NAME: Grynvault Rebalance
       APP_PATH: build/bin/Grynvault Rebalance.app
       DMG_PATH: build/out/Grynvault-Rebalance-macOS-universal-candidate.dmg
+      UNSIGNED_DMG_PATH: build/out/Grynvault-Rebalance-${{ inputs.release_tag }}-macOS-universal-UNSIGNED-EXPERIMENTAL.dmg
     steps:
       - name: Check out the requested tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -78,6 +83,14 @@ jobs:
           go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
           go mod download
 
+      - name: Install pinned SBOM tool
+        if: inputs.distribution_mode == 'unsigned-experimental'
+        shell: bash
+        run: >-
+          go install
+          -ldflags '-X main.version=1.41.1'
+          github.com/anchore/syft/cmd/syft@v1.41.1
+
       - name: Run non-paying tests and security checks
         shell: bash
         run: |
@@ -101,7 +114,7 @@ jobs:
           "${{ steps.source.outputs.commit }}"
 
       - name: Validate signing inputs
-        if: inputs.build_release
+        if: inputs.distribution_mode == 'developer-id-private'
         shell: bash
         env:
           CERTIFICATE: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
@@ -120,14 +133,14 @@ jobs:
           done
 
       - name: Import Grynvault signing certificate
-        if: inputs.build_release
+        if: inputs.distribution_mode == 'developer-id-private'
         uses: Apple-Actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
         with:
           p12-file-base64: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
           p12-password: ${{ secrets.GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
 
       - name: Sign and inspect the application
-        if: inputs.build_release
+        if: inputs.distribution_mode == 'developer-id-private'
         shell: bash
         env:
           SIGNING_IDENTITY: ${{ secrets.GRYNVAULT_APPLE_SIGNING_IDENTITY }}
@@ -139,7 +152,7 @@ jobs:
           ./scripts/release/inspect-macos.sh "$APP_PATH" "$RELEASE_TAG" "${{ steps.source.outputs.commit }}" --require-developer-id
 
       - name: Create, notarize, and staple the candidate disk image
-        if: inputs.build_release
+        if: inputs.distribution_mode == 'developer-id-private'
         shell: bash
         env:
           APPLE_PASSWORD: ${{ secrets.GRYNVAULT_APPLE_PASSWORD }}
@@ -155,8 +168,43 @@ jobs:
           spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
           shasum -a 256 "$DMG_PATH" > "${DMG_PATH}.sha256"
 
+      - name: Package explicitly unsigned experimental disk image
+        if: inputs.distribution_mode == 'unsigned-experimental'
+        shell: bash
+        run: >-
+          ./scripts/release/package-unsigned-macos.sh
+          "$APP_PATH"
+          "$RELEASE_TAG"
+          "${{ steps.source.outputs.commit }}"
+          build/out
+
+      - name: Generate source archive and SBOM
+        if: inputs.distribution_mode == 'unsigned-experimental'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/release/make-source-artifacts.sh "$RELEASE_TAG" build/out
+          ./scripts/release/generate-sbom.sh "build/out/Grynvault-Rebalance-${RELEASE_TAG}-source.cdx.json"
+
+      - name: Write unsigned preparation index
+        if: inputs.distribution_mode == 'unsigned-experimental'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_archive="build/out/grynvault-rebalance-${RELEASE_TAG}-source.tar.gz"
+          sbom="build/out/Grynvault-Rebalance-${RELEASE_TAG}-source.cdx.json"
+          ./scripts/release/write-candidate-index.sh \
+            "$RELEASE_TAG" \
+            "${{ steps.source.outputs.commit }}" \
+            "build/out/Grynvault-Rebalance-${RELEASE_TAG}-UNSIGNED-PREPARATION-INDEX.txt" \
+            "$UNSIGNED_DMG_PATH" \
+            "${UNSIGNED_DMG_PATH}.sha256" \
+            "${UNSIGNED_DMG_PATH%.dmg}.gatekeeper.txt" \
+            "$source_archive" \
+            "$sbom"
+
       - name: Archive unsigned internal evidence
-        if: ${{ !inputs.build_release }}
+        if: inputs.distribution_mode == 'unsigned-internal'
         shell: bash
         run: |
           set -euo pipefail
@@ -164,7 +212,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "build/out/UNSIGNED-INTERNAL-Grynvault-Rebalance-${RELEASE_TAG}.zip"
 
       - name: Upload unsigned internal evidence
-        if: ${{ !inputs.build_release }}
+        if: inputs.distribution_mode == 'unsigned-internal'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: UNSIGNED-INTERNAL-Grynvault-Rebalance-${{ inputs.release_tag }}-${{ steps.source.outputs.commit }}
@@ -173,12 +221,27 @@ jobs:
           retention-days: 3
 
       - name: Upload private signed candidate
-        if: inputs.build_release
+        if: inputs.distribution_mode == 'developer-id-private'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: PRIVATE-CANDIDATE-Grynvault-Rebalance-${{ inputs.release_tag }}-${{ steps.source.outputs.commit }}
           path: |
             ${{ env.DMG_PATH }}
             ${{ env.DMG_PATH }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload private unsigned experimental candidate
+        if: inputs.distribution_mode == 'unsigned-experimental'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: PRIVATE-UNSIGNED-EXPERIMENTAL-Grynvault-Rebalance-${{ inputs.release_tag }}-${{ steps.source.outputs.commit }}
+          path: |
+            ${{ env.UNSIGNED_DMG_PATH }}
+            ${{ env.UNSIGNED_DMG_PATH }}.sha256
+            build/out/Grynvault-Rebalance-${{ inputs.release_tag }}-macOS-universal-UNSIGNED-EXPERIMENTAL.gatekeeper.txt
+            build/out/grynvault-rebalance-${{ inputs.release_tag }}-source.tar.gz
+            build/out/Grynvault-Rebalance-${{ inputs.release_tag }}-source.cdx.json
+            build/out/Grynvault-Rebalance-${{ inputs.release_tag }}-UNSIGNED-PREPARATION-INDEX.txt
           if-no-files-found: error
           retention-days: 7

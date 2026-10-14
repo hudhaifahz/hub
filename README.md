@@ -2,7 +2,12 @@
 > **Grynvault Rebalance is an experimental, independently maintained fork of
 > Alby Hub. It is not an official Alby release.** The first public build is
 > limited to universal macOS and uses a separate application identity and data
-> directory. Back up your wallet before any explicit import or migration.
+> directory. The owner-selected package is intentionally **not Apple Developer
+> ID signed or notarized**, so Gatekeeper is expected to warn or block it. An
+> ad-hoc signature checks bundle integrity but does not identify Grynvault as a
+> trusted publisher. Verify the PGP-signed manifest and SHA-256 before opening,
+> or build from the immutable source tag. Back up your wallet before any
+> explicit import or migration.
 
 See [the usage guide](./docs/grynvault-release/USAGE.md),
 [BUILDING.md](./BUILDING.md), [MIGRATION.md](./MIGRATION.md), and

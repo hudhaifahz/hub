@@ -17,6 +17,7 @@ package.json.md5
 
 build/bin
 build/appicon.png
+build/out
 
 *.log
 

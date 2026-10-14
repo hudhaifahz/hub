@@ -1,6 +1,6 @@
 # Grynvault Rebalance release notes
 
-Status: **PREPARED — NOT SIGNED — NOT PUBLISHED**
+Status: **PREPARED — APPLE SIGNING DECLINED — PGP NOT SIGNED — NOT PUBLISHED**
 
 Grynvault Rebalance adds a fail-closed exact-channel circular rebalance flow to
 Alby Hub. The owner chooses the exact channel sats must leave through and the
@@ -37,9 +37,12 @@ services with their own fees, custody, privacy, and counterparty risks.
 
 ## Initial platform
 
-Universal macOS only. Public availability requires a Grynvault Developer ID
-signature, Apple notarization and stapling, a PGP-signed artifact manifest,
-fresh-download verification, and independent readback of every published URL.
+Universal macOS 15.4 or newer only. The owner-selected package is intentionally
+ad-hoc signed, not Apple Developer ID signed, and not notarized or stapled. Its
+filename and in-image warning say `UNSIGNED-EXPERIMENTAL`; Gatekeeper is expected
+to warn or block it. Public availability still requires a PGP-signed artifact
+manifest, fresh-download verification, and independent readback of every
+published URL.
 
 See `docs/grynvault-release/USAGE.md` for the non-paying quote flow, exact
 confirmation boundary, failure interpretation, and privacy-safe screenshots.

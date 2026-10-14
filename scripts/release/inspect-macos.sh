@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "usage: $0 <app-path> <expected-tag> <expected-source-commit> [--require-developer-id]" >&2
+  echo "usage: $0 <app-path> <expected-tag> <expected-source-commit> [--require-adhoc|--require-developer-id]" >&2
   exit 64
 fi
 
@@ -11,6 +11,7 @@ expected_tag="$2"
 expected_source_commit="$3"
 signing_mode="${4:-}"
 expected_bundle_id="com.grynvault.rebalance"
+expected_macos_minimum="15.4.0"
 expected_ldk_sha="cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd"
 executable_path="${app_path}/Contents/MacOS/Grynvault Rebalance"
 ldk_path="${app_path}/Contents/Frameworks/libldk_node.dylib"
@@ -24,7 +25,7 @@ if [[ ! "$expected_source_commit" =~ ^[a-f0-9]{40}$ ]]; then
   echo "expected source commit must be a 40-character lowercase Git object ID" >&2
   exit 1
 fi
-if [[ -n "$signing_mode" && "$signing_mode" != "--require-developer-id" ]]; then
+if [[ -n "$signing_mode" && "$signing_mode" != "--require-adhoc" && "$signing_mode" != "--require-developer-id" ]]; then
   echo "unsupported signing mode: $signing_mode" >&2
   exit 64
 fi
@@ -38,6 +39,7 @@ done
 
 bundle_id="$(plutil -extract CFBundleIdentifier raw -o - "$plist_path")"
 bundle_name="$(plutil -extract CFBundleName raw -o - "$plist_path")"
+bundle_macos_minimum="$(plutil -extract LSMinimumSystemVersion raw -o - "$plist_path")"
 if [[ "$bundle_id" != "$expected_bundle_id" ]]; then
   echo "unexpected bundle identifier: $bundle_id" >&2
   exit 1
@@ -46,11 +48,30 @@ if [[ "$bundle_name" != "Grynvault Rebalance" ]]; then
   echo "unexpected bundle name: $bundle_name" >&2
   exit 1
 fi
+if [[ "$bundle_macos_minimum" != "$expected_macos_minimum" ]]; then
+  echo "unexpected minimum macOS version: $bundle_macos_minimum" >&2
+  exit 1
+fi
 
 for binary_path in "$executable_path" "$ldk_path"; do
   architectures="$(lipo -archs "$binary_path")"
   if [[ "$architectures" != *arm64* || "$architectures" != *x86_64* ]]; then
     echo "bundle is not universal: $binary_path ($architectures)" >&2
+    exit 1
+  fi
+done
+
+for architecture in x86_64 arm64; do
+  executable_macos_minimum="$(
+    vtool -show-build -arch "$architecture" "$executable_path" |
+      awk '
+        $1 == "cmd" && $2 == "LC_VERSION_MIN_MACOSX" { legacy = 1; next }
+        legacy && $1 == "version" { print $2; exit }
+        $1 == "minos" { print $2; exit }
+      '
+  )"
+  if [[ "$executable_macos_minimum" != "15.4" ]]; then
+    echo "unexpected ${architecture} executable deployment target: ${executable_macos_minimum:-missing}" >&2
     exit 1
   fi
 done
@@ -71,7 +92,7 @@ if [[ "$ldk_install_name" != '@rpath/libldk_node.dylib' ]]; then
 fi
 
 actual_ldk_sha="$(shasum -a 256 "$ldk_path" | awk '{print $1}')"
-if [[ "$signing_mode" != "--require-developer-id" && "$actual_ldk_sha" != "$expected_ldk_sha" ]]; then
+if [[ -z "$signing_mode" && "$actual_ldk_sha" != "$expected_ldk_sha" ]]; then
   echo "embedded LDK digest mismatch: $actual_ldk_sha" >&2
   exit 1
 fi
@@ -95,7 +116,7 @@ if rg -a -l 'com\.getalby\.Alby-?Hub|https://getalby\.com/update/hub' "$app_path
   exit 1
 fi
 
-if [[ "$signing_mode" == "--require-developer-id" ]]; then
+if [[ -n "$signing_mode" ]]; then
   codesign --verify --strict --verbose=2 "$ldk_path"
   codesign --verify --deep --strict --verbose=2 "$app_path"
   codesign -d --entitlements - --xml "$app_path" >"$entitlements_path" 2>/dev/null
@@ -114,29 +135,48 @@ if [[ "$signing_mode" == "--require-developer-id" ]]; then
   done
   signing_details="$(codesign -dv --verbose=4 "$app_path" 2>&1)"
   ldk_signing_details="$(codesign -dv --verbose=4 "$ldk_path" 2>&1)"
-  if grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$signing_details" ||
-    grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$ldk_signing_details"; then
-    echo "public candidate must not use Alby's signing identity" >&2
-    exit 1
-  fi
-  if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signing_details" ||
-    ! grep -Fq 'Authority=Developer ID Application:' <<<"$ldk_signing_details"; then
-    echo "public candidate application or LDK library is missing a Developer ID Application signature" >&2
-    exit 1
-  fi
-  app_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$signing_details")"
-  ldk_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$ldk_signing_details")"
-  if [[ -z "$app_team_identifier" || "$app_team_identifier" == "not set" || "$app_team_identifier" != "$ldk_team_identifier" ]]; then
-    echo "public candidate application and LDK library do not share one signing Team Identifier" >&2
-    exit 1
+  if [[ "$signing_mode" == "--require-adhoc" ]]; then
+    for details in "$signing_details" "$ldk_signing_details"; do
+      if ! grep -Fq 'Signature=adhoc' <<<"$details"; then
+        echo "unsigned experimental candidate is not ad-hoc signed" >&2
+        exit 1
+      fi
+      if grep -Fq 'Authority=' <<<"$details"; then
+        echo "unsigned experimental candidate unexpectedly has a certificate authority" >&2
+        exit 1
+      fi
+      if ! grep -Fq 'TeamIdentifier=not set' <<<"$details"; then
+        echo "unsigned experimental candidate unexpectedly has a Team Identifier" >&2
+        exit 1
+      fi
+    done
+  else
+    if grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$signing_details" ||
+      grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$ldk_signing_details"; then
+      echo "public candidate must not use Alby's signing identity" >&2
+      exit 1
+    fi
+    if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signing_details" ||
+      ! grep -Fq 'Authority=Developer ID Application:' <<<"$ldk_signing_details"; then
+      echo "public candidate application or LDK library is missing a Developer ID Application signature" >&2
+      exit 1
+    fi
+    app_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$signing_details")"
+    ldk_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$ldk_signing_details")"
+    if [[ -z "$app_team_identifier" || "$app_team_identifier" == "not set" || "$app_team_identifier" != "$ldk_team_identifier" ]]; then
+      echo "public candidate application and LDK library do not share one signing Team Identifier" >&2
+      exit 1
+    fi
   fi
 fi
 
 echo "bundle identifier: $bundle_id"
 echo "bundle name: $bundle_name"
+echo "minimum macOS version: $bundle_macos_minimum"
+echo "executable deployment target: 15.4"
 echo "executable architectures: $(lipo -archs "$executable_path")"
 echo "LDK architectures: $(lipo -archs "$ldk_path")"
-if [[ "$signing_mode" == "--require-developer-id" ]]; then
+if [[ -n "$signing_mode" ]]; then
   echo "signed LDK SHA-256: $actual_ldk_sha"
   echo "reviewed unsigned LDK SHA-256: $expected_ldk_sha (verified before signing)"
 else
@@ -144,4 +184,7 @@ else
 fi
 echo "embedded tag: $expected_tag"
 echo "embedded source commit: $expected_source_commit"
+if [[ "$signing_mode" == "--require-adhoc" ]]; then
+  echo "signing identity: ad-hoc only (no publisher identity, notarization, or Gatekeeper trust)"
+fi
 echo "bundle inspection passed"
