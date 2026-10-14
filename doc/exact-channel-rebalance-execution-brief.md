@@ -63,20 +63,23 @@ milestones.
 ## Current resume checkpoint
 
 The independent release branch is committed and pushed at
-`28e4f42b32f7b1401304b345ba36186d82c8cb8d`. GitHub Actions run
-`38485346043` passed the source, frontend, Go, race, vet, vulnerability, and
-secret checks on the supported macOS runner. Its independently named universal
-macOS preflight bundle passed exact-commit inspection with the reviewed LDK
-library hash, isolated bundle identifier/data directory/updater, and exact
-embedded source hash. The three prepared upstream bases remain unchanged at
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. GitHub Actions run
+`38494419778` passed the source, frontend, Go, race, vet, vulnerability, secret,
+and release-script checks on the supported macOS runner. Its independently
+named universal macOS preflight bundle passed exact-commit inspection with the
+reviewed LDK library hash, isolated bundle identifier/data directory/updater,
+and exact embedded source hash. Three complete CodeRabbit passes against base
+`1fb6c8cd0fcb2fbee48c888c6274e2659d74c169` produced two findings, then one
+finding, then zero findings. Every finding was reproduced, fixed, regression
+tested, committed, and remotely checked; CodeRabbit remains review input, not
+an independent audit. The three prepared upstream bases remain unchanged at
 Hub `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node
 `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go
 `5ba434093284d0dc8291e45d2a3d2c1c5a879698`. The preflight remains unsigned
-and was not installed or launched. CodeRabbit review is still blocked on
-owner-controlled login. Resume by completing that review, then stop at the
-owner-controlled signing prerequisites and immutable release-tag decision. Do
-not sign, notarize, install, publish, deploy, change DNS, open public pull
-requests, or move sats at this checkpoint.
+and was not installed or launched. Resume only at the owner-controlled signing
+prerequisites and immutable release-tag decision. Do not create or push the
+proposed tag, sign, notarize, install, publish, deploy, change DNS, open public
+pull requests, or move sats at this checkpoint.
 
 ## Proposed defaults
 

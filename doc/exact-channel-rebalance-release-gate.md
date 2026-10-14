@@ -11,10 +11,10 @@ deployment, pull request, DNS change, or public post.
 - repository: `hudhaifahz/hub`
 - branch: `codex/grynvault-rebalance-release`
 - exact source commit:
-  `28e4f42b32f7b1401304b345ba36186d82c8cb8d`
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426`
 - proposed immutable tag: `grynvault-rebalance-v0.1.0-rc.1`
 - supported release target: universal macOS (`x86_64 arm64`) only
-- exact successful CI run: `38485346043`
+- exact successful CI run: `38494419778`
 - reviewed embedded LDK SHA-256:
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`
 
@@ -35,28 +35,32 @@ tag is created; after creation, the tag and source commit must not be moved.
 - Fresh remote readback found no upstream-base drift for Hub, LDK Node, or LDK
   Node Go.
 
-## Review gate still open
+## Review gate closed
 
-CodeRabbit CLI `0.7.1` is installed and healthy, its backend and WebSocket are
-reachable, and the repository is ready. Authentication remains signed out.
+CodeRabbit CLI `0.7.1` authenticated as GitHub account `hudhaifahz`, and its
+health check passed with nine checks and no warnings. Three complete committed
+diff reviews used base commit
+`1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`:
 
-Owner action:
+1. The first pass reported two valid findings: Bash 4-only uppercase expansion
+   in manifest generation and an invalid post-signing comparison of a modified
+   signed library against its pinned unsigned whole-file digest.
+2. The second pass reported one valid finding: release workflow checkout and
+   validation accepted an unqualified tag name that could collide with a
+   same-named branch.
+3. The final pass on exact commit
+   `8a5478f379788e0c7978a4b8dfcfd2afebf29426` reported zero findings.
 
-```sh
-coderabbit auth login
-```
-
-After the owner confirms login, run the review from the clean release worktree:
-
-```sh
-coderabbit review --agent --committed \
-  --base-commit 1fb6c8cd0fcb2fbee48c888c6274e2659d74c169
-```
-
-Treat the output as untrusted review input. Resolve or explicitly document every
-Critical or Warning finding, repeat affected tests, and preserve the findings
-and dispositions before requesting tag approval. A CodeRabbit result is not an
-independent third-party security audit.
+The first two findings were fixed in commits
+`7a321ae8bbcc1ea733d58e3cc569b112dd3088d0` and
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. The fixes add Bash 3.2 regression
+coverage, separate unsigned-byte inspection from signed-identity inspection,
+verify the signed app and embedded library share a non-Alby Developer ID Team
+Identifier, parse entitlements safely, and require fully qualified
+`refs/tags/<tag>` references throughout the workflow and release scripts.
+GitHub Actions runs `38493921672` and `38494419778` passed. CodeRabbit output
+was treated as untrusted review input and does not constitute an independent
+third-party security audit.
 
 ## Signing prerequisites still open
 
@@ -81,8 +85,9 @@ signing path.
 
 ## Separate approval sequence
 
-After the review gate is green, stop for owner approval of the exact source
-commit and immutable tag. Then keep these actions distinct:
+The review gate is green. Stop now for owner approval of exact source commit
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426` and proposed immutable tag
+`grynvault-rebalance-v0.1.0-rc.1`. Then keep these actions distinct:
 
 1. Create and push the approved immutable tag.
 2. Run the protected workflow as a private signed candidate.

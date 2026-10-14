@@ -1017,10 +1017,38 @@ Observed:
   `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node remains
   `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go remains
   `5ba434093284d0dc8291e45d2a3d2c1c5a879698`.
-- CodeRabbit CLI `0.7.1` still reports `signed out`; no review was claimed or
-  waived. The next owner action is local `coderabbit auth login`, after which
-  the exact final source head must be reviewed and every Critical or Warning
-  finding resolved or documented before the release-tag gate.
+- CodeRabbit CLI `0.7.1` authenticated as GitHub account `hudhaifahz`; its
+  doctor check passed nine checks with no warnings. Three complete committed
+  diff reviews against base
+  `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169` produced two findings, then one
+  finding, then zero findings. The first pass correctly identified Bash 4-only
+  uppercase expansion in manifest generation and an invalid post-signing
+  whole-file digest comparison against the pinned unsigned LDK library. The
+  second pass correctly identified unqualified release-tag resolution that
+  could collide with a same-named branch. All three were fixed and regression
+  tested; the final pass on exact commit
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426` reported zero findings.
+- Commit `7a321ae8bbcc1ea733d58e3cc569b112dd3088d0` makes manifest generation
+  compatible with macOS Bash 3.2, repeats unsigned-byte inspection immediately
+  before signing, and makes post-signing inspection verify the app and embedded
+  library signatures, their matching non-Alby Team Identifier, and required
+  entitlements without comparing the modified signed library to its unsigned
+  whole-file hash. A separate entitlement-path defect found while verifying
+  this flow was also corrected by reading codesign's XML output and escaping
+  dotted entitlement keys for `plutil`.
+- Commit `8a5478f379788e0c7978a4b8dfcfd2afebf29426` requires fully qualified
+  `refs/tags/<tag>` references for workflow checkout, validation, builds,
+  manifests, and source archives. Its regression creates a branch-only name and
+  proves all three release scripts reject it. GitHub Actions run `38493921672`
+  passed the first fix, and run `38494419778` passed the exact final commit.
+- A final unsigned universal preflight built from exact commit
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426` under temporary local tag
+  `preflight-8a5478f3`. It passed product and bundle identity, `x86_64 arm64`
+  executable and library slices, runtime-path, embedded source/tag metadata,
+  valid Info.plist, and reviewed LDK SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+  The temporary tag was deleted, and the bundle was not installed, launched,
+  signed, notarized, stapled, or published.
 - Packaging exposed and corrected four build-system issues before signing:
   duplicate per-architecture runtime-path output, generated Wails bindings in
   formatting scope, retained build output, and Wails ad-hoc resigning of the

@@ -1,8 +1,8 @@
 # Exact-channel rebalance release plan
 
-Status: owner-build acceptance is complete; isolated upstream preparation and
-security verification are in progress; public release is blocked on the gates
-recorded below
+Status: owner-build acceptance, isolated upstream preparation, and unsigned
+source/preflight security verification are complete; public release is blocked
+on the owner-controlled gates recorded below
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
@@ -16,7 +16,7 @@ owner review.
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                                                                                 | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                                             |
 | Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                    | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                          |
-| Independent preflight | Unsigned universal bundle built from exact clean commit `28e4f42b32f7b1401304b345ba36186d82c8cb8d`                                                                                    | Identity and embedded-code inspection pass; it was not installed or launched and is not a public release candidate.                |
+| Independent preflight | Unsigned universal bundle built from exact clean commit `8a5478f379788e0c7978a4b8dfcfd2afebf29426`                                                                                    | Identity and embedded-code inspection pass; it was not installed or launched and is not a public release candidate.                 |
 | GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                           | There is no public binary, immutable release page, signed manifest, or public download URL.                                         |
 | Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` stages the locked Portal 04 card with 0 High/Critical audit findings | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates. |
 | Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture                                                                  | Temporary acceptance is complete, but canonical DNS and public launch are not.                                                      |
@@ -101,10 +101,10 @@ separately audited local companion/upstream capability and a new threat model.
   `7054c902890772f34e1d1a9533ec5463862d2e45` on
   `codex/rebalance-portal-security`.
 - Independent Grynvault release-preparation head:
-  `28e4f42b32f7b1401304b345ba36186d82c8cb8d` on
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426` on
   `codex/grynvault-rebalance-release`; the owner-fork remote readback matches.
-  GitHub Actions run `38485346043` passed the complete supported-macOS check
-  matrix at that exact head. Product-code head
+  GitHub Actions run `38494419778` passed the complete supported-macOS check
+  matrix and release-script regressions at that exact head. Product-code head
   `c41a5e1773030da5fccc174386edc8730423b4a3` also passed run `38483312899`.
 - Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
@@ -227,7 +227,7 @@ remained disabled until its exact confirmation was supplied.
       `govulncheck`.
 - [x] Run Rust tests, Clippy, formatting, and dependency advisory checks.
 - [x] Run frontend lint, type checking, production builds, and dependency audit.
-- [ ] Run CodeRabbit only after the secret scan; treat its output as untrusted
+- [x] Run CodeRabbit only after the secret scan; treat its output as untrusted
       review input and resolve all Critical and Warning findings.
 - [x] Inspect the unsigned exact-commit preflight application bundle, dynamic
       libraries, rpaths, entitlements, updater configuration, embedded commit
