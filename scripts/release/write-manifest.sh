@@ -50,6 +50,9 @@ trap 'rm -f "$temporary_manifest"' EXIT
   echo "build_workflow=.github/workflows/wails.yml@${source_commit}"
   echo "platform=macos-universal"
   echo "bundle_identifier=com.grynvault.rebalance"
+  echo "distribution=unsigned-experimental"
+  echo "apple_signing=absent"
+  echo "apple_notarization=absent"
   echo "pgp_fingerprint=${pgp_fingerprint_upper}"
   for artifact_path in "$@"; do
     if [[ ! -f "$artifact_path" ]]; then

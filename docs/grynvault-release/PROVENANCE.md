@@ -1,7 +1,7 @@
 # Grynvault Rebalance provenance
 
 Status: preparation record; final release values are appended only after the
-immutable tag, signing ceremony, and fresh-download verification.
+immutable tag, owner-controlled PGP signing, and fresh-download verification.
 
 ## Source chain
 
@@ -29,8 +29,17 @@ inserted into the release manifest from the exact immutable tag.
 - bundle identifier: `com.grynvault.rebalance`
 - data directory name: `grynvault-rebalance`
 - single-instance lock port: `21421`
-- initial platform: universal macOS only
+- initial platform: universal macOS 15.4 or newer only
 - canonical update and documentation origin: `https://rebalance.grynvault.com/`
+- distribution class: `unsigned-experimental`
+- Apple Developer ID signature: absent by owner decision
+- Apple notarization and stapling: absent by owner decision
+- application signature: ad-hoc bundle-integrity signature only
+
+The application and native library are inspected before and after ad-hoc
+signing. The latter changes their bytes, so the pinned raw LDK digest above is
+verified before signing and recorded alongside the signed-byte artifact hashes.
+Ad-hoc signing does not establish publisher identity or Gatekeeper trust.
 
 ## Brand asset
 

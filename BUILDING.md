@@ -25,6 +25,13 @@ they receive their own complete acceptance evidence.
 - Yarn: `1.22.22`
 - Wails CLI: `v2.16.0`
 
+The release script explicitly links Apple's `UniformTypeIdentifiers` framework
+for both macOS architectures. A fresh x86_64 link otherwise leaves Wails'
+`UTType` reference unresolved on current SDKs.
+It also pins the application and CGO deployment target to macOS 15.4, matching
+the newest minimum declared by the inherited Bark native objects. Older macOS
+versions are not represented as supported by this experimental package.
+
 The final source commit and immutable tag are recorded in the signed release
 manifest. A moving branch name is never sufficient release provenance.
 Public source artifacts contain the clean tagged tree. Patch-series attachments
@@ -59,9 +66,9 @@ yarn build:wails
 yarn audit --groups dependencies
 ```
 
-The inherited Bark deployment-target linker warnings are a documented baseline
-residual. They do not change a test exit status and are not silently
-reclassified as an application vulnerability.
+Any deployment-target linker warning is a release failure. The build and
+bundle metadata must remain aligned at macOS 15.4 unless every native
+dependency is rebuilt and re-tested for an older supported target.
 
 ## Release build
 
@@ -74,14 +81,43 @@ scripts/release/inspect-macos.sh \
   "build/bin/Grynvault Rebalance.app" <immutable-tag> <source-commit>
 ```
 
-This produces an unsigned internal candidate unless the owner separately uses
-the protected signing workflow. Do not distribute an unsigned or ad-hoc signed
-candidate as a public release.
+This produces an unsigned internal candidate. To produce the owner-selected,
+explicitly unsigned experimental disk image after the raw-byte inspection:
 
-## Owner-controlled signing gate
+```bash
+scripts/release/package-unsigned-macos.sh \
+  "build/bin/Grynvault Rebalance.app" \
+  <immutable-tag> <source-commit> build/out
+```
 
-Developer ID signing, notarization, stapling, and PGP manifest signing require
-separate owner approval and owner-controlled credentials. The GitHub workflow is
-manual-only and cannot use Alby's signing identity. Its `build_release` input
-must be explicitly enabled and the protected Grynvault Apple secrets must be
-present. Never print, export, or commit private signing material.
+The package script ad-hoc signs the native library and application for local
+bundle-integrity checks, embeds a `README-UNSIGNED.txt` warning in the disk
+image, verifies the mounted result, records the local Gatekeeper assessment,
+and names the artifact `UNSIGNED-EXPERIMENTAL`. It does not create an Apple
+publisher identity, notarization ticket, or Gatekeeper-accepted release.
+
+Generate the pinned CycloneDX source SBOM with Syft 1.41.1:
+
+```bash
+scripts/release/generate-sbom.sh \
+  build/out/Grynvault-Rebalance-<immutable-tag>-source.cdx.json
+```
+
+The SBOM generator fails unless it finds both Go and npm components and rejects
+an output containing the local checkout path.
+
+## Owner-controlled authenticity and publication gate
+
+The owner has deliberately declined Apple Developer ID signing, notarization,
+and stapling for this release path. Those capabilities remain isolated as an
+unused private workflow mode and cannot use Alby's signing identity.
+
+PGP manifest signing still requires separate owner approval and an
+owner-controlled key. The manual GitHub workflow only produces a private
+candidate artifact; it never publishes a GitHub release. Never print, export,
+or commit private signing material. Public availability requires a detached
+PGP signature, owner approval, and fresh-download verification of every URL.
+
+Do not disable Gatekeeper globally. A user who verifies the manifest and elects
+to accept unsigned software may use macOS's per-application Open/Open Anyway
+flow. Building from the immutable tag is the safer option.

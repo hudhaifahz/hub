@@ -38,11 +38,23 @@ The release script now deduplicates paths before mutation; a fresh exact-commit
 candidate must pass bundle inspection before the signing gate can open.
 Generated Wails bindings are excluded from source formatting checks, and the
 release build fails if packaging changes any tracked file.
+The clean-checkout release test also found that platform-specific Wails utility
+files and generated bindings must exist before TypeScript validation. A
+bindings-only build target now creates them without claiming the desktop port,
+opening a wallet, or starting the Hub service; the release then runs
+`prepare:wails` before lint and type checking instead of relying on files left
+behind by an earlier developer session.
+The same clean universal build exposed an implicit local linker dependency: the
+x86_64 target could resolve Wails' `UTType` reference only when the shell had
+previously supplied the framework flag. The release script now explicitly links
+Apple's `UniformTypeIdentifiers` framework for both architectures.
 Wails is also required to clean its generated binary directory, skip module-file
 rewrites, and remove local build paths before compiling a candidate.
 Because Wails applies an ad-hoc signature to the packaged native library, the
-release script restores the reviewed pinned LDK bytes after packaging and before
-the owner-controlled Developer ID signing step.
+release script restores the reviewed pinned LDK bytes after packaging. The
+unsigned experimental packager verifies those raw bytes first, then applies an
+explicit ad-hoc signature to both the library and application and verifies the
+mounted disk image.
 Bundle inspection normalizes identical per-architecture Mach-O metadata before
 requiring one exact runtime path and one exact native-library install name.
 
@@ -67,16 +79,28 @@ The separately reported `github.com/klauspost/compress/s2` advisory was removed
 by updating the indirect dependency to 1.18.7. These residual module/package
 notices are recorded rather than misrepresented as reachable findings.
 
-## Known build warning
+## macOS compatibility floor
 
 The inherited Bark macOS static library was built with a macOS 15.4 deployment
-target while the application link target is macOS 15.0. The linker warns but
-the builds and tests succeed. This must remain visible in candidate evidence and
-be re-evaluated before broadening the supported macOS range.
+target. The application CGO flags, linked executable, and bundle metadata are
+therefore pinned to macOS 15.4 rather than advertising an older unverified
+target. Compatibility below 15.4 requires rebuilding and testing every native
+dependency and is outside this release boundary.
+
+## Known distribution risk
+
+The owner has declined Apple Developer ID signing, notarization, and stapling.
+The resulting package has no Apple-verifiable publisher identity and Gatekeeper
+is expected to warn or block it. Ad-hoc signing detects some post-signing bundle
+changes but is not an authenticity guarantee. Release filenames, the in-image
+warning, provenance, checksum index, and documentation must never imply Apple
+trust. PGP manifest signing and independently verified hashes remain mandatory
+before any public download is approved.
 
 ## Gates still closed
 
-This review does not authorize tagging, Developer ID signing, notarization,
-stapling, installation against a live wallet, a public download, DNS changes,
-an upstream pull request, or any Lightning value movement. Those steps require
-their separate owner and acceptance gates.
+This review does not authorize a new immutable tag, PGP signing, installation
+against a live wallet, a public download, DNS changes, an upstream pull request,
+or any Lightning value movement. Those steps require their separate owner and
+acceptance gates. Apple signing and notarization are intentionally omitted from
+the selected path rather than treated as pending approvals.

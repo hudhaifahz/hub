@@ -32,13 +32,30 @@ if [[ "$(node --version)" != v22.* ]]; then
   echo "Node.js 22.x is required for a release build" >&2
   exit 1
 fi
+if ! command -v wails >/dev/null 2>&1 || [[ "$(wails version | head -n 1)" != "v2.16.0" ]]; then
+  echo "Wails CLI v2.16.0 is required for a release build" >&2
+  exit 1
+fi
 
 source_url="https://github.com/hudhaifahz/hub/commit/${source_commit}"
 export VITE_GRYNVAULT_SOURCE_URL="$source_url"
 
+# Bark's shipped macOS static libraries declare a 15.4 deployment target. Keep
+# the application and all CGO compilation/linking at that same conservative
+# floor instead of allowing Wails to advertise an older, unverified target.
+export MACOSX_DEPLOYMENT_TARGET=15.4
+export CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=15.4"
+export CGO_CXXFLAGS="${CGO_CXXFLAGS:-} -mmacosx-version-min=15.4"
+export CGO_LDFLAGS="${CGO_LDFLAGS:-} -framework UniformTypeIdentifiers -mmacosx-version-min=15.4"
+
+mkdir -p frontend/dist
+touch frontend/dist/tmp
+wails generate module -tags "wails" -nocolour
+
 (
   cd frontend
   yarn install --frozen-lockfile
+  yarn prepare:wails
   yarn lint:js
   yarn tsc:compile
   yarn format
@@ -52,7 +69,7 @@ fi
 mkdir -p build
 cp appicon.png build/appicon.png
 
-go run github.com/wailsapp/wails/v2/cmd/wails@v2.16.0 build \
+wails build \
   -clean \
   -m \
   -nosyncgomod \
@@ -61,7 +78,7 @@ go run github.com/wailsapp/wails/v2/cmd/wails@v2.16.0 build \
   -webview2 embed \
   -o "Grynvault Rebalance" \
   -tags "wails" \
-  -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -extldflags '-Wl,-headerpad_max_install_names'"
+  -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -extldflags '-Wl,-headerpad_max_install_names -framework UniformTypeIdentifiers'"
 
 if [[ -n "$(git status --porcelain=v1 --untracked-files=no)" ]]; then
   echo "release build changed tracked files in the tagged checkout" >&2
@@ -89,4 +106,4 @@ chmod +x "$executable_path"
 echo "unsigned internal candidate: ${app_path}"
 echo "source commit: ${source_commit}"
 echo "source URL: ${source_url}"
-echo "public distribution remains blocked on Developer ID signing, notarization, stapling, manifest signing, and fresh-download verification"
+echo "the owner-selected unsigned experimental path requires explicit packaging, PGP manifest signing, publication approval, and fresh-download verification"

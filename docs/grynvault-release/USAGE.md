@@ -69,6 +69,22 @@ route is not retried through different channels.
 The hosted Grynvault companion is informational only. It cannot connect to a
 wallet, find a live route, quote, sign, pay, or rebalance.
 
+## Installing the experimental macOS package
+
+The packaged application requires macOS 15.4 or newer. Older systems are not a
+supported target for this release.
+
+The downloadable macOS package is intentionally not Apple Developer ID signed
+or notarized. Its filename includes `UNSIGNED-EXPERIMENTAL`, the disk image
+contains `README-UNSIGNED.txt`, and Gatekeeper is expected to warn or block it.
+
+Before opening it, verify the DMG SHA-256 against the PGP-signed release
+manifest, verify the manifest with the separately published owner fingerprint,
+and confirm that the embedded source URL points to the immutable release
+commit. Building from the immutable source tag is safer than accepting an
+unsigned binary. Do not disable Gatekeeper globally; if you accept the risk
+after verification, use macOS's per-application Open/Open Anyway flow.
+
 ## Screenshot provenance
 
 The images use the real dialog component and synthetic fixture data. They
