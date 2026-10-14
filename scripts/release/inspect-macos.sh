@@ -71,7 +71,7 @@ if [[ "$ldk_install_name" != '@rpath/libldk_node.dylib' ]]; then
 fi
 
 actual_ldk_sha="$(shasum -a 256 "$ldk_path" | awk '{print $1}')"
-if [[ "$actual_ldk_sha" != "$expected_ldk_sha" ]]; then
+if [[ "$signing_mode" != "--require-developer-id" && "$actual_ldk_sha" != "$expected_ldk_sha" ]]; then
   echo "embedded LDK digest mismatch: $actual_ldk_sha" >&2
   exit 1
 fi
@@ -96,8 +96,9 @@ if rg -a -l 'com\.getalby\.Alby-?Hub|https://getalby\.com/update/hub' "$app_path
 fi
 
 if [[ "$signing_mode" == "--require-developer-id" ]]; then
+  codesign --verify --strict --verbose=2 "$ldk_path"
   codesign --verify --deep --strict --verbose=2 "$app_path"
-  codesign -d --entitlements :- "$app_path" >"$entitlements_path" 2>/dev/null
+  codesign -d --entitlements - --xml "$app_path" >"$entitlements_path" 2>/dev/null
   plutil -lint "$entitlements_path" >/dev/null
   for entitlement in \
     com.apple.security.app-sandbox \
@@ -105,18 +106,28 @@ if [[ "$signing_mode" == "--require-developer-id" ]]; then
     com.apple.security.network.server \
     com.apple.security.files.downloads.read-write \
     com.apple.security.files.user-selected.read-write; do
-    if [[ "$(plutil -extract "$entitlement" raw -o - "$entitlements_path" 2>/dev/null || true)" != "true" ]]; then
+    entitlement_key_path="${entitlement//./\\.}"
+    if [[ "$(plutil -extract "$entitlement_key_path" raw -o - "$entitlements_path" 2>/dev/null || true)" != "true" ]]; then
       echo "required entitlement is missing or false: $entitlement" >&2
       exit 1
     fi
   done
   signing_details="$(codesign -dv --verbose=4 "$app_path" 2>&1)"
-  if grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$signing_details"; then
+  ldk_signing_details="$(codesign -dv --verbose=4 "$ldk_path" 2>&1)"
+  if grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$signing_details" ||
+    grep -Fq 'Authority=Developer ID Application: Alby Inc.' <<<"$ldk_signing_details"; then
     echo "public candidate must not use Alby's signing identity" >&2
     exit 1
   fi
-  if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signing_details"; then
-    echo "public candidate is missing a Developer ID Application signature" >&2
+  if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signing_details" ||
+    ! grep -Fq 'Authority=Developer ID Application:' <<<"$ldk_signing_details"; then
+    echo "public candidate application or LDK library is missing a Developer ID Application signature" >&2
+    exit 1
+  fi
+  app_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$signing_details")"
+  ldk_team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2; exit }' <<<"$ldk_signing_details")"
+  if [[ -z "$app_team_identifier" || "$app_team_identifier" == "not set" || "$app_team_identifier" != "$ldk_team_identifier" ]]; then
+    echo "public candidate application and LDK library do not share one signing Team Identifier" >&2
     exit 1
   fi
 fi
@@ -125,7 +136,12 @@ echo "bundle identifier: $bundle_id"
 echo "bundle name: $bundle_name"
 echo "executable architectures: $(lipo -archs "$executable_path")"
 echo "LDK architectures: $(lipo -archs "$ldk_path")"
-echo "LDK SHA-256: $actual_ldk_sha"
+if [[ "$signing_mode" == "--require-developer-id" ]]; then
+  echo "signed LDK SHA-256: $actual_ldk_sha"
+  echo "reviewed unsigned LDK SHA-256: $expected_ldk_sha (verified before signing)"
+else
+  echo "LDK SHA-256: $actual_ldk_sha"
+fi
 echo "embedded tag: $expected_tag"
 echo "embedded source commit: $expected_source_commit"
 echo "bundle inspection passed"

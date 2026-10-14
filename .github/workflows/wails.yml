@@ -128,6 +128,7 @@ jobs:
           SIGNING_IDENTITY: ${{ secrets.GRYNVAULT_APPLE_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
+          ./scripts/release/inspect-macos.sh "$APP_PATH" "$RELEASE_TAG" "${{ steps.source.outputs.commit }}"
           codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$APP_PATH/Contents/Frameworks/libldk_node.dylib"
           codesign --force --timestamp --options runtime --entitlements build/darwin/entitlements.plist --sign "$SIGNING_IDENTITY" "$APP_PATH"
           ./scripts/release/inspect-macos.sh "$APP_PATH" "$RELEASE_TAG" "${{ steps.source.outputs.commit }}" --require-developer-id

@@ -50,6 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/release/check-source-boundaries.sh
+          ./scripts/release/test-release-scripts.sh
           cd frontend
           yarn prepare:http
           yarn lint:js

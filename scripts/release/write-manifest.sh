@@ -33,6 +33,7 @@ if [[ ! "$pgp_fingerprint" =~ ^[A-Fa-f0-9]{40}$ ]]; then
   echo "PGP fingerprint must contain exactly 40 hexadecimal characters" >&2
   exit 1
 fi
+pgp_fingerprint_upper="$(printf '%s' "$pgp_fingerprint" | tr '[:lower:]' '[:upper:]')"
 
 manifest_directory="$(dirname "$output_manifest")"
 mkdir -p "$manifest_directory"
@@ -48,7 +49,7 @@ trap 'rm -f "$temporary_manifest"' EXIT
   echo "build_workflow=.github/workflows/wails.yml@${source_commit}"
   echo "platform=macos-universal"
   echo "bundle_identifier=com.grynvault.rebalance"
-  echo "pgp_fingerprint=${pgp_fingerprint^^}"
+  echo "pgp_fingerprint=${pgp_fingerprint_upper}"
   for artifact_path in "$@"; do
     if [[ ! -f "$artifact_path" ]]; then
       echo "artifact does not exist: $artifact_path" >&2
