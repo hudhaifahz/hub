@@ -90,7 +90,15 @@ owner has since declined the Apple Developer ID, notarization, and stapling
 path. Commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` prepares an explicitly
 `UNSIGNED-EXPERIMENTAL` DMG path, source archive, CycloneDX 1.6 SBOM, checksum,
 Gatekeeper-rejection evidence, and unsigned-preparation index. A local-only
-test tag was deleted after verification; no new immutable release tag exists.
+test tag was deleted after verification. On 2026-10-14, the owner separately
+approved immutable annotated tag `grynvault-rebalance-v0.1.0-rc.2`; remote Git
+and the GitHub Git-object API read back tag object
+`c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peeled commit
+`29a34b97fdd890f1895ca9827ba0e59f8457f3ee`. The complete unsigned artifact set
+was rebuilt from rc.2 and passed bundle, mounted-image, checksum, SBOM,
+source-archive, and expected Gatekeeper-rejection checks. Final local hashes
+are recorded in `doc/exact-channel-rebalance-release-gate.md`. GitHub still has
+zero releases, and the package was not installed or launched.
 The isolated Portal 04 security branch now shows the unsigned/unnotarized and
 Gatekeeper warnings, macOS 15.4+ floor, PGP-manifest gate, and exact source
 commit; full workspace checks, refreshed audits, secret scans, and desktop/mobile
@@ -101,9 +109,9 @@ prepared and remotely read back at
 dry-run bundle, zero-vulnerability audit, and secret scan passed. Neither source
 update was deployed, and the accepted provider version still serves the older
 unpublished metadata.
-Resume at the separate owner gates for a new immutable rc tag and PGP manifest
-signing. Do not install, publish, deploy, change DNS, open public pull requests,
-or move sats at this checkpoint.
+Resume at the separate owner PGP-key/fingerprint and manifest-signing gate. Do
+not install, publish, deploy, change DNS, open public pull requests, or move sats
+at this checkpoint.
 
 ## Proposed defaults
 

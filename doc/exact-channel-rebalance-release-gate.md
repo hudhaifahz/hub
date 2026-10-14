@@ -1,11 +1,11 @@
 # Exact-channel rebalance release gate
 
-Status: **UNSIGNED PACKAGE PATH VERIFIED — NEW TAG AND PGP SIGNING PENDING — UNPUBLISHED**
+Status: **IMMUTABLE RC.2 AND UNSIGNED ARTIFACT SET VERIFIED — PGP SIGNING PENDING — UNPUBLISHED**
 
 This packet records the exact decision point after non-paying source, package,
-and CI verification. It does not authorize a new immutable tag, PGP signature,
-installation, migration, GitHub release, deployment, pull request, DNS change,
-public post, or Lightning value movement.
+CI, immutable-tag, and final local artifact verification. It does not authorize
+a PGP signature, installation, migration, GitHub release, deployment, pull
+request, DNS change, public post, or Lightning value movement.
 
 ## Current reviewed source candidate
 
@@ -13,6 +13,9 @@ public post, or Lightning value movement.
 - branch: `codex/grynvault-rebalance-release`
 - exact source commit:
   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`
+- immutable annotated tag: `grynvault-rebalance-v0.1.0-rc.2`
+- tag object: `c4270fbaa40a183947562c0460b6e3c466f9a8eb`
+- peeled tag commit: `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`
 - exact successful GitHub Actions run: `38521293804`
 - supported package target: universal macOS 15.4 or newer
 - distribution class: explicitly `UNSIGNED-EXPERIMENTAL`
@@ -24,8 +27,8 @@ public post, or Lightning value movement.
 Historical immutable annotated tag `grynvault-rebalance-v0.1.0-rc.1` has tag
 object `88cd63322c9f842a271571d621bba51393c9e709` and still peels to
 `8a5478f379788e0c7978a4b8dfcfd2afebf29426`. It must never be moved. The
-current package-path commit is newer, so a separately approved new immutable
-tag is required before final artifact construction.
+owner separately approved rc.2 at the newer package-path commit. Both tags are
+immutable and must never be moved.
 
 ## Evidence closed at the current commit
 
@@ -50,11 +53,17 @@ tag is required before final artifact construction.
   created an unmistakably named `UNSIGNED-EXPERIMENTAL` DMG, embedded
   `README-UNSIGNED.txt`, verified the disk image and mounted app, and recorded
   Gatekeeper rejection with `source=no usable signature` and exit status 3.
-- A clean source archive and CycloneDX 1.6 SBOM were created. The SBOM contains
-  1,073 components: 256 Go, 815 npm, and two normalized lockfile components;
-  it contains no local checkout path.
+- A clean source archive and CycloneDX 1.6 SBOM were created from rc.2. The SBOM
+  contains 1,100 components: 283 Go, 815 npm, and two normalized lockfile
+  components; it contains no local checkout path.
 - The local-only test tag `grynvault-unsigned-local-29a34b97` was deleted after
-  verification. No new release tag or GitHub release was created.
+  verification.
+- On 2026-10-14, the owner approved immutable annotated tag
+  `grynvault-rebalance-v0.1.0-rc.2` at the exact reviewed commit. Git and the
+  GitHub Git-object API independently read back tag object
+  `c4270fbaa40a183947562c0460b6e3c466f9a8eb`, peeled commit
+  `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`, and unsigned-tag verification
+  reason `unsigned`, as expected. GitHub still has zero releases.
 - Frontier Crown Portal 04 commit
   `82aff42b327b2609bb4b5783aba79b6ea8bbcba9` adds explicit unsigned,
   unnotarized, Gatekeeper, macOS 15.4+, and PGP-manifest disclosure plus
@@ -69,7 +78,33 @@ tag is required before final artifact construction.
   dependency audit, and secret scan passed. It was not deployed, so the accepted
   provider version remains unchanged.
 
-## Non-release local artifact evidence
+## Final rc.2 local artifact evidence
+
+These artifacts were rebuilt from the immutable rc.2 tag with Node 22.23.3,
+Yarn 1.22.22, Wails 2.16.0, and Syft 1.41.1. They remain local and unpublished.
+The DMG and its mounted application passed bundle, architecture, minimum-macOS,
+embedded-source, updater-boundary, entitlement, ad-hoc-signature, and disk-image
+verification. Gatekeeper rejected the DMG with `source=no usable signature` and
+exit status 3, which is the required result for this unsigned path.
+
+- unsigned experimental DMG: 79,082,856 bytes,
+  `b329d7bec494cfff6b6c4f2865f2aa13e08a11e96726696b869cd0309c6dfe1a`
+- DMG checksum file: 160 bytes,
+  `ab65e3fbd5f9719efb2494aca4c6c9d460871129a9a83bbc802f88ed7293c359`
+- Gatekeeper evidence: 221 bytes,
+  `be4d0f340f2d09aa58fcbe2f8ec2492e10e6b6c43a783406a5cb81c58545b4b0`
+- source archive: 2,495,913 bytes,
+  `71da411e271d033da2a5bcd1be43eccb8e9d3595df3c917b4a346c97d23b002d`
+- CycloneDX 1.6 SBOM: 2,225,015 bytes,
+  `e771bb19bc842a94781a2334cedc070699de0a8400f7e04cc83dab089fe9550c`
+- unsigned preparation index: 1,072 bytes,
+  `250a5d23c9fb9dd37c24f086c375ea4e689e6dcb4958ba67a6f89620c134450a`
+
+The unsigned preparation index records `UNSIGNED_PREPARATION_ONLY`, absent
+Apple signing/notarization, and absent PGP signature. It is evidence, not a
+signed release manifest.
+
+## Historical non-release local artifact evidence
 
 These hashes prove the local test pipeline only. They are not final public
 release hashes and must not be placed on the portal as downloads:
@@ -111,12 +146,12 @@ rechecked only when the owner chooses a signing path.
 
 1. **Complete:** verify and push the unsigned-package source commit and pass its
    exact GitHub CI run.
-2. **Owner immutable-tag gate:** approve a new tag, expected to be
-   `grynvault-rebalance-v0.1.0-rc.2`, at exact commit
-   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` or at a later exact reviewed
-   commit if CodeRabbit or CI causes another fix. Never move rc.1.
-3. Rebuild the full unsigned artifact set from that exact immutable tag and
-   replace all local-test hashes with final hashes.
+2. **Complete:** the owner approved immutable annotated tag
+   `grynvault-rebalance-v0.1.0-rc.2` at exact commit
+   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`; remote Git and GitHub object
+   readback match. Never move rc.1 or rc.2.
+3. **Complete:** rebuild and verify the full unsigned artifact set from rc.2;
+   final local artifact hashes are recorded above.
 4. **Owner PGP gate:** select the public key/fingerprint and authorize detached
    signing of the final manifest through an owner-controlled signer.
 5. Verify the PGP signature, every artifact hash, explicit unsigned warnings,
