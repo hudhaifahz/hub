@@ -1,8 +1,9 @@
 # Exact-channel rebalance release plan
 
-Status: owner-build acceptance, isolated upstream preparation, and unsigned
-source/preflight security verification are complete; public release is blocked
-on the owner-controlled gates recorded below
+Status: owner-build acceptance, isolated upstream preparation, unsigned
+source/preflight security verification, and immutable release tagging are
+complete; signing and public release remain blocked on the owner-controlled
+gates recorded below
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
@@ -14,9 +15,9 @@ owner review.
 
 | Surface               | Observed state                                                                                                                                                                        | Release meaning                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks                                                                                                                                 | Reviewable source exists, but no immutable release tag or upstream PR chain exists yet.                                             |
+| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks; immutable tag `grynvault-rebalance-v0.1.0-rc.1` peels to exact commit `8a5478f379788e0c7978a4b8dfcfd2afebf29426`               | Reviewable, tagged source exists, but no signed package, GitHub release, or upstream PR chain exists yet.                           |
 | Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                    | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                          |
-| Independent preflight | Unsigned universal bundle built from exact clean commit `8a5478f379788e0c7978a4b8dfcfd2afebf29426`                                                                                    | Identity and embedded-code inspection pass; it was not installed or launched and is not a public release candidate.                 |
+| Independent preflight | Unsigned universal bundles built from exact clean commit and immutable tag `grynvault-rebalance-v0.1.0-rc.1`                                                                          | Identity and embedded-code inspection pass; neither was installed or launched, and neither is a public release candidate.           |
 | GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                           | There is no public binary, immutable release page, signed manifest, or public download URL.                                         |
 | Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` stages the locked Portal 04 card with 0 High/Critical audit findings | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates. |
 | Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture                                                                  | Temporary acceptance is complete, but canonical DNS and public launch are not.                                                      |
@@ -299,7 +300,7 @@ Prepare three coordinated contributions:
 
 ### Release artifacts
 
-- [ ] Tag one immutable release candidate on the owner fork.
+- [x] Tag one immutable release candidate on the owner fork.
 - [x] Build and inspect an unsigned preflight from a clean exact commit using
       pinned toolchain and dependency versions. Repeat from the immutable release
       tag before signing.
@@ -536,7 +537,10 @@ Implementation evidence on 2026-10-13:
 - [x] Prepare and verify the product name, bundle identifier, icon, data
       directory, updater policy, universal-macOS platform matrix, and
       migration/rollback UX. Public release approval remains separate.
-- [ ] Make a clean release tag and build all artifacts from that tag.
+- [x] Make a clean release tag and build and inspect the unsigned application
+      from that tag.
+- [ ] Build the signed application archive, tagged source archive, manifest,
+      SBOM, and provenance artifacts from that immutable tag.
 - [ ] Obtain an owner-controlled Developer ID signing path and PGP signing key;
       keep their private material outside source, logs, and chat.
 - [ ] Sign, notarize, staple, hash, manifest, PGP-sign, and verify from a fresh

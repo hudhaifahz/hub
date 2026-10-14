@@ -1,10 +1,11 @@
 # Exact-channel rebalance release gate
 
-Status: **PREPARED — NOT AUTHORIZED — NOT TAGGED — NOT SIGNED**
+Status: **TAGGED — UNSIGNED — UNPUBLISHED**
 
 This packet records the exact decision point after non-paying source and bundle
-verification. It does not authorize a tag, signing workflow, release, install,
-deployment, pull request, DNS change, or public post.
+verification and the separately approved immutable tag. It does not authorize
+a signing workflow, release, install, deployment, pull request, DNS change, or
+public post.
 
 ## Reviewed source candidate
 
@@ -12,15 +13,19 @@ deployment, pull request, DNS change, or public post.
 - branch: `codex/grynvault-rebalance-release`
 - exact source commit:
   `8a5478f379788e0c7978a4b8dfcfd2afebf29426`
-- proposed immutable tag: `grynvault-rebalance-v0.1.0-rc.1`
+- approved immutable tag: `grynvault-rebalance-v0.1.0-rc.1`
+- remote annotated-tag object:
+  `88cd63322c9f842a271571d621bba51393c9e709`
 - supported release target: universal macOS (`x86_64 arm64`) only
 - exact successful CI run: `38494419778`
 - reviewed embedded LDK SHA-256:
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`
 
-The proposed tag uses a Grynvault-specific namespace so it cannot be confused
-with upstream Alby Hub tags. The owner may choose a different tag before any
-tag is created; after creation, the tag and source commit must not be moved.
+The tag uses a Grynvault-specific namespace so it cannot be confused with
+upstream Alby Hub tags. Git and GitHub API readback both show that the remote
+annotated tag peels to exact commit
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. The tag and source commit must not
+be moved.
 
 ## Evidence already closed
 
@@ -30,10 +35,16 @@ tag is created; after creation, the tag and source commit must not be moved.
 - A local unsigned preflight built from the exact commit and passed product
   identity, bundle identity, architecture, runtime-path, embedded-source,
   embedded-library, and Info.plist inspection.
+- A second unsigned preflight built directly from immutable tag
+  `grynvault-rebalance-v0.1.0-rc.1` passed the same inspection. Its embedded tag
+  is the immutable tag, its embedded source commit is the exact reviewed
+  commit, and its universal LDK library retains the pinned unsigned SHA-256.
 - The preflight was not installed, launched, signed, notarized, stapled, or
-  published. Its temporary local preflight tag was deleted.
+  published. The earlier temporary local preflight tag was deleted.
 - Fresh remote readback found no upstream-base drift for Hub, LDK Node, or LDK
   Node Go.
+- GitHub still reports zero releases, and the tag push triggered no signing or
+  publication workflow.
 
 ## Review gate closed
 
@@ -85,12 +96,15 @@ signing path.
 
 ## Separate approval sequence
 
-The review gate is green. Stop now for owner approval of exact source commit
-`8a5478f379788e0c7978a4b8dfcfd2afebf29426` and proposed immutable tag
-`grynvault-rebalance-v0.1.0-rc.1`. Then keep these actions distinct:
+The review gate is green, and the owner separately approved exact source commit
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426` and immutable tag
+`grynvault-rebalance-v0.1.0-rc.1`. Keep the remaining actions distinct:
 
-1. Create and push the approved immutable tag.
-2. Run the protected workflow as a private signed candidate.
+1. **Complete:** create, push, and independently read back the approved
+   immutable tag.
+2. **Owner signing gate:** establish the owner-controlled Developer ID,
+   notarization, and PGP paths, then explicitly authorize the protected workflow
+   as a private signed candidate.
 3. Inspect Developer ID signing, notarization, stapling, Gatekeeper acceptance,
    hashes, manifest, PGP signature, and clean-profile behavior.
 4. Test clean installation and migration only with owner-approved copies and a

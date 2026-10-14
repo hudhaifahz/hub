@@ -1068,3 +1068,43 @@ Consequence:
   PRs, release publication, canonical DNS, Portal 04 deployment, Nostr signing,
   Stacker News submission, live-wallet migration, and all Lightning value
   movement remain separately gated.
+
+### 2026-10-13 — Immutable release tag approved and verified
+
+Observed:
+
+- The owner explicitly approved creating and pushing immutable annotated tag
+  `grynvault-rebalance-v0.1.0-rc.1` at exact reviewed commit
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426`. Immediately before creation, the
+  local and owner-fork branch heads matched that commit, the source tree was
+  clean, the tag was absent locally and remotely, and GitHub Actions run
+  `38494419778` still reported `completed` / `success` for that exact SHA.
+- The first push command did not reach GitHub because an ambiguous shell
+  expansion produced an invalid local refspec. The newly created local tag was
+  preserved, verified to peel to the approved commit, and GitHub was verified
+  to have no tag before retry. The retry used explicit
+  `refs/tags/<tag>:refs/tags/<tag>` syntax and succeeded.
+- Independent Git readback returned remote annotated-tag object
+  `88cd63322c9f842a271571d621bba51393c9e709` and peeled commit
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426`. GitHub's Git-object API returned
+  the same tag name, tag-object type, object SHA, and target commit.
+- A fresh unsigned universal application built directly from immutable tag
+  `grynvault-rebalance-v0.1.0-rc.1`. Inspection passed product name
+  `Grynvault Rebalance`, bundle identifier `com.grynvault.rebalance`, both
+  `x86_64` and `arm64` executable and LDK slices, required runtime path,
+  embedded immutable tag, embedded exact source commit, valid Info.plist, and
+  reviewed LDK SHA-256
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+  The previously documented Bark deployment-target warnings remained unchanged.
+- GitHub reported zero releases after the tag push, and the actions-run list
+  showed no signing or publication workflow triggered by the tag. The unsigned
+  bundle was not installed, launched, archived for distribution, signed,
+  notarized, stapled, or published.
+
+Consequence:
+
+- The immutable-tag and unsigned tag-build gates are closed. The next action is
+  the explicit owner signing gate: establish owner-controlled Developer ID,
+  notarization, and PGP paths before authorizing the protected private-candidate
+  workflow. Publication, installation, migration, DNS, Portal 04, upstream PRs,
+  Nostr, Stacker News, and all Lightning value movement remain separately gated.

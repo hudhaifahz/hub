@@ -76,10 +76,14 @@ an independent audit. The three prepared upstream bases remain unchanged at
 Hub `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node
 `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go
 `5ba434093284d0dc8291e45d2a3d2c1c5a879698`. The preflight remains unsigned
-and was not installed or launched. Resume only at the owner-controlled signing
-prerequisites and immutable release-tag decision. Do not create or push the
-proposed tag, sign, notarize, install, publish, deploy, change DNS, open public
-pull requests, or move sats at this checkpoint.
+and was not installed or launched. The owner approved immutable annotated tag
+`grynvault-rebalance-v0.1.0-rc.1`; remote tag object
+`88cd63322c9f842a271571d621bba51393c9e709` independently peels to the exact
+release commit. A fresh unsigned build directly from that tag passed the same
+identity, architecture, runtime-path, embedded-source, Info.plist, and pinned
+LDK inspection. Resume only at the owner-controlled Developer ID/notarization
+and PGP signing prerequisites. Do not sign, notarize, install, publish, deploy,
+change DNS, open public pull requests, or move sats at this checkpoint.
 
 ## Proposed defaults
 
