@@ -1176,3 +1176,39 @@ Consequence:
   owner-controlled PGP manifest-signing action. Publication, installation,
   migration, DNS, Portal 04, upstream PRs, Nostr, Stacker News, and all
   Lightning value movement remain separately gated.
+
+### 2026-10-13 — Unsigned portal and companion metadata staged
+
+Observed:
+
+- Frontier Crown Portal 04 content commit
+  `82aff42b327b2609bb4b5783aba79b6ea8bbcba9` makes the unsigned/unnotarized
+  distribution, expected Gatekeeper warning or block, macOS 15.4+ floor,
+  PGP-manifest authenticity gate, non-Alby status, and exact Hub source visible.
+  It adds regression coverage and fresh desktop/mobile screenshots. Full
+  workspace lint, 117 executed tests, dry-run Worker/server/web builds, refreshed
+  complete and production audits with zero High/Critical findings, committed-diff
+  and directory secret scans, and 1,440/375 CSS-pixel browser readback passed.
+  Verification documentation head
+  `7645db5a813a0c28926b4e780078aa76adbe5421` was pushed and read back exactly.
+- Companion branch `codex/unsigned-release-metadata` was pushed and read back at
+  `24fc2475c18b5e69559bfd2c757154e30f2afd3c`. It prepares release metadata for
+  Hub commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`, macOS 15.4+,
+  ad-hoc executable signing, no Apple Developer ID/notarization/stapling, and an
+  owner-PGP-signed manifest. Formatting, lint, generated-type checks, three
+  TypeScript checks, all 13 Worker-runtime tests, the dry-run bundle, an audit
+  with zero vulnerabilities, and directory/commit secret scans passed under
+  supported Node 24.14.1.
+- No portal preview, production portal, companion provider version, canonical
+  DNS, release, package, wallet, or Lightning state changed. The accepted
+  provider continues to serve its earlier unpublished metadata until a separate
+  deployment approval and new external acceptance record.
+
+Consequence:
+
+- The public-facing source layers now agree with the owner's no-Apple-signing
+  decision without implying that anything is downloadable or live. The next
+  release action remains the separate owner approval for a new immutable rc tag,
+  followed later by the separate owner-controlled PGP signing gate. Deployment,
+  publication, installation, migration, upstream PRs, Nostr, Stacker News, and
+  all Lightning value movement remain separately gated.

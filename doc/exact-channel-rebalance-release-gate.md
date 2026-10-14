@@ -55,6 +55,19 @@ tag is required before final artifact construction.
   it contains no local checkout path.
 - The local-only test tag `grynvault-unsigned-local-29a34b97` was deleted after
   verification. No new release tag or GitHub release was created.
+- Frontier Crown Portal 04 commit
+  `82aff42b327b2609bb4b5783aba79b6ea8bbcba9` adds explicit unsigned,
+  unnotarized, Gatekeeper, macOS 15.4+, and PGP-manifest disclosure plus
+  desktop/mobile screenshots. Documentation head
+  `7645db5a813a0c28926b4e780078aa76adbe5421` records successful full workspace
+  checks, refreshed audits, secret scans, responsive browser readback, and exact
+  remote SHA. No preview or production deployment occurred.
+- Companion branch `codex/unsigned-release-metadata` was pushed and read back at
+  `24fc2475c18b5e69559bfd2c757154e30f2afd3c`. It prepares the same explicit
+  signing/platform/source metadata; formatting, lint, generated types, all
+  TypeScript checks, 13 Worker-runtime tests, a dry-run bundle, zero-vulnerability
+  dependency audit, and secret scan passed. It was not deployed, so the accepted
+  provider version remains unchanged.
 
 ## Non-release local artifact evidence
 

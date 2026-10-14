@@ -20,8 +20,8 @@ owner review.
 | Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                                                                                       | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                                          |
 | Independent preflight | An explicitly `UNSIGNED-EXPERIMENTAL` universal macOS 15.4+ DMG, source archive, CycloneDX SBOM, checksum, Gatekeeper evidence, and unsigned index were built from a local-only tag at `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`                        | All local integrity checks pass; the test tag was deleted, the package was not installed or published, and its hashes are not final release hashes. |
 | GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                                                                                              | There is no public binary, immutable release page, signed manifest, or public download URL.                                                         |
-| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` stages the locked Portal 04 card with 0 High/Critical audit findings                                                                    | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates.                 |
-| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the reviewed fixture                                                                                                                                     | Temporary acceptance is complete, but canonical DNS and public launch are not.                                                                      |
+| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` at `7645db5a813a0c28926b4e780078aa76adbe5421` stages the locked Portal 04 card with explicit unsigned warnings and 0 High/Critical audit findings | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates.                 |
+| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the earlier reviewed fixture, while branch `codex/unsigned-release-metadata` at `24fc2475c18b5e69559bfd2c757154e30f2afd3c` prepares current source/signing metadata | Temporary acceptance is complete, but the metadata update is not deployed and canonical DNS/public launch remain gated.                             |
 | macOS signing         | The owner explicitly declined the Apple Developer ID, notarization, and stapling path                                                                                                                                                                    | The package must remain unmistakably unsigned/unnotarized; Gatekeeper rejection is expected and must not be described as acceptance.                |
 | Manifest signing      | No local PGP secret key is available to the release workflow                                                                                                                                                                                             | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required.                                            |
 | Upstream baseline     | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it                                                                                                                                                           | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation.                                              |
@@ -100,8 +100,12 @@ separately audited local companion/upstream capability and a new threat model.
   `c6d2691dfa80d58391e5271cb583528f0be51a4d` /
   `873833e9364ce693e02e86f129125b712a84d579`.
 - Isolated Frontier Crown security-remediation head:
-  `7054c902890772f34e1d1a9533ec5463862d2e45` on
+  `7645db5a813a0c28926b4e780078aa76adbe5421` on
   `codex/rebalance-portal-security`.
+- Hosted companion unsigned-metadata head:
+  `24fc2475c18b5e69559bfd2c757154e30f2afd3c` on
+  `codex/unsigned-release-metadata`; remote readback matches and no deployment
+  occurred.
 - Independent Grynvault release-preparation head:
   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` on
   `codex/grynvault-rebalance-release`; the owner-fork remote readback matches.
@@ -521,6 +525,13 @@ Implementation evidence on 2026-10-13:
   `0c44a0e` disabled persisted invocation logs and enabled query-string
   redaction before the accepted version was deployed. Real-time operator
   tailing remains an explicit metadata-bearing diagnostic action.
+- companion source branch `codex/unsigned-release-metadata` was later pushed
+  and read back at `24fc2475c18b5e69559bfd2c757154e30f2afd3c`; it reports the
+  reviewed Hub head `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`, macOS 15.4+,
+  ad-hoc executable signing, no Apple Developer ID/notarization/stapling, and
+  owner-PGP-manifest authenticity. Supported-Node checks, all 13 tests, dry-run
+  build, audit, and secret scan passed. This branch was not deployed, and the
+  accepted provider readback above remains the live state.
 
 ## 9. Execution sequence and approval gates
 

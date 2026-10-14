@@ -44,7 +44,7 @@ milestones.
   - Portal baseline branch/head: `codex/rebalance-portal-04` /
     `873833e9364ce693e02e86f129125b712a84d579`
   - Security branch/head: `codex/rebalance-portal-security` /
-    `7054c902890772f34e1d1a9533ec5463862d2e45`
+    `7645db5a813a0c28926b4e780078aa76adbe5421`
 - Grynvault root site: `/Users/kode/Development/btc_jv`
   - GitHub: `Grynvault/btc_jv`
   - This repository serves `grynvault.com`. Do not deploy the Frontier Crown
@@ -54,6 +54,9 @@ milestones.
     credentials, storage, database, or execution binding.
   - Private GitHub: `hudhaifahz/grynvault-rebalance`
   - Main head: `71d3c4dbfd159efc45b4761f1cf36ca4bc75f99c`
+  - Prepared unsigned-metadata branch/head:
+    `codex/unsigned-release-metadata` /
+    `24fc2475c18b5e69559bfd2c757154e30f2afd3c`
   - Clean GitHub Actions run: `38482199397`
 - Independent release worktree:
   `/Users/kode/Development/grynvault-rebalance-release`
@@ -88,6 +91,16 @@ path. Commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` prepares an explicitly
 `UNSIGNED-EXPERIMENTAL` DMG path, source archive, CycloneDX 1.6 SBOM, checksum,
 Gatekeeper-rejection evidence, and unsigned-preparation index. A local-only
 test tag was deleted after verification; no new immutable release tag exists.
+The isolated Portal 04 security branch now shows the unsigned/unnotarized and
+Gatekeeper warnings, macOS 15.4+ floor, PGP-manifest gate, and exact source
+commit; full workspace checks, refreshed audits, secret scans, and desktop/mobile
+browser checks passed, with final remote head
+`7645db5a813a0c28926b4e780078aa76adbe5421`. The companion metadata update is
+prepared and remotely read back at
+`24fc2475c18b5e69559bfd2c757154e30f2afd3c`; its complete local check, 13 tests,
+dry-run bundle, zero-vulnerability audit, and secret scan passed. Neither source
+update was deployed, and the accepted provider version still serves the older
+unpublished metadata.
 Resume at the separate owner gates for a new immutable rc tag and PGP manifest
 signing. Do not install, publish, deploy, change DNS, open public pull requests,
 or move sats at this checkpoint.
