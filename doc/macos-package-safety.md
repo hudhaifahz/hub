@@ -18,7 +18,10 @@ Before an application is installed or archived, verify all of the following:
   path;
 - the executable links `libldk_node.dylib` through `@rpath`;
 - the executable and embedded Lightning library contain the same architectures;
-- a public candidate has a non-ad-hoc signature and a signing Team Identifier.
+- a Developer ID candidate has a non-ad-hoc signature and signing Team
+  Identifier; an explicitly unsigned experimental candidate has only ad-hoc
+  integrity signatures, no certificate authority or Team Identifier, and an
+  unmistakable warning in both its filename and disk image.
 
 Run the static gate with the identity expected by that distribution:
 
@@ -54,7 +57,7 @@ The package command refuses to overwrite prior evidence and writes a SHA-256
 file plus a manifest containing the bundle identity, architectures, executable
 hash, embedded Lightning-library hash, archive size, and archive hash.
 
-## Public release candidates
+## Developer ID release candidates
 
 A Developer ID signed archive is still only a candidate. Use
 `PACKAGE_CLASS=developer-id-candidate`, an independent distribution identity,
@@ -66,6 +69,28 @@ An independently maintained fork must use its own product name, icon, bundle
 identifier, signing identity, update channel, and data directory. Importing an
 existing wallet is a separate, backed-up owner action; the package must never
 silently reuse or replace the official application's data container.
+
+## Explicitly unsigned experimental candidates
+
+The Grynvault owner declined Apple Developer ID signing, notarization, and
+stapling for the selected path. This is not equivalent to a trusted macOS
+release. A candidate on this path must:
+
+- use `UNSIGNED-EXPERIMENTAL` in the DMG filename and volume warning;
+- contain a plain-text warning that it has no Apple-verifiable publisher
+  identity and is expected to be warned about or blocked by Gatekeeper;
+- apply and verify ad-hoc signatures only for local bundle integrity;
+- prove there is no certificate authority or Team Identifier;
+- record the expected Gatekeeper rejection rather than suppress or bypass it;
+- publish a clean source archive, checksum, SBOM, provenance, and a detached
+  owner PGP signature over the final manifest; and
+- instruct users to prefer a source build and never disable Gatekeeper
+  globally.
+
+The release workflow may prepare this artifact privately, but it must not
+publish it. Final hashes and signatures must be regenerated from a separately
+approved immutable tag, then verified from a fresh download before the portal
+can link to it.
 
 ## Runtime acceptance
 

@@ -1,116 +1,117 @@
 # Exact-channel rebalance release gate
 
-Status: **TAGGED — UNSIGNED — UNPUBLISHED**
+Status: **UNSIGNED PACKAGE PATH VERIFIED — NEW TAG AND PGP SIGNING PENDING — UNPUBLISHED**
 
-This packet records the exact decision point after non-paying source and bundle
-verification and the separately approved immutable tag. It does not authorize
-a signing workflow, release, install, deployment, pull request, DNS change, or
-public post.
+This packet records the exact decision point after non-paying source, package,
+and CI verification. It does not authorize a new immutable tag, PGP signature,
+installation, migration, GitHub release, deployment, pull request, DNS change,
+public post, or Lightning value movement.
 
-## Reviewed source candidate
+## Current reviewed source candidate
 
 - repository: `hudhaifahz/hub`
 - branch: `codex/grynvault-rebalance-release`
 - exact source commit:
-  `8a5478f379788e0c7978a4b8dfcfd2afebf29426`
-- approved immutable tag: `grynvault-rebalance-v0.1.0-rc.1`
-- remote annotated-tag object:
-  `88cd63322c9f842a271571d621bba51393c9e709`
-- supported release target: universal macOS (`x86_64 arm64`) only
-- exact successful CI run: `38494419778`
-- reviewed embedded LDK SHA-256:
+  `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`
+- exact successful GitHub Actions run: `38521293804`
+- supported package target: universal macOS 15.4 or newer
+- distribution class: explicitly `UNSIGNED-EXPERIMENTAL`
+- Apple Developer ID signature: absent by owner decision
+- Apple notarization/stapling: absent by owner decision
+- reviewed unsigned LDK SHA-256:
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`
 
-The tag uses a Grynvault-specific namespace so it cannot be confused with
-upstream Alby Hub tags. Git and GitHub API readback both show that the remote
-annotated tag peels to exact commit
-`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. The tag and source commit must not
-be moved.
+Historical immutable annotated tag `grynvault-rebalance-v0.1.0-rc.1` has tag
+object `88cd63322c9f842a271571d621bba51393c9e709` and still peels to
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. It must never be moved. The
+current package-path commit is newer, so a separately approved new immutable
+tag is required before final artifact construction.
 
-## Evidence already closed
+## Evidence closed at the current commit
 
-- The owner-fork branch and remote ref both resolve to the exact source commit.
-- GitHub Actions passed the complete supported-macOS source, frontend, Go,
-  race, vet, vulnerability, and tracked-tree secret matrix at that commit.
-- A local unsigned preflight built from the exact commit and passed product
-  identity, bundle identity, architecture, runtime-path, embedded-source,
-  embedded-library, and Info.plist inspection.
-- A second unsigned preflight built directly from immutable tag
-  `grynvault-rebalance-v0.1.0-rc.1` passed the same inspection. Its embedded tag
-  is the immutable tag, its embedded source commit is the exact reviewed
-  commit, and its universal LDK library retains the pinned unsigned SHA-256.
-- The preflight was not installed, launched, signed, notarized, stapled, or
-  published. The earlier temporary local preflight tag was deleted.
-- Fresh remote readback found no upstream-base drift for Hub, LDK Node, or LDK
-  Node Go.
-- GitHub still reports zero releases, and the tag push triggered no signing or
-  publication workflow.
+- The owner-fork branch and remote ref both resolve to exact commit
+  `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`.
+- GitHub Actions run `38521293804` passed checkout, pinned-tool installation,
+  frontend and workflow checks, Go and race tests, vet, current vulnerability scanning,
+  tracked-tree secret scanning, and release-script checks.
+- Local source-boundary checks, release-script regressions, actionlint 1.7.7,
+  focused Go tests, Wails binding-only compilation, `go vet`, Gitleaks 8.30.1,
+  and govulncheck 1.9.0 passed. Govulncheck reports zero reachable
+  vulnerabilities; the two previously documented non-reachable dependency
+  advisories remain visible.
+- A clean universal application built with Node 22, Yarn 1.22.22, Wails 2.16.0,
+  and Go 1.27.2. Both executable slices and `LSMinimumSystemVersion` declare
+  macOS 15.4, matching the inherited Bark native-object floor.
+- Raw inspection passed product/bundle identity, independent data identity,
+  updater/source boundary, both architectures, exact runtime path, embedded
+  exact source/tag, and the pinned unsigned LDK hash.
+- The packager applied only ad-hoc integrity signatures, verified required
+  entitlements and absence of any certificate authority or Team Identifier,
+  created an unmistakably named `UNSIGNED-EXPERIMENTAL` DMG, embedded
+  `README-UNSIGNED.txt`, verified the disk image and mounted app, and recorded
+  Gatekeeper rejection with `source=no usable signature` and exit status 3.
+- A clean source archive and CycloneDX 1.6 SBOM were created. The SBOM contains
+  1,073 components: 256 Go, 815 npm, and two normalized lockfile components;
+  it contains no local checkout path.
+- The local-only test tag `grynvault-unsigned-local-29a34b97` was deleted after
+  verification. No new release tag or GitHub release was created.
 
-## Review gate closed
+## Non-release local artifact evidence
 
-CodeRabbit CLI `0.7.1` authenticated as GitHub account `hudhaifahz`, and its
-health check passed with nine checks and no warnings. Three complete committed
-diff reviews used base commit
-`1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`:
+These hashes prove the local test pipeline only. They are not final public
+release hashes and must not be placed on the portal as downloads:
 
-1. The first pass reported two valid findings: Bash 4-only uppercase expansion
-   in manifest generation and an invalid post-signing comparison of a modified
-   signed library against its pinned unsigned whole-file digest.
-2. The second pass reported one valid finding: release workflow checkout and
-   validation accepted an unqualified tag name that could collide with a
-   same-named branch.
-3. The final pass on exact commit
-   `8a5478f379788e0c7978a4b8dfcfd2afebf29426` reported zero findings.
+- unsigned experimental DMG: 79,082,617 bytes,
+  `5ecfb2e237a8579f9ebcff1f15efb43a0e077b0b461fbf4e68823b5a6bd7d1bf`
+- source archive: 2,496,076 bytes,
+  `7ede0c39b7555ccfb749f1916effde26dff0d18c67a9f87dfd24c02b1ecca2d2`
+- CycloneDX SBOM: 2,047,656 bytes,
+  `fecace7fb1cb85e72348cf789a77329ab8373287f67d3ec40c7000e53ee9ea35`
 
-The first two findings were fixed in commits
-`7a321ae8bbcc1ea733d58e3cc569b112dd3088d0` and
-`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. The fixes add Bash 3.2 regression
-coverage, separate unsigned-byte inspection from signed-identity inspection,
-verify the signed app and embedded library share a non-Alby Developer ID Team
-Identifier, parse entitlements safely, and require fully qualified
-`refs/tags/<tag>` references throughout the workflow and release scripts.
-GitHub Actions runs `38493921672` and `38494419778` passed. CodeRabbit output
-was treated as untrusted review input and does not constitute an independent
-third-party security audit.
+## Review status
 
-## Signing prerequisites still open
+Three earlier complete CodeRabbit CLI reviews against base
+`1fb6c8cd0fcb2fbee48c888c6274e2659d74c169` produced two findings, then one,
+then zero findings at historical rc.1 commit
+`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. Every finding was reproduced,
+fixed, regression tested, committed, and checked remotely.
 
-The release Mac currently has zero valid code-signing identities and zero GPG
-secret keys. Private material must remain owner-controlled and must never be
-printed, committed, pasted into chat, or stored in the release source tree.
+The local CodeRabbit CLI is currently signed out. The CodeRabbit GitHub app was
+added to the owner's account, but no public pull request was opened merely to
+trigger it. CodeRabbit remains review input and is not an independent security
+audit. A later owner-approved PR must receive and resolve its current review.
 
-The protected signing workflow expects these GitHub Actions secrets, whose
-values must be supplied by the owner through GitHub's secret controls:
+## Owner decisions and remaining gates
 
-- `GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_P12_BASE64`
-- `GRYNVAULT_APPLE_DEVELOPER_CERTIFICATE_PASSWORD`
-- `GRYNVAULT_APPLE_PASSWORD`
-- `GRYNVAULT_APPLE_TEAM_ID`
-- `GRYNVAULT_APPLE_USERNAME`
-- `GRYNVAULT_APPLE_SIGNING_IDENTITY`
+The owner explicitly declined Apple Developer ID signing, notarization, and
+stapling. Those are omitted rather than pending. The optional private workflow
+mode remains isolated but is not part of the chosen release path. Documentation,
+filenames, UI, and portal text must never imply Apple publisher identity or
+Gatekeeper acceptance.
 
-PGP manifest signing additionally requires one owner-approved public key and
-its full 40-hex fingerprint. The private PGP key stays outside GitHub Actions,
-source, logs, and chat unless the owner approves a separately documented secure
-signing path.
+PGP manifest signing still requires an owner-approved public key and full
+40-hex fingerprint. Private PGP material must remain outside source, CI logs,
+and chat. This Mac previously reported zero GPG secret keys; that fact must be
+rechecked only when the owner chooses a signing path.
 
 ## Separate approval sequence
 
-The review gate is green, and the owner separately approved exact source commit
-`8a5478f379788e0c7978a4b8dfcfd2afebf29426` and immutable tag
-`grynvault-rebalance-v0.1.0-rc.1`. Keep the remaining actions distinct:
-
-1. **Complete:** create, push, and independently read back the approved
-   immutable tag.
-2. **Owner signing gate:** establish the owner-controlled Developer ID,
-   notarization, and PGP paths, then explicitly authorize the protected workflow
-   as a private signed candidate.
-3. Inspect Developer ID signing, notarization, stapling, Gatekeeper acceptance,
-   hashes, manifest, PGP signature, and clean-profile behavior.
-4. Test clean installation and migration only with owner-approved copies and a
+1. **Complete:** verify and push the unsigned-package source commit and pass its
+   exact GitHub CI run.
+2. **Owner immutable-tag gate:** approve a new tag, expected to be
+   `grynvault-rebalance-v0.1.0-rc.2`, at exact commit
+   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` or at a later exact reviewed
+   commit if CodeRabbit or CI causes another fix. Never move rc.1.
+3. Rebuild the full unsigned artifact set from that exact immutable tag and
+   replace all local-test hashes with final hashes.
+4. **Owner PGP gate:** select the public key/fingerprint and authorize detached
+   signing of the final manifest through an owner-controlled signer.
+5. Verify the PGP signature, every artifact hash, explicit unsigned warnings,
+   and Gatekeeper rejection from a fresh download.
+6. Test clean installation and migration only with owner-approved copies and a
    verified rollback; do not move sats.
-5. Stop again before publishing a GitHub release.
-6. Stop separately before public DNS, Portal 04 deployment, upstream PRs,
+7. Stop again before publishing a GitHub release.
+8. Stop separately before canonical DNS, Portal 04 deployment, upstream PRs,
    Nostr signing, and Stacker News submission/payment.
 
 No action later in this sequence inherits approval from an earlier step.

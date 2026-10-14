@@ -63,27 +63,34 @@ milestones.
 ## Current resume checkpoint
 
 The independent release branch is committed and pushed at
-`8a5478f379788e0c7978a4b8dfcfd2afebf29426`. GitHub Actions run
-`38494419778` passed the source, frontend, Go, race, vet, vulnerability, secret,
-and release-script checks on the supported macOS runner. Its independently
-named universal macOS preflight bundle passed exact-commit inspection with the
+`29a34b97fdd890f1895ca9827ba0e59f8457f3ee`. GitHub Actions run
+`38521293804` passed the source, frontend, Go, race, vet, vulnerability, secret,
+and release-script checks on the supported macOS runner. Its independently named
+universal macOS 15.4+ preflight bundle passed exact-commit inspection with the
 reviewed LDK library hash, isolated bundle identifier/data directory/updater,
-and exact embedded source hash. Three complete CodeRabbit passes against base
+exact embedded source hash, and aligned bundle/binary deployment targets.
+Three earlier complete CodeRabbit passes against base
 `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169` produced two findings, then one
 finding, then zero findings. Every finding was reproduced, fixed, regression
 tested, committed, and remotely checked; CodeRabbit remains review input, not
-an independent audit. The three prepared upstream bases remain unchanged at
+an independent audit. The local CodeRabbit CLI is now signed out; the GitHub
+app may review a later owner-approved PR, but no new PR was opened. The three
+prepared upstream bases remain unchanged at
 Hub `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node
 `74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go
 `5ba434093284d0dc8291e45d2a3d2c1c5a879698`. The preflight remains unsigned
 and was not installed or launched. The owner approved immutable annotated tag
 `grynvault-rebalance-v0.1.0-rc.1`; remote tag object
 `88cd63322c9f842a271571d621bba51393c9e709` independently peels to the exact
-release commit. A fresh unsigned build directly from that tag passed the same
-identity, architecture, runtime-path, embedded-source, Info.plist, and pinned
-LDK inspection. Resume only at the owner-controlled Developer ID/notarization
-and PGP signing prerequisites. Do not sign, notarize, install, publish, deploy,
-change DNS, open public pull requests, or move sats at this checkpoint.
+release commit. That rc.1 tag remains immutable and must not be moved. The
+owner has since declined the Apple Developer ID, notarization, and stapling
+path. Commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` prepares an explicitly
+`UNSIGNED-EXPERIMENTAL` DMG path, source archive, CycloneDX 1.6 SBOM, checksum,
+Gatekeeper-rejection evidence, and unsigned-preparation index. A local-only
+test tag was deleted after verification; no new immutable release tag exists.
+Resume at the separate owner gates for a new immutable rc tag and PGP manifest
+signing. Do not install, publish, deploy, change DNS, open public pull requests,
+or move sats at this checkpoint.
 
 ## Proposed defaults
 
@@ -126,8 +133,9 @@ Follow the waves in `doc/exact-channel-rebalance-release-plan.md`:
    migrations, embedded library, sync, channels, balances, and responsive UI.
 3. Prepare clean upstream contributions for LDK, LDK Go, and Hub.
 4. Rebase on current upstream and repeat the complete test and security matrix.
-5. Create an independently branded, signed, notarized, stapled, source-pinned
-   release candidate with explicit migration and rollback.
+5. Create an independently branded, source-pinned, explicitly unsigned and
+   unnotarized release candidate with prominent Gatekeeper warnings, a
+   PGP-signed manifest, and explicit migration and rollback.
 6. Build and privately deploy the bounded HTTP/MCP companion; complete its
    security tests before canonical DNS.
 7. Prepare Portal 04 with immutable release, source, verification, release-note,
@@ -148,7 +156,8 @@ or independently accepted states.
   single-action approval packet under the Lightning routing skill.
 - Keep all credentials, MFA, signing secrets, private keys, passwords, and
   wallet secrets outside chat, source, screenshots, logs, and commands.
-- Developer ID, notarization, PGP, Nostr signing, and MFA remain owner-controlled.
+- Apple Developer ID, notarization, and stapling are omitted by owner decision.
+  PGP and Nostr signing and MFA remain owner-controlled.
 - Never publish the current ad-hoc owner-test archive.
 - Require zero unresolved Critical or High security findings.
 - Do not call the work independently audited unless an independent reviewer has

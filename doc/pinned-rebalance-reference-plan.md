@@ -1117,3 +1117,62 @@ Consequence:
   notarization, and PGP paths before authorizing the protected private-candidate
   workflow. Publication, installation, migration, DNS, Portal 04, upstream PRs,
   Nostr, Stacker News, and all Lightning value movement remain separately gated.
+
+### 2026-10-13 — Explicit unsigned distribution path verified
+
+Observed:
+
+- The owner explicitly declined Apple Developer ID signing, notarization, and
+  stapling and directed work to continue on every other safe release task. The
+  release source now labels this as an `UNSIGNED-EXPERIMENTAL` distribution
+  rather than leaving Apple trust as an unresolved prerequisite.
+- Release-preparation commit
+  `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` adds a manual-only unsigned mode,
+  ad-hoc app/library integrity inspection, an in-image warning, expected
+  Gatekeeper-rejection evidence, a clean source archive, CycloneDX 1.6 SBOM,
+  checksum, provenance documentation, and an unsigned-preparation index. No
+  workflow mode publishes a GitHub release.
+- Clean-checkout testing found that Wails binding generation could previously
+  claim the production single-instance port and start application services. A
+  binding-only build target now generates types without opening the wallet,
+  starting Hub services, or claiming port 21421. Fresh binding generation and
+  TypeScript validation pass while the live application is running.
+- Clean universal linking also exposed an implicit dependency on Apple's
+  `UniformTypeIdentifiers` framework. The release script now links it
+  explicitly for both architectures. The application and CGO deployment target
+  and bundle metadata are aligned at macOS 15.4, matching the inherited Bark
+  native-object floor; the misleading 10.13 bundle claim and deployment-target
+  linker warnings are removed from the package build.
+- A clean local-only test tag at the exact commit produced a universal
+  macOS 15.4+ app and unsigned experimental DMG. Raw and mounted inspection
+  passed product/bundle identity, `x86_64 arm64`, runtime path, exact embedded
+  source/tag, required entitlements, absence of certificate authority/Team ID,
+  and the reviewed unsigned LDK digest
+  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+  Gatekeeper rejected the DMG with `source=no usable signature`, as required.
+- The test DMG SHA-256 was
+  `5ecfb2e237a8579f9ebcff1f15efb43a0e077b0b461fbf4e68823b5a6bd7d1bf`.
+  The source archive SHA-256 was
+  `7ede0c39b7555ccfb749f1916effde26dff0d18c67a9f87dfd24c02b1ecca2d2`;
+  the SBOM SHA-256 was
+  `fecace7fb1cb85e72348cf789a77329ab8373287f67d3ec40c7000e53ee9ea35`.
+  These are local test evidence, not final release hashes. The local-only tag
+  was deleted and none of the artifacts was installed or published.
+- Local source-boundary, release-script, actionlint, frontend, Go, binding-only,
+  vet, current govulncheck, and Gitleaks gates passed. Govulncheck reports zero
+  reachable vulnerabilities. Exact GitHub Actions run `38521293804` completed
+  successfully for the pushed source commit.
+- The CodeRabbit GitHub app is available, but the local CLI is signed out and
+  no public PR was opened merely to trigger review. A current CodeRabbit review
+  remains required on the later owner-approved PR and is not an independent
+  audit.
+
+Consequence:
+
+- Historical tag `grynvault-rebalance-v0.1.0-rc.1` remains immutable at
+  `8a5478f379788e0c7978a4b8dfcfd2afebf29426` and cannot identify the newer
+  package-path source. The next stop is owner approval for a new immutable tag,
+  expected to be `grynvault-rebalance-v0.1.0-rc.2`, followed separately by an
+  owner-controlled PGP manifest-signing action. Publication, installation,
+  migration, DNS, Portal 04, upstream PRs, Nostr, Stacker News, and all
+  Lightning value movement remain separately gated.
