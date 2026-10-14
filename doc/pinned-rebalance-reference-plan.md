@@ -1100,6 +1100,15 @@ Observed:
   showed no signing or publication workflow triggered by the tag. The unsigned
   bundle was not installed, launched, archived for distribution, signed,
   notarized, stapled, or published.
+- The preceding documentation-only commit
+  `b05f5cc139a4a2bc76734615c47f8613f284b801` triggered the owner branch's
+  inherited `Multiplatform Docker build & push` run `38495163823`, which failed
+  at its Linux `Run tests` step before Docker build. That commit and workflow
+  are not the tagged release source or its supported-macOS acceptance run; the
+  unauthenticated job record exposes only exit code 1, so no more specific cause
+  is claimed. The tag-record documentation commit uses GitHub's documented
+  skip-CI marker to avoid repeating that unrelated workflow. Exact release
+  source run `38494419778` remains successful.
 
 Consequence:
 
