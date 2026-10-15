@@ -1212,3 +1212,88 @@ Consequence:
   followed later by the separate owner-controlled PGP signing gate. Deployment,
   publication, installation, migration, upstream PRs, Nostr, Stacker News, and
   all Lightning value movement remain separately gated.
+
+### 2026-10-14 — Public rc.2, canonical companion, and durable Portal 04 acceptance
+
+Observed:
+
+- Immutable annotated tag `grynvault-rebalance-v0.1.0-rc.2` still has tag object
+  `c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peels to exact reviewed source
+  `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`. Historical rc.1 remains
+  unchanged.
+- GitHub prerelease
+  `https://github.com/hudhaifahz/hub/releases/tag/grynvault-rebalance-v0.1.0-rc.2`
+  is public. A fresh external download verified the 79,082,856-byte DMG at
+  SHA-256 `b329d7bec494cfff6b6c4f2865f2aa13e08a11e96726696b869cd0309c6dfe1a`,
+  the `.dmg.sha256` file, and every release artifact hash.
+- A fresh isolated GnuPG home imported the 721-byte public key, read exact
+  primary fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126` and
+  encryption subkey `1F4E227EAED1809E009067B1E8251E01DC70A7A9`, and reported a good detached
+  signature over the public manifest. The private key and passphrase remained
+  owner-controlled and outside source, logs, and chat.
+- The downloaded DMG was mounted read-only and never launched. Static checks
+  confirmed Grynvault product/bundle identity, macOS 15.4+, universal app and
+  LDK slices, exact tag/source metadata, the reviewed runtime path, ad-hoc
+  integrity signature, no Team Identifier, successful deep verification, and
+  expected Gatekeeper rejection. This is PGP-authenticated experimental
+  distribution evidence, not Apple trust, clean-install acceptance, or an
+  independent audit.
+- `https://rebalance.grynvault.com` is live with canonical TLS, current rc.2
+  metadata, compatibility and sanitized diagnostic documentation, and exactly
+  five read-only MCP tools. Negative acceptance rejected a fabricated
+  `execute_rebalance`, a hostile Origin, and unapproved diagnostic fields. The
+  endpoint accepts no wallet credentials or NWC connection and creates no
+  invoice, route, HTLC, payment, or rebalance.
+- Portal PR `Grynvault/frontierCrown#6` advanced to exact final head
+  `e17a7ab78d469e3b676ca1e199db82c781483180`. Its complete web suite passed
+  1,350 tests, TypeScript lint and production build passed, and the repository
+  whitespace check passed. Two valid minor CodeRabbit CLI findings were fixed; the final
+  pass's one minor fallback suggestion was rejected because an explicitly empty
+  release setting intentionally disables all release links and the regression
+  test exercises every empty field. The CLI reported that the repository is
+  not connected to a CodeRabbit organization visible to the authenticated
+  account, so this is not evidence of a GitHub App review.
+- The PR was squash-merged with exact-head protection at
+  `18b1e6efdc381c3f0ea516150e865c42c2a8eb30`. Netlify production deploy
+  `6ad0542ffa83daccd5046625` is ready from that commit, scanned 4,309 files with
+  zero secret matches, and deployed no server or edge functions. Live browser
+  readback of `https://frontiercrown.com/portal` shows Portal 04, RC.2, the full
+  PGP fingerprint, explicit unsigned/unnotarized/Gatekeeper/backup/real-sats
+  warnings, and exact public Download, Verify, Source, API/docs, Manifest,
+  Signature, and Public key links.
+- The branded public rc.2 application has not been installed. The running
+  `/Applications/Alby Hub.app` remains the previously accepted owner diagnostic
+  build. Public-package clean-install, copied-data migration, wallet continuity,
+  embedded-hash, UI, and rollback acceptance remain open owner-controlled work.
+- No new quote, invoice, probe, HTLC, payment, or rebalance was created during
+  publication or documentation. The prior 10,000-sat quote is expired and must
+  never be executed. Each proof pilot requires a new quote and one exact
+  action-time approval packet; pilots cannot be batched.
+
+Commercial boundary:
+
+- RC.2 is ready to advertise as experimental open-source software with the
+  exact disclosures above. It is not ready to advertise as audited, Apple
+  verified, migration-proven, guaranteed-route software, or a hosted executor.
+- Version one remains a narrow operator-assisted offer: verified download and
+  setup help, backup/migration/recovery preparation, quote interpretation, and
+  post-operation evidence review. The operator retains the wallet, credentials,
+  signer, exact confirmation, and execution action.
+- Do not charge 1,000 sats automatically per rebalance yet and do not operate a
+  customer wallet. A success-only 1,000-sat support fee is economically clearer
+  only for a deliberately bounded pilot such as a rebalance of at least 100,000
+  sats, with Lightning routing fees disclosed separately and no route or success
+  guarantee. Record several owner-controlled pilots and a written service scope
+  before taking the first customer payment.
+- Public Lightning pathfinding cannot be forced to route through the operator's
+  own node by this hosted companion. Earning routing fees requires separately
+  operated, capitalized, well-connected public channels with competitive fees,
+  uptime, and demand; it is a distinct node-liquidity business, not a feature of
+  the current read-only API/MCP service.
+
+Consequence:
+
+- Publication and portal durability gates are closed. The next safe work is
+  public-package clean-install/migration acceptance and then exactly one fresh
+  proof-pilot action packet. Upstream PRs, customer payments, Nostr signing, and
+  Stacker News submission/payment retain their separate approval gates.

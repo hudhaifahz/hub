@@ -1,33 +1,34 @@
 # Exact-channel rebalance release plan
 
-Status: owner-build acceptance, isolated upstream preparation, unsigned
-source/package security verification, and immutable rc.2 artifact construction
-are complete. The owner declined Apple Developer ID signing and notarization.
-PGP manifest signing, installation/migration acceptance, and every public
-release action remain behind the owner-controlled gates recorded below.
+Status: immutable rc.2 is publicly available as an explicitly unsigned,
+unnotarized experimental release authenticated by the owner's PGP key. The
+read-only companion and Portal 04 are live and independently read back. Clean
+installation and copied-data migration of the public Grynvault package, several
+fresh owner-approved proof pilots, upstream PR submission, and public launch
+posts remain open gates.
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
-This checklist does not authorize a payment, deployment, pull request, release,
-signature, or public post. Each public or value-moving action requires a separate
-owner review.
+This checklist records completed owner-approved actions but does not authorize
+another payment, deployment, pull request, signature, or public post. Each new
+public or value-moving action requires the separate owner review below.
 
 ## Current public-release snapshot (2026-10-14)
 
-| Surface               | Observed state                                                                                                                                                                                                                                                                              | Release meaning                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Exact-channel source  | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks; immutable annotated tag `grynvault-rebalance-v0.1.0-rc.2` has tag object `c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peels to exact reviewed commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`; historical rc.1 remains unchanged | The release source is immutable and independently read back, but no GitHub release or upstream PR chain exists yet.                      |
-| Owner package         | Guarded owner-test ZIP exists locally for source commit `4a82cbf40cc9c2aa60255737e2a4b1f968001e9f`                                                                                                                                                                                          | It is ad-hoc signed, uses the official Alby bundle identity and data container, and must not be published.                               |
-| Independent preflight | The explicitly `UNSIGNED-EXPERIMENTAL` universal macOS 15.4+ DMG, source archive, CycloneDX SBOM, checksum, Gatekeeper evidence, and unsigned index were rebuilt from immutable rc.2 at `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`                                                          | All local integrity checks pass and final pre-signing hashes are recorded; the package was not installed, signed with PGP, or published. |
-| GitHub release        | The `hudhaifahz/hub` fork has zero releases                                                                                                                                                                                                                                                 | There is no public binary, immutable release page, signed manifest, or public download URL.                                              |
-| Frontier Crown portal | The live portal contains Portal 01 through Portal 03; isolated security branch `codex/rebalance-portal-security` at `7645db5a813a0c28926b4e780078aa76adbe5421` stages the locked Portal 04 card with explicit unsigned warnings and 0 High/Critical audit findings                          | No rebalance card or download is live. Production remains blocked by the final release, preview-review, and owner deployment gates.      |
-| Grynvault endpoint    | `rebalance.grynvault.com` does not resolve; an unadvertised Cloudflare provider hostname serves the earlier reviewed fixture, while branch `codex/unsigned-release-metadata` at `24fc2475c18b5e69559bfd2c757154e30f2afd3c` prepares current source/signing metadata                         | Temporary acceptance is complete, but the metadata update is not deployed and canonical DNS/public launch remain gated.                  |
-| macOS signing         | The owner explicitly declined the Apple Developer ID, notarization, and stapling path                                                                                                                                                                                                       | The package must remain unmistakably unsigned/unnotarized; Gatekeeper rejection is expected and must not be described as acceptance.     |
-| Manifest signing      | No local PGP secret key is available to the release workflow                                                                                                                                                                                                                                | A public key, fingerprint, owner-controlled signing ceremony, and detached signature are still required.                                 |
-| Upstream baseline     | `v1.24.1` remains the latest tagged Alby Hub release; upstream `master` has advanced beyond it                                                                                                                                                                                              | Rebase and compatibility checks must be repeated immediately before PR and release candidate creation.                                   |
+| Surface                | Observed state                                                                                                                                                                                                                                                                                                                                                                                          | Release meaning                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exact-channel source   | Public on the `hudhaifahz` Hub, LDK, and LDK Go forks; annotated tag `grynvault-rebalance-v0.1.0-rc.2` has tag object `c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peels to exact source `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`; historical rc.1 remains unchanged.                                                                                                                               | Immutable source identity is proven. Upstream PR submission remains separate.                                                                              |
+| Installed owner build  | `/Applications/Alby Hub.app` is the previously accepted owner diagnostic build, not the branded public rc.2 application.                                                                                                                                                                                                                                                                                | Prior live evidence remains useful, but it is not public-package installation or migration acceptance.                                                     |
+| Public GitHub release  | `https://github.com/hudhaifahz/hub/releases/tag/grynvault-rebalance-v0.1.0-rc.2` is a public prerelease with the DMG, source archive, SBOM, manifest, detached signature, public key, Gatekeeper evidence, and preparation index.                                                                                                                                                                       | RC.2 may be advertised only as experimental, independently maintained, unsigned, and unnotarized.                                                          |
+| Package authentication | Fresh external download verified DMG SHA-256 `b329d7bec494cfff6b6c4f2865f2aa13e08a11e96726696b869cd0309c6dfe1a` and a good detached signature from fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. Mounted static inspection confirmed both architectures, macOS 15.4+, exact tag/source, isolated bundle identity, reviewed runtime path, ad-hoc signature, and expected Gatekeeper rejection. | PGP authenticates the manifest; it is not Apple code signing, notarization, independent audit, or clean-install proof.                                     |
+| Frontier Crown portal  | PR `Grynvault/frontierCrown#6` was squash-merged at `18b1e6efdc381c3f0ea516150e865c42c2a8eb30`. Netlify production deploy `6ad0542ffa83daccd5046625` is ready from that exact commit, and live `/portal` readback shows RC.2, the full fingerprint, warnings, and exact artifact links.                                                                                                                 | Portal publication is durable on the configured production branch. Inherited server/MCP audit findings are not represented as fixed by this static-web PR. |
+| Grynvault endpoint     | `https://rebalance.grynvault.com` is live with canonical TLS, current rc.2 metadata, compatibility/diagnostic documentation, and exactly five read-only MCP tools. A fabricated execution tool and hostile Origin were rejected.                                                                                                                                                                        | This endpoint is documentation and diagnostics only: no wallet credentials, NWC, invoices, routes, payments, or rebalance execution.                       |
+| Apple trust            | Developer ID signing, notarization, and stapling are absent by owner decision. The application is ad-hoc signed for integrity and Gatekeeper warning/rejection is expected.                                                                                                                                                                                                                             | Never describe the package as Apple-verified or suppress the warning.                                                                                      |
+| PGP identity           | Public primary key `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126` (ed25519) and encryption subkey `1F4E227EAED1809E009067B1E8251E01DC70A7A9` (cv25519) are published with the release.                                                                                                                                                                                                                      | Private key and passphrase remain owner-controlled and outside source, logs, and chat.                                                                     |
+| Upstream baseline      | RC.2 is based on Alby Hub v1.24.1; upstream has advanced beyond it.                                                                                                                                                                                                                                                                                                                                     | Rebase and compatibility checks must be repeated immediately before opening upstream PRs or cutting another release.                                       |
 
-The local owner-test archive is evidence, not a downloadable product. The portal
-must not link to it, and the endpoint must not advertise it as a release.
+The local owner-test archive remains evidence, not a downloadable product. The
+portal links only to the independently named public rc.2 assets.
 
 ## Product split and non-custodial boundary
 
@@ -96,16 +97,11 @@ separately audited local companion/upstream capability and a new threat model.
   `74daaf98c7eeee7bca58c703c103d57affbd928a` / `2dc742a8`.
 - Isolated LDK Go PR-preparation base/head:
   `5ba434093284d0dc8291e45d2a3d2c1c5a879698` / `a381cacb`.
-- Isolated Frontier Crown Portal 04 base/head:
-  `c6d2691dfa80d58391e5271cb583528f0be51a4d` /
-  `873833e9364ce693e02e86f129125b712a84d579`.
-- Isolated Frontier Crown security-remediation head:
-  `7645db5a813a0c28926b4e780078aa76adbe5421` on
-  `codex/rebalance-portal-security`.
-- Hosted companion unsigned-metadata head:
-  `24fc2475c18b5e69559bfd2c757154e30f2afd3c` on
-  `codex/unsigned-release-metadata`; remote readback matches and no deployment
-  occurred.
+- Frontier Crown Portal 04 PR head/merged production commit:
+  `e17a7ab78d469e3b676ca1e199db82c781483180` /
+  `18b1e6efdc381c3f0ea516150e865c42c2a8eb30`.
+- Hosted companion source head: `71d3c4dbfd159efc45b4761f1cf36ca4bc75f99c`
+  on `main`; the canonical Cloudflare deployment is read-only.
 - Independent Grynvault release-preparation head:
   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` on
   `codex/grynvault-rebalance-release`; the owner-fork remote readback matches.
@@ -115,7 +111,7 @@ separately audited local companion/upstream capability and a new threat model.
   Immutable annotated rc.2 has tag object
   `c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peels to
   `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`; remote Git and GitHub object
-  readback match, and GitHub still has zero releases.
+  readback match. The public prerelease is bound to that exact tag and commit.
   Product-code head
   `c41a5e1773030da5fccc174386edc8730423b4a3` also passed run `38483312899`.
 - Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
@@ -324,13 +320,13 @@ Prepare three coordinated contributions:
       not publish patch-series attachments because they can reproduce
       credential-shaped values removed from upstream source. Repeat from the
       owner-approved final immutable tag before publication.
-- [ ] Produce a manifest containing every filename, byte size, SHA-256 digest,
+- [x] Produce a manifest containing every filename, byte size, SHA-256 digest,
       source commit, upstream base, dependency commits, and build-workflow identity.
-- [ ] Sign the manifest with the owner's PGP key. Keep the private key outside
+- [x] Sign the manifest with the owner's PGP key. Keep the private key outside
       the repository, CI logs, and chat.
-- [ ] Publish the public key and full fingerprint independently from the
+- [x] Publish the public key and full fingerprint independently from the
       downloadable files.
-- [ ] Verify the signature and every artifact hash from a fresh download before
+- [x] Verify the signature and every artifact hash from a fresh download before
       marking the release available.
 - [ ] Call the build reproducible only if independent clean builds produce the
       same artifact hashes; otherwise call it source-pinned and provenance-backed.
@@ -354,18 +350,18 @@ Prepare three coordinated contributions:
       existing checkout.
 - [x] Label it as an experimental independent Alby Hub fork, not an official
       Alby release.
-- [ ] Show the release version, supported platform, upstream Alby version, and
+- [x] Show the release version, supported platform, upstream Alby version, and
       release status.
 - [x] Provide separate actions for Download, Verify signature, View source, Read
       release notes, and Report a security issue.
-- [ ] Show the PGP fingerprint and SHA-256 manifest without asking users to
+- [x] Show the PGP fingerprint and SHA-256 manifest without asking users to
       trust only the download origin.
 - [x] Require a clear backup and real-funds warning before download.
-- [ ] Verify keyboard, touch, mobile, and desktop behavior and confirm all links
+- [x] Verify keyboard, touch, mobile, and desktop behavior and confirm all links
       resolve to the immutable release.
-- [ ] Deploy only after a separate review of the exact portal diff and target
+- [x] Deploy only after a separate review of the exact portal diff and target
       release URLs.
-- [ ] Read the live portal and download back from the public origin before
+- [x] Read the live portal and download back from the public origin before
       declaring them available.
 
 ## 7. Public release communication
@@ -570,19 +566,20 @@ Implementation evidence on 2026-10-13:
 - [x] Rebuild the unsigned DMG, checksum, Gatekeeper evidence, source archive,
       CycloneDX SBOM, and unsigned preparation index from rc.2; verify hashes,
       bundle contents, expected Gatekeeper rejection, and zero GitHub releases.
-- [ ] Obtain an owner-controlled PGP signing key and full fingerprint; keep
+- [x] Obtain an owner-controlled PGP signing key and full fingerprint; keep
       private material outside source, logs, and chat.
-- [ ] Generate and PGP-sign the final manifest, then verify a fresh download
-      and clean macOS 15.4+ profile before calling it an unsigned experimental
-      release candidate.
+- [x] Generate and PGP-sign the final manifest, then verify the signature,
+      hashes, and static macOS 15.4+ package metadata from a fresh download.
+- [ ] Clean-install the public package on a clean macOS 15.4+ profile before
+      treating clean-install acceptance as proven.
 
 ### Wave D — build and privately accept the companion
 
 - [x] Implement only the HTTP/MCP functions in Section 8 with fixture data.
 - [x] Deploy to a temporary provider hostname, run the hosted-service security
       gate, and verify no wallet-execution path or credential field exists.
-- [ ] Add the exact Route 53 record only after private acceptance, then verify
-      canonical TLS and all endpoints externally.
+- [x] Provision the canonical Cloudflare hostname only after private acceptance,
+      then verify canonical TLS and every read-only endpoint externally.
 
 ### Wave E — stage the portal and release pages
 
@@ -595,17 +592,17 @@ Implementation evidence on 2026-10-13:
       `7054c902890772f34e1d1a9533ec5463862d2e45`; full and production audits now
       contain 0 Critical and 0 High findings, complete tests/builds pass, and
       the remaining Moderate/Low development-tool findings are documented.
-- [ ] Store binaries on the immutable GitHub release, not in the portal Git
+- [x] Store binaries on the immutable GitHub release, not in the portal Git
       repository or Netlify bundle.
-- [ ] Add Portal 04 in an isolated branch and point it only to the verified
+- [x] Add Portal 04 in an isolated branch and point it only to the verified
       GitHub assets, signed manifest, source tag, release notes, security contact,
       and `rebalance.grynvault.com` documentation.
-- [ ] Review the exact portal diff and a deploy preview. Stop for owner approval
+- [x] Review the exact portal diff and a deploy preview. Stop for owner approval
       before merging or deploying the public card.
 
 ### Wave F — public launch
 
-- [ ] Publish the immutable release and read every artifact back from its public
+- [x] Publish the immutable release and read every artifact back from its public
       URL; then activate Portal 04 and read the live portal back.
 - [ ] Open the upstream PR chain only after its separate owner review.
 - [ ] Prepare exact Nostr and Stacker News payloads with final URLs and claims.

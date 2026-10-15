@@ -65,53 +65,45 @@ milestones.
 
 ## Current resume checkpoint
 
-The independent release branch is committed and pushed at
+The independent release source remains immutable at annotated tag
+`grynvault-rebalance-v0.1.0-rc.2`, tag object
+`c4270fbaa40a183947562c0460b6e3c466f9a8eb`, and exact commit
 `29a34b97fdd890f1895ca9827ba0e59f8457f3ee`. GitHub Actions run
-`38521293804` passed the source, frontend, Go, race, vet, vulnerability, secret,
-and release-script checks on the supported macOS runner. Its independently named
-universal macOS 15.4+ preflight bundle passed exact-commit inspection with the
-reviewed LDK library hash, isolated bundle identifier/data directory/updater,
-exact embedded source hash, and aligned bundle/binary deployment targets.
-Three earlier complete CodeRabbit passes against base
-`1fb6c8cd0fcb2fbee48c888c6274e2659d74c169` produced two findings, then one
-finding, then zero findings. Every finding was reproduced, fixed, regression
-tested, committed, and remotely checked; CodeRabbit remains review input, not
-an independent audit. The local CodeRabbit CLI is now signed out; the GitHub
-app may review a later owner-approved PR, but no new PR was opened. The three
-prepared upstream bases remain unchanged at
-Hub `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`, LDK Node
-`74daaf98c7eeee7bca58c703c103d57affbd928a`, and LDK Node Go
-`5ba434093284d0dc8291e45d2a3d2c1c5a879698`. The preflight remains unsigned
-and was not installed or launched. The owner approved immutable annotated tag
-`grynvault-rebalance-v0.1.0-rc.1`; remote tag object
-`88cd63322c9f842a271571d621bba51393c9e709` independently peels to the exact
-release commit. That rc.1 tag remains immutable and must not be moved. The
-owner has since declined the Apple Developer ID, notarization, and stapling
-path. Commit `29a34b97fdd890f1895ca9827ba0e59f8457f3ee` prepares an explicitly
-`UNSIGNED-EXPERIMENTAL` DMG path, source archive, CycloneDX 1.6 SBOM, checksum,
-Gatekeeper-rejection evidence, and unsigned-preparation index. A local-only
-test tag was deleted after verification. On 2026-10-14, the owner separately
-approved immutable annotated tag `grynvault-rebalance-v0.1.0-rc.2`; remote Git
-and the GitHub Git-object API read back tag object
-`c4270fbaa40a183947562c0460b6e3c466f9a8eb` and peeled commit
-`29a34b97fdd890f1895ca9827ba0e59f8457f3ee`. The complete unsigned artifact set
-was rebuilt from rc.2 and passed bundle, mounted-image, checksum, SBOM,
-source-archive, and expected Gatekeeper-rejection checks. Final local hashes
-are recorded in `doc/exact-channel-rebalance-release-gate.md`. GitHub still has
-zero releases, and the package was not installed or launched.
-The isolated Portal 04 security branch now shows the unsigned/unnotarized and
-Gatekeeper warnings, macOS 15.4+ floor, PGP-manifest gate, and exact source
-commit; full workspace checks, refreshed audits, secret scans, and desktop/mobile
-browser checks passed, with final remote head
-`7645db5a813a0c28926b4e780078aa76adbe5421`. The companion metadata update is
-prepared and remotely read back at
-`24fc2475c18b5e69559bfd2c757154e30f2afd3c`; its complete local check, 13 tests,
-dry-run bundle, zero-vulnerability audit, and secret scan passed. Neither source
-update was deployed, and the accepted provider version still serves the older
-unpublished metadata.
-Resume at the separate owner PGP-key/fingerprint and manifest-signing gate. Do
-not install, publish, deploy, change DNS, open public pull requests, or move sats
-at this checkpoint.
+`38521293804` passed the supported-macOS source/release checks. The public
+prerelease at
+`https://github.com/hudhaifahz/hub/releases/tag/grynvault-rebalance-v0.1.0-rc.2`
+contains the explicitly unsigned/unnotarized universal macOS 15.4+ DMG and its
+source, SBOM, manifest, detached signature, public key, checksum, Gatekeeper,
+and preparation evidence. A fresh external download verified DMG SHA-256
+`b329d7bec494cfff6b6c4f2865f2aa13e08a11e96726696b869cd0309c6dfe1a`
+and a good signature from exact PGP fingerprint
+`D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. Read-only mounting and static
+inspection confirmed exact rc.2/source metadata, independent bundle identity,
+both architectures, macOS 15.4+, the reviewed runtime path, ad-hoc integrity
+signature, no Team Identifier, and expected Gatekeeper rejection. It was not
+launched or installed.
+
+The canonical companion at `https://rebalance.grynvault.com` is live with
+current metadata and exactly five read-only MCP tools. Negative acceptance
+rejected a fabricated execution tool, hostile Origin, and extra diagnostic
+fields. It has no wallet, NWC, invoice, route, payment, or execution binding.
+Frontier Crown PR `Grynvault/frontierCrown#6` was reviewed, tested, and
+squash-merged with exact-head protection at
+`18b1e6efdc381c3f0ea516150e865c42c2a8eb30`. Netlify production deploy
+`6ad0542ffa83daccd5046625` is ready from that exact commit; the live portal
+shows RC.2, the full PGP fingerprint, explicit warnings, and exact immutable
+release/source/docs links. The final CodeRabbit CLI review is recorded in the
+release gate; the repository was not recognized as connected to a CodeRabbit
+organization, so no GitHub-App or independent-audit claim is permitted.
+
+The running `/Applications/Alby Hub.app` is still the earlier owner diagnostic
+build, not the branded public rc.2 package. Resume with the owner-controlled
+clean-install and copied-data migration gate, or prepare exactly one fresh
+pilot quote/action packet. Never execute an expired quote, batch pilots, or
+move sats without the owner's action-time approval of the exact channels,
+principal, eight-decimal BTC equivalent, fee, cap, maximum debit, balances,
+expiry, quote ID, and route fingerprint. Upstream PRs, Nostr signing, and
+Stacker News submission/payment remain separately gated.
 
 ## Proposed defaults
 
