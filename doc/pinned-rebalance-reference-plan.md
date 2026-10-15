@@ -1,6 +1,6 @@
 # Pinned Channel Rebalance Reference Plan
 
-Status: source implementation and deterministic verification are complete through owner confirmation, exact-route submission, restart recovery, and two-leg terminal reconciliation. The exact build from Hub commit `defe4b32c68044c35318e979dbea6e740d9a39cd` is installed and running with migration, wallet continuity, embedded-library, and UI safety checks recorded below. No live rebalance is authorized by this plan.
+Status: source implementation and deterministic verification are complete through owner confirmation, exact-route submission, restart recovery, and two-leg terminal reconciliation. The exact build from Hub commit `defe4b32c68044c35318e979dbea6e740d9a39cd` is installed and running with migration, wallet continuity, and embedded-library checks recorded below. Two separately approved live operations have reconciled successfully; the latest Kraken-return proof pilot is recorded below. This plan does not authorize another quote or payment.
 
 This document is the durable checklist and learning log for adding fail-closed channel routing to the Alby Hub rebalance flow. Update it whenever implementation evidence changes an assumption. Do not mark an item complete from code presence alone; require the stated verification evidence.
 
@@ -28,7 +28,7 @@ Allow an owner to request a circular rebalance with:
 - [x] No unknown or unbounded fee is payable.
 - [x] Incoming channel enforcement is not claimed until it is verified before settlement or the provider protocol is proven atomic. (The local self-payment rejects a wrong or mixed incoming channel before claim; the provider flow remains locked.)
 - [x] Only one rebalance operation may execute at a time. (A database-level partial unique index permits at most one local quote in `executing`, including races between different valid quote IDs.)
-- [ ] A live rebalance always requires a fresh, action-specific owner approval packet.
+- [x] A live rebalance always requires a fresh, action-specific owner approval packet. (Both recorded live operations used a fresh quote and a separate exact owner approval; neither authorizes a retry or another pilot.)
 - [x] Tests, builds, deployment, UI presence, live execution, and economic success are reported as separate states.
 
 ## Confirmed starting point
@@ -1297,3 +1297,82 @@ Consequence:
   public-package clean-install/migration acceptance and then exactly one fresh
   proof-pilot action packet. Upstream PRs, customer payments, Nostr signing, and
   Stacker News submission/payment retain their separate approval gates.
+
+### 2026-10-14 — Owner-approved 10,000-sat Kraken-return proof pilot reconciled
+
+Observed:
+
+- The owner explicitly approved only quote
+  `9b220dcf40d7af94bdb6e91a89c88dd6` for `10,000 sats`
+  (`0.00010000 BTC`). The exact confirmation was bound to suffix `89c88dd6`.
+  The quote allowed at most `100 sats` of routing fee and quoted exactly
+  `8,981 msat` (`8.981 sats`), for an exact maximum source debit of
+  `10,008.981 sats` (the UI rounded its warning ceiling to `10,009 sats`).
+- The selected outgoing channel was
+  `255349693497905514942651862984333935477` to full peer
+  `030ef18b788bdfaf899071bb975f258306f83eae0a83d9e52aee93ae894296a42c`.
+  The selected incoming channel was
+  `86157859664272214382561858939519142638` to full Kraken peer
+  `02437c00ef5de2686a6bd60f8acb5c83d17010916010a15f479d5ef84c04f04485`.
+  Route fingerprint was
+  `4561133178447d94a99b7a3ba20d4941732842d00fcd68072c8a55973611d85b`;
+  first/final SCIDs were `1065615883472404481` and
+  `1065603788758843392`.
+- The execution control was invoked once. No fallback and no automatic retry
+  occurred. Durable state reconciled to `succeeded / succeeded` with operation
+  ID `9024958cb7a1fc09de7dddf3b9586648a44d8dd144922655e7bd1a93d96463db`,
+  payment hash
+  `001dcbdc73361b433f95cd683f1dfb784175b1491f3bc2359eaf990ce724abc6`,
+  outbound payment ID
+  `4cbca62968f3ed1f2f56af0b606e37dfae074ead00265a4576f880d92d02ed89`,
+  and evidence hash
+  `1bf52818a68d503b288b02ef43610508fa123af7e396689483da9aad9ac50161`.
+  Actual routing fee equalled the quote at `8,981 msat` (`8.981 sats`).
+- Independent read-only SQLite readback matched every identifier and amount,
+  reported zero quotes left in `executing`, and returned `integrity_check = ok`.
+- Live channel readback after reconciliation showed all four channels online.
+  The selected outgoing pair moved from `769,236 / 210,103 sats` to
+  `759,227 / 220,112 sats`, a `10,009-sat` displayed shift including the
+  rounded routing fee. The Kraken pair moved from `156,256 / 823,083 sats`
+  while the HTLC was pending to `166,256 / 813,083 sats` after settlement,
+  an exact `10,000-sat` return-channel shift. On-chain balance remained
+  `41,883 sats`.
+
+Consequence:
+
+- This is one successful owner-controlled proof pilot for the intended
+  inbound-`030ef18b...` / outbound-Kraken liquidity direction. It proves the
+  exact selected channel pair and durable terminal reconciliation for this
+  installed owner build at this time. It is not clean-install or copied-wallet
+  acceptance of the public rc.2 package, a route-availability guarantee, an
+  independent security audit, or authorization for another payment.
+- A new live pilot still requires a fresh quote, one exact action-time approval,
+  and no fallback or automatic retry.
+
+### 2026-10-14 — Installed narrow-window dialog still fails owner usability
+
+Observed:
+
+- Owner screenshot evidence from the installed app shows long peer keys,
+  channel IDs, route values, and quote-review values clipped at the right edge.
+  The action footer consumes a large share of the available height, while the
+  current review section requires awkward vertical scrolling and can leave a
+  label visible without its value.
+- Synthetic geometry tests therefore did not establish acceptable installed-app
+  readability. Treat the current responsive-dialog checklist as source/fixture
+  evidence only, not owner acceptance of the installed UI.
+
+Required follow-up:
+
+- Replace the fragile two-column label/value presentation at constrained widths
+  with a responsive stacked layout. Render exact identifiers in a compact
+  monospace, copyable, `overflow-wrap: anywhere` presentation; never hide the
+  evidence behind ellipses.
+- Keep the active review/status section visibly bounded and independently
+  scrollable. Reduce the action footer's height, allow actions to wrap without
+  covering content, and preserve safe-area padding and keyboard focus order.
+- Re-test the real installed component—not only fixtures—at 320, 375, 768, and
+  1280 CSS pixels, plus 200% zoom, in pre-quote, quoted, executing, succeeded,
+  failed, and recovery states. Acceptance requires every label/value pair,
+  exact identifier, status value, and action to remain readable without
+  horizontal clipping.

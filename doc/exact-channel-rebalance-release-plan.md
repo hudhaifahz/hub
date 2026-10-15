@@ -2,10 +2,11 @@
 
 Status: immutable rc.2 is publicly available as an explicitly unsigned,
 unnotarized experimental release authenticated by the owner's PGP key. The
-read-only companion and Portal 04 are live and independently read back. Clean
-installation and copied-data migration of the public Grynvault package, several
-fresh owner-approved proof pilots, upstream PR submission, and public launch
-posts remain open gates.
+read-only companion and Portal 04 are live and independently read back. One
+fresh owner-approved Kraken-return proof pilot has reconciled successfully on
+the installed owner build. Clean installation and copied-data migration of the
+public Grynvault package, additional proof pilots, the installed-app UI repair,
+upstream PR submission, and public launch posts remain open gates.
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
@@ -187,6 +188,25 @@ Privacy-safe usage instructions and screenshot provenance are recorded in
 horizontal overflow, and all three actions remained inside the viewport. The
 exact-confirmation action became keyboard-reachable only after the fixture text
 matched; it was not invoked.
+
+### Installed-app usability regression reopened (2026-10-14)
+
+Owner screenshot evidence from the live installed dialog supersedes the earlier
+fixture-only visual acceptance claim. At the observed narrow window width, long
+peer keys, channel IDs, route evidence, and quote values are clipped at the
+right edge; the footer consumes too much height; and scrolling can expose labels
+without their corresponding values. The safety logic remains intact, but this
+presentation is not release-quality for a financial confirmation surface.
+
+- [ ] Use a stacked responsive label/value layout at constrained widths.
+- [ ] Show full exact identifiers in compact monospace, copyable fields with
+      `overflow-wrap: anywhere`; do not rely on truncation or ellipses for proof.
+- [ ] Keep the current quote/status section clearly bounded and scrollable while
+      reducing the sticky footer footprint so it never masks evidence.
+- [ ] Repeat real-component and installed-app checks at 320, 375, 768, and 1280
+      CSS pixels and 200% zoom for pre-quote, quoted, executing, succeeded,
+      failed, and recovery states.
+- [ ] Require owner visual acceptance before calling the dialog fixed again.
 
 The explicit browser-zoom check used Brave at 200% on the real component's
 synthetic quote and recovery fixtures. Retina `devicePixelRatio` increased from
