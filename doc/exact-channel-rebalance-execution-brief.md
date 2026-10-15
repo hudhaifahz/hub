@@ -5,9 +5,13 @@ release. It supplements, but does not replace, the detailed release checklist.
 
 ## Reusable goal prompt
 
-Complete the Grynvault exact-channel rebalance release by following this brief;
-keep its records current and stop only at its explicit owner approval or
-signing gates.
+Complete the Grynvault exact-channel rebalance release by following this brief.
+Prioritize the installed-app UI repair, then cut and verify immutable RC.3,
+prove clean installation and copied-data migration with rollback, refresh the
+security/test evidence, prepare the current upstream PR chain, update every
+public surface, and only then prepare Nostr and Stacker News publication.
+Keep all records current and stop only at the explicit owner approval,
+value-moving, signing, deployment, PR-opening, or publication gates below.
 
 ## Read first
 
@@ -98,12 +102,85 @@ organization, so no GitHub-App or independent-audit claim is permitted.
 
 The running `/Applications/Alby Hub.app` is still the earlier owner diagnostic
 build, not the branded public rc.2 package. Resume with the owner-controlled
-clean-install and copied-data migration gate, or prepare exactly one fresh
-pilot quote/action packet. Never execute an expired quote, batch pilots, or
-move sats without the owner's action-time approval of the exact channels,
-principal, eight-decimal BTC equivalent, fee, cap, maximum debit, balances,
-expiry, quote ID, and route fingerprint. Upstream PRs, Nostr signing, and
-Stacker News submission/payment remain separately gated.
+clean-install and copied-data migration gate only after repairing the
+installed-app dialog and producing a new immutable release candidate. RC.2 is
+immutable and must never be replaced in place.
+
+One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
+pilot has reconciled successfully on the installed owner build. Durable
+readback reported `succeeded / succeeded`, exact actual routing fee
+`8,981 msat` (`8.981 sats`), zero operations left in `executing`, database
+integrity `ok`, the intended outgoing/Kraken balance shifts, and all four
+channels online. This proves one operation on the installed owner build; it is
+not public-package clean-install or migration acceptance and authorizes no
+retry or later payment.
+
+The owner rejected the installed narrow-window dialog on usability grounds.
+Long identifiers and quote values can be clipped, labels can separate from
+their values, and the footer consumes too much of the available height. Earlier
+synthetic geometry evidence is not installed-app visual acceptance. Fix and
+verify this before the main public launch.
+
+Never execute an expired quote, batch pilots, or move sats without the owner's
+action-time approval of the exact channels, principal, eight-decimal BTC
+equivalent, fee, cap, maximum debit, balances, expiry, quote ID, and route
+fingerprint. Upstream PRs, Nostr signing, and Stacker News
+submission/payment remain separately gated.
+
+## Priority completion sequence
+
+Treat this order as the active priority for the resumed goal. Do not skip ahead
+from a prepared or locally passing state to a public-completion claim.
+
+1. **Repair and accept the installed UI.** Implement a responsive stacked
+   label/value layout at constrained widths; use compact copyable monospace
+   fields with `overflow-wrap: anywhere` for exact identifiers; keep the active
+   review/status content independently scrollable; and reduce the action
+   footer's footprint without obscuring evidence. Verify the real component and
+   installed desktop app at 320, 375, 768, and 1280 CSS pixels plus 200% zoom in
+   pre-quote, quoted, executing, succeeded, failed, and recovery states. Require
+   owner visual acceptance.
+2. **Create immutable RC.3.** Because RC.2 cannot be changed, record a new exact
+   source commit and annotated tag. Rebuild the universal macOS package, source
+   archive, SBOM, provenance, checksums, Gatekeeper evidence, manifest, and
+   release notes. Preserve the explicit unsigned/unnotarized classification.
+   Stop for the owner's exact tag and PGP-signing approvals.
+3. **Prove the downloadable package.** On a clean macOS 15.4+ profile, verify a
+   clean install with no wallet data. Using only an owner-approved copy of the
+   wallet data, verify migration, unlock, database integrity, channels,
+   balances, transaction history, NWC apps and permissions, backup state,
+   embedded source/library hashes, UI behavior, and rollback. Do not move sats
+   during installation acceptance.
+4. **Refresh security and regression evidence.** Run the complete Go, Rust,
+   binding, frontend, migration, package, dependency, secret, and release-tree
+   checks against the exact RC.3 source. Require zero unresolved Critical or
+   High findings and document all residuals. Do not call this an independent
+   audit.
+5. **Prepare the current upstream PR chain.** Rebase the isolated LDK, LDK Go,
+   and Hub contributions on current upstream heads, rerun their full matrices,
+   refresh the PR bodies and screenshots, and stop for owner review before
+   opening the three public PRs. Never merge on behalf of upstream maintainers.
+6. **Refresh every public surface.** Publish only after the separate release
+   approval, then update the read-only companion and Portal 04 to exact RC.3
+   metadata and immutable links. Independently read back every download, hash,
+   signature, source commit, certificate, endpoint, portal action, and PR URL.
+7. **Publish the launch posts last.** Prepare the final Nostr kind-1 event and
+   show its exact content, tags, relay set, and timestamp policy for separate
+   signing/publication approval. Read it back from a target relay. Then perform
+   a fresh exact-URL Stacker News duplicate check and show the exact title, URL,
+   territory, description, and current fee for a separate submission/payment
+   approval. Reconcile one posting attempt before any retry.
+
+### Paid-service boundary
+
+The public open-source announcement does not authorize selling an operator
+service. Before the first paid customer, separately complete at least three
+fresh intended-channel proof pilots one approval at a time, prove one safe
+expiry or no-route case moved no sats and incurred no fee, publish the support
+scope/refund/privacy/security/incident-stop terms, refresh the release evidence,
+and obtain owner approval for the exact offer and payment mechanism. Never
+operate a customer's wallet or remote-click the customer's value-moving
+confirmation.
 
 ## Proposed defaults
 
