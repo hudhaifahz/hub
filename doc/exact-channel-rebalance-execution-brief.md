@@ -120,6 +120,8 @@ Use these unless current evidence reveals a conflict:
   compatibility revision `2025-11-25` explicitly pinned
 - Open-source release followed by a paid installation, migration, recovery, or
   diagnostic-support experiment
+- Operator-service boundary and paid-pilot gates:
+  `doc/exact-channel-rebalance-operator-service.md`
 
 ## Product boundary
 

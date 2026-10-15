@@ -611,6 +611,10 @@ Implementation evidence on 2026-10-13:
 
 ## 10. Small-business experiment
 
+The exact no-custody scope, proposed validation price, customer disclosure,
+action packet, evidence requirements, and first-paid-customer gates are in
+`doc/exact-channel-rebalance-operator-service.md`.
+
 Treat this as validation-stage infrastructure, not yet a routing-liquidity
 business. The first customer is a self-hosting Alby/LDK operator who already has
 one channel with enough outbound liquidity and another with enough inbound

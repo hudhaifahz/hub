@@ -2,9 +2,9 @@
 
 Status: **PREPARED — NOT SIGNED — NOT PUBLISHED**
 
-These drafts are not publication authorization. Replace every bracketed value
-only after the signed release, portal, canonical companion hostname, and
-upstream pull requests are publicly readable and independently verified.
+These drafts are not publication authorization. The public release, portal, and
+canonical companion URLs below were independently read back on 2026-10-14.
+Upstream pull requests do not yet exist and are deliberately not claimed.
 
 ## Nostr kind-1 note
 
@@ -14,7 +14,11 @@ pre-sign or reuse an expired signing request.
 Proposed tags:
 
 ```json
-[["t", "bitcoin"], ["t", "lightning"], ["t", "albyhub"]]
+[
+  ["t", "bitcoin"],
+  ["t", "lightning"],
+  ["t", "albyhub"]
+]
 ```
 
 Proposed content:
@@ -24,16 +28,25 @@ Grynvault Rebalance is an experimental, independently maintained macOS fork of A
 
 It binds the exact first and final channels inside the local Hub/LDK process, with non-paying route discovery, typed confirmation, no fallback route, and no automatic payment retry. It cannot manufacture liquidity or guarantee a viable Lightning route.
 
-Source, signed release, checksums, documentation, security notes, and upstream contributions: [FINAL_CANONICAL_RELEASE_URL]
+Source and PGP-authenticated release:
+https://github.com/hudhaifahz/hub/releases/tag/grynvault-rebalance-v0.1.0-rc.2
+
+Read-only documentation and diagnostics:
+https://rebalance.grynvault.com
+
+Portal:
+https://frontiercrown.com/portal
+
+The macOS application is unsigned by Apple and unnotarized. Verify the PGP-signed manifest and expect Gatekeeper to warn or block it. Not independently audited.
 
 Not an official Alby release or endorsement.
 ```
 
 Before requesting signing approval:
 
-- replace the placeholder with the final canonical HTTPS release page;
 - verify every linked artifact, source tag, manifest signature, documentation
-  page, and upstream pull request from a fresh profile;
+  page, and portal link from a fresh profile;
+- do not add an upstream-contribution claim until the exact PR chain is public;
 - compare with prior owner posts to avoid duplicating an unchanged announcement;
 - show the owner this exact text, kind `1`, tags, relay set, and timestamp policy;
 - exclude node identifiers, balances, wallet history, routing tactics, keys, and
@@ -43,19 +56,19 @@ Before requesting signing approval:
 
 ## Stacker News link post
 
-This remains a template until the canonical public article exists. Prefer the
-public release article or a verified long-form Nostr article as the source; do
-not syndicate a private, mutable, or inaccessible URL.
+This remains a template until the owner approves submission. The immutable
+public GitHub release is the current canonical link; replace it only with a
+freshly verified long-form article.
 
 - Title: `Grynvault Rebalance: exact-channel circular rebalancing for Alby Hub`
-- URL: `[FINAL_CANONICAL_ARTICLE_URL]`
+- URL: `https://github.com/hudhaifahz/hub/releases/tag/grynvault-rebalance-v0.1.0-rc.2`
 - Territory: `bitcoin` (reconfirm that this is the narrowest available relevant
   territory immediately before submission)
 - Crosspost to Nostr: off
 - Description:
 
 ```text
-An experimental independent macOS fork that adds fail-closed circular rebalancing through owner-selected outgoing and incoming channels. Route discovery is non-paying; execution requires a fresh exact confirmation and never falls back to another channel. Includes source, signed artifacts, checksums, migration guidance, security notes, and upstream contribution links.
+An experimental independent macOS fork that adds fail-closed circular rebalancing through owner-selected outgoing and incoming channels. Route discovery is non-paying; execution requires a fresh exact confirmation and never falls back to another channel. Includes source, a PGP-signed manifest, checksums, migration guidance, and security notes. The app is unsigned by Apple, unnotarized, and not independently audited.
 ```
 
 Before requesting submission or payment approval:
