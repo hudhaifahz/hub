@@ -644,9 +644,10 @@ Implementation evidence on 2026-10-13:
 - [x] Independently read back exact GitHub run `38857778185` as successful at
       source commit `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`; every
       frontend/release and Go/security step completed successfully.
-- [ ] Obtain a fresh zero-finding CodeRabbit review of the rc.3 release layer
-      after the public-OSS quota resets, before asking for the immutable rc.3 tag
-      approval.
+- [x] Obtain a fresh zero-finding CodeRabbit review of the rc.3 release layer
+      against exact parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` before
+      asking for immutable rc.3 tag approval. On 2026-10-16, the complete review
+      closed with zero findings across 64 reviewed files.
 - [x] Make a clean release tag and build and inspect the unsigned application
       from that tag.
 - [x] Build and verify the explicitly unsigned application DMG, source archive,

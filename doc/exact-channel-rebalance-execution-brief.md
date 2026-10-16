@@ -124,10 +124,11 @@ SBOM, and preparation-index run. The disposable tag was deleted. This is
 non-release evidence only: no immutable rc.3 tag, PGP signature, public release,
 installation, migration, or publication exists. GitHub source-compatibility run
 `38857778185` completed successfully at that exact head, including frontend,
-release-workflow, Go, race, vet, vulnerability, and secret checks. A fresh
-release-layer CodeRabbit review is still required before presenting the
-immutable-tag approval packet and is waiting for the public-OSS review quota to
-reset.
+release-workflow, Go, race, vet, vulnerability, and secret checks. On
+2026-10-16, a fresh CodeRabbit CLI review of the complete RC.3 release layer
+against exact parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` completed with
+zero findings across 64 reviewed files. The immutable-tag approval packet is
+therefore ready, but no tag or later publication action is authorized yet.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable

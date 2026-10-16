@@ -52,16 +52,16 @@ The local-only artifact was built from disposable tag
 `grynvault-unsigned-local-9583e7a2`, inspected, mounted read-only, and rejected
 by Gatekeeper with `source=no usable signature` and exit status 3 as expected.
 The tag was then deleted. It is not an rc.3 artifact and must not be signed,
-installed, uploaded, linked, or advertised. The fresh release-layer CodeRabbit
-review is pending because the public OSS CLI quota was exhausted after the
-completed contribution reviews; do not substitute those earlier reviews for a
-fresh RC.3 result.
+installed, uploaded, linked, or advertised. After the public OSS CLI quota
+reset, a fresh CodeRabbit CLI review of the complete RC.3 release layer against
+exact parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` completed on 2026-10-16
+with zero findings across 64 reviewed files.
 
 GitHub independently completed run `38857778185` successfully at exact head
 `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. Every setup, frontend/release,
 Go/security, and teardown step concluded `success`.
 
-After the fresh RC.3 CodeRabbit review closes, the proposed immutable-tag action
+The fresh RC.3 CodeRabbit review is closed. The proposed immutable-tag action
 packet is:
 
 - tag: `grynvault-rebalance-v0.1.0-rc.3`;
