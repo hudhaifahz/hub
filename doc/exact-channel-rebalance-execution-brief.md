@@ -10,10 +10,11 @@ Prioritize the installed-app UI repair, then cut and verify immutable RC.3,
 prove clean installation and copied-data migration with rollback, refresh the
 security/test evidence, prepare the current upstream PR chain, update every
 public surface, and only then prepare Nostr and Stacker News publication.
-In parallel, prepare the separately isolated stock-Alby provider described in
-`doc/stock-alby-rebalance-provider-plan.md`, but never describe its peer-targeted
-best-effort routing as exact-channel behavior and never let provider work weaken
-or bypass the exact-release gates.
+Do not implement the deferred stock-Alby payment provider described in
+`doc/stock-alby-rebalance-provider-plan.md`. The owner concluded on 2026-10-15
+that peer-targeted best-effort routing does not satisfy the product's purpose.
+Preserve that document as the rationale and future compatibility analysis only;
+focus implementation on exact local-channel enforcement and upstream adoption.
 Keep all records current and stop only at the explicit owner approval,
 value-moving, signing, deployment, PR-opening, or publication gates below.
 
@@ -216,13 +217,12 @@ The hosted service cannot replace the local patch for forced routing. It must
 not execute payments or rebalances, proxy Hub owner APIs, accept an NWC
 connection, or claim it can force routes in an unmodified Alby Hub.
 
-A future `provider.rebalance.grynvault.com` is a separate service and trust
-boundary governed by `doc/stock-alby-rebalance-provider-plan.md`. It can perform
-a real two-leg peer-targeted rebalance for stock Alby users, but stock Hub does
-not transmit both local channel IDs or accept a provider-selected first hop.
-Accordingly it cannot guarantee either exact customer channel and must never be
-presented as the exact-channel product. Keep the existing
-`rebalance.grynvault.com` companion read-only.
+The proposed `provider.rebalance.grynvault.com` payment service is deferred and
+must not be implemented or deployed under the current goal. Stock Hub does not
+transmit both local channel IDs or accept a provider-selected first hop, so its
+peer-targeted best-effort flow does not satisfy the exact-channel product
+purpose. Reconsider it only after explicit owner direction or upstream protocol
+changes. Keep the existing `rebalance.grynvault.com` companion read-only.
 
 Never request or accept seeds, passwords, recovery material, macaroons, NWC
 connection strings, API tokens, private keys, invoices, preimages, payment

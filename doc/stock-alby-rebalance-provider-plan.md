@@ -1,7 +1,10 @@
 # Stock Alby rebalance provider plan
 
-Status: architecture and acceptance plan only. No provider is deployed, no node
-or wallet credential is configured, and no payment is authorized by this file.
+Status: **deferred by owner decision on 2026-10-15**. Preserve this document as
+compatibility analysis and a record of why the stock-provider path was not
+selected. Do not implement or deploy it under the active release goal. No
+provider is deployed, no node or wallet credential is configured, and no
+payment is authorized by this file.
 
 This plan defines a second Grynvault product path for people who use an
 unmodified Alby Hub. It does not replace or weaken the exact-channel feature in
@@ -9,7 +12,7 @@ the Grynvault Alby/LDK fork.
 
 ## Decision
 
-Ship and describe two different modes with different guarantees:
+The two technically possible modes have different guarantees:
 
 | Mode | Client | Customer channel guarantee | Intended use |
 | --- | --- | --- | --- |
@@ -19,6 +22,13 @@ Ship and describe two different modes with different guarantees:
 Never call the stock-provider mode `exact-channel`, `channel-pinned`, or
 `guaranteed`. Its UI, documentation, receipts, pricing, and support terms must
 say `peer-targeted` and `best effort`.
+
+The owner chose not to build the stock-provider mode because selecting only a
+receiving peer while leaving the customer's outgoing channel to ordinary route
+selection can produce the wrong liquidity movement. The active product remains
+Grynvault Exact Rebalance. The useful stock-Alby path is upstream adoption of
+the exact channel-selection and enforcement changes, not a best-effort payment
+service beside an unmodified client.
 
 ## Will it actually rebalance sats?
 
@@ -221,7 +231,10 @@ Transitions must be monotonic and idempotent. `OUTCOME_UNKNOWN` and
 - [ ] Reconcile both payment hashes and customer/provider balance changes before
       considering the pilot successful or attempting another.
 
-## Implementation sequence
+## Implementation sequence if explicitly revived
+
+Do not start this sequence without new explicit owner direction after reviewing
+whether stock Alby has gained exact outgoing and incoming channel controls.
 
 1. Create a separate private repository and threat model; do not modify the
    live companion.
