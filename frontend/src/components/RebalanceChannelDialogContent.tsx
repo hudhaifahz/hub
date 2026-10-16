@@ -210,6 +210,7 @@ export function RebalanceChannelDialogContent({
   const [quote, setQuote] = React.useState<RebalanceQuote>();
   const [confirmation, setConfirmation] = React.useState("");
   const [operation, setOperation] = React.useState<LocalRebalanceOperation>();
+  const [operationRefreshRetry, setOperationRefreshRetry] = React.useState(0);
   const [resumeStoredOperation, setResumeStoredOperation] =
     React.useState(false);
 
@@ -238,10 +239,13 @@ export function RebalanceChannelDialogContent({
       return;
     }
     const timer = window.setTimeout(() => {
-      refreshOperation().catch((error) => console.error(error));
+      refreshOperation().catch((error) => {
+        console.error(error);
+        setOperationRefreshRetry((retry) => retry + 1);
+      });
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [operation, refreshOperation]);
+  }, [operation, operationRefreshRetry, refreshOperation]);
 
   React.useEffect(() => {
     if (operation?.state === "succeeded" || operation?.state === "failed") {
