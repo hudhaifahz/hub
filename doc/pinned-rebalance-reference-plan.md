@@ -1560,6 +1560,12 @@ Observed:
   not passed. The underlying contribution diff's final complete review remains
   zero-finding, while the rc.2 release-layer history retains its earlier review
   evidence.
+- Proposed tag `grynvault-rebalance-v0.1.0-rc.3` is absent from local refs,
+  the owner-fork remote, and GitHub Releases. Its future action packet is bound
+  to exact source `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`, but it must not
+  be presented for approval until fresh RC.3 CodeRabbit review closes. Creating
+  the tag, rebuilding final artifacts, PGP signing, publishing the release, and
+  installing it remain separate actions.
 
 Consequence:
 

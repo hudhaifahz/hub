@@ -61,6 +61,21 @@ GitHub independently completed run `38857778185` successfully at exact head
 `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. Every setup, frontend/release,
 Go/security, and teardown step concluded `success`.
 
+After the fresh RC.3 CodeRabbit review closes, the proposed immutable-tag action
+packet is:
+
+- tag: `grynvault-rebalance-v0.1.0-rc.3`;
+- exact commit: `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`;
+- action: create and push one annotated tag only;
+- exclusions: no PGP signing, GitHub release, installation, deployment,
+  publication, or Lightning operation in the tag action.
+
+The tag and matching GitHub release are currently absent. The approval text
+must name both the exact tag and full commit. Final artifacts will differ from
+the disposable-build hashes because the immutable release tag is embedded in
+the application; rebuild and re-verify them only after tag approval. PGP signing
+then requires its own later owner-controlled approval.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit
