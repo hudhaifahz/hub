@@ -1,6 +1,6 @@
 # Pre-release security review
 
-Date: 2026-10-15
+Date: 2026-10-16
 
 Status: internal pre-release review; not an independent third-party audit and
 not a public-release approval.
@@ -32,12 +32,23 @@ live Lightning payment was used.
 | HTTP and Wails frontend builds | Node 22 / locked Yarn dependencies | Pass |
 | Source-boundary assertions | `scripts/release/check-source-boundaries.sh` | Pass |
 
-The RC.3 preparation source replays the exact-channel work onto Alby Hub
+The candidate source replays the exact-channel work onto Alby Hub
 `v1.24.3` and pins the reviewed LDK and Go binding heads recorded in
 `PROVENANCE.md`. The final upstream-oriented Hub diff received a complete
 CodeRabbit review with zero findings after fixing dependency provenance and a
 transient reconciliation-status polling gap. CodeRabbit is review input, not an
 independent security audit.
+
+The offline RC.3 acceptance test revealed that a failed desktop OAuth callback
+could place its one-time authorization-code query value in a Wails route log.
+RC.3 was withheld from publication. The successor source removes every query
+value from Wails route logs and reflected unhandled-route errors, redacts
+payment-request path segments, and applies the payment redaction even when URL
+parsing fails on malformed escapes. Focused regression tests cover OAuth query
+values, ordinary query values, payment requests, and malformed payment paths.
+After the malformed-path fallback was corrected, a complete CodeRabbit review
+of the RC.3-to-successor diff reported zero findings. CodeRabbit is review
+input, not an independent security audit.
 
 An unsigned universal preflight build identified and fixed duplicate runtime
 path processing caused by `otool` reporting each path once per architecture.
