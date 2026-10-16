@@ -1772,3 +1772,82 @@ Consequence:
   narrow RC.4 clean-install and copied-data migration/rollback checks. That
   check must remain non-paying and offline, preserve canonical wallet data and
   backups, and leave the canonical Alby Hub as the only network-connected node.
+
+### 2026-10-16 — RC.4 offline clean-install, copied-wallet, and rollback acceptance
+
+Observed:
+
+- The owner approved one offline, non-paying RC.4 acceptance run. The exact
+  manifest and detached signature were reverified in an isolated public-key-only
+  keyring as `GOODSIG` and `VALIDSIG` for fingerprint
+  `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. The accepted private DMG retained
+  SHA-256
+  `534d258c9c59b4ac63758de306899ee932f31457d54eb9a849757c931c41345e`.
+- Fresh hash-verified backups preserved the canonical Alby application and live
+  wallet data before installation. The primary application backup has SHA-256
+  `6404f32597b00dd3678035f0f38699fece773a1a5581018cc4f43a001e0085d0`;
+  the live container work-directory backup has SHA-256
+  `619b57a03c02ad32e17c9a58be2766fa1fe856556754fdc99e27b6605c5c5385`.
+  Existing Grynvault RC.3 and legacy data were separately preserved. A failed
+  partial whole-container archive is explicitly marked invalid and is not
+  acceptance evidence.
+- `/Applications/Grynvault Rebalance.app` passed installed-bundle readback for
+  independent bundle identity `com.grynvault.rebalance`, universal `x86_64`
+  and `arm64` slices, macOS 15.4 floor, exact embedded tag
+  `grynvault-rebalance-v0.1.0-rc.4`, exact source
+  `4de3883f4d76af2a312962c2d5e7546963bf9261`, and pinned raw LDK SHA-256
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`.
+- An empty work directory opened the branded welcome flow under an external
+  network-denial profile and exposed only its loopback UI socket. Database
+  integrity was `ok`. A forced offline Alby callback recorded only the route
+  `/api/alby/callback`; it recorded no query or authorization-code value.
+- The first copied-data launch reused the production bundle identifier and
+  inherited stale WebView form state. Two stale setup requests were safely
+  rejected because setup was already complete. The acceptance was repeated
+  with a disposable test-only bundle identifier
+  `com.grynvault.rebalance.rc4acceptance`, while preserving the exact RC.4
+  binary/tag/source and the same external network-denial boundary. This is the
+  required isolation pattern for future copied-data acceptance.
+- Before launch, the canonical and copied databases matched: `nwc.db` SHA-256
+  `4786e5960ef58a0fd77d09717cdd7a7b5f95c8994835066a832240f556cdae68`
+  and LDK SQLite SHA-256
+  `08d0b99ee63ad964b0bca70791ae6665ce247d6ad69edf81dd2d88f6e6a9b2e6`.
+  Both integrity checks returned `ok`. The copied baseline contained 12 NWC
+  applications, 94 permission rows, 262 transactions, 12 local quote records,
+  409 LDK rows, and seven static backups.
+- The owner entered the wallet password only in the local application UI.
+  Successful seed decryption reconstructed the canonical public node identity
+  `0250370618809ebd6cce2f9da1a7647bcd6cf10ac839083553c307f6a2feba779e`.
+  Startup then stopped at the intended network-denial boundary with
+  `ConnectionFailed: Network connection closed`; the copied node never reached
+  an online state.
+- Post-unlock readback preserved all 12 NWC applications, all 94 permissions and
+  their per-scope counts, the 262-row transaction snapshot, seven static
+  backups, and all five channel-monitor identities and lengths. RC.4 applied
+  migration 36 only to the disposable copy and changed only
+  `NodeLastStartTime` among user configuration keys. Database integrity remained
+  `ok`.
+- The canonical Hub was independently restarted during the acceptance and
+  advanced by one later settled outgoing transaction after the copy snapshot.
+  That live-only row explains the final 263-versus-262 transaction count; the
+  isolated copied database retained the approved snapshot and never moved
+  value.
+- A narrow scan of the 24 new RC.4 runtime log lines found zero matches for
+  callback queries, authorization codes, payment-request query fields, or
+  BOLT11 prefixes. Historical pre-RC.4 log content is not treated as evidence
+  for the new redaction behavior.
+- The disposable test process did not exit after the graceful interrupt or
+  `TERM`, so it was stopped by exact PID with `KILL`. The disposable copy is no
+  longer running; the canonical `/Applications/Alby Hub.app` remains the only
+  network-connected wallet process. No invoice, probe, HTLC, payment, swap,
+  rebalance, or channel operation was created by this acceptance.
+
+Consequence:
+
+- Step 5 is complete for the private PGP-verified RC.4 artifact. This proves
+  clean-profile behavior, copied-wallet continuity, rollback preservation,
+  embedded identity, and the RC.4 route-log redaction under external-network
+  denial. It does not publish RC.4 or authorize an upstream PR, portal or
+  companion update, Nostr event, Stacker News submission, or Lightning action.
+- GitHub RC.4 publication and portal/companion production updates remain
+  separate owner-approval gates.

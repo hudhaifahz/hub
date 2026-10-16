@@ -707,7 +707,7 @@ Implementation evidence on 2026-10-13:
       over that exact manifest with the release key; verify it in an isolated
       public-key-only keyring and do not upload it. Signature SHA-256:
       `21d5aebc2e07917e6ba1653343086ca41a5f7b70399ddc3256bb8d02f51cf129`.
-- [ ] Repeat the narrow clean-install and copied-data migration/rollback checks
+- [x] Repeat the narrow clean-install and copied-data migration/rollback checks
       with the PGP-verified RC.4 package and no Lightning operation.
 - [ ] Obtain separate owner approval before GitHub RC.4 publication and again
       before portal/companion production updates.

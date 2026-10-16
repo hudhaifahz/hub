@@ -153,6 +153,23 @@ as the final candidate. Prepare a new immutable candidate from the reviewed
 security-fix source and repeat the package/signature/install gates before any
 public RC update.
 
+RC.4 is now the private accepted successor. Annotated tag
+`grynvault-rebalance-v0.1.0-rc.4`, tag object
+`df8597eb314217d3b40e89135079e1a0ca2da4cc`, peels to exact source
+`4de3883f4d76af2a312962c2d5e7546963bf9261`. Its private universal DMG has
+SHA-256 `534d258c9c59b4ac63758de306899ee932f31457d54eb9a849757c931c41345e`;
+the owner-controlled manifest signature verified in a public-key-only keyring.
+The owner-approved offline clean-profile and copied-wallet acceptance completed
+on 2026-10-16 with hash-verified backups, database integrity `ok`, canonical
+public node identity, all NWC apps and permissions, transaction snapshot,
+static backups, and channel-monitor identities preserved. External networking
+was denied throughout the disposable copy's run, and startup stopped at the
+expected Electrum boundary. A narrow scan of new RC.4 runtime lines found no
+credential-shaped route data. The disposable copy is stopped and canonical
+Alby Hub is the only network-connected wallet process. No Lightning operation
+was created. RC.4 GitHub publication and portal/companion production updates
+still require separate owner approvals.
+
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable
 readback reported `succeeded / succeeded`, exact actual routing fee

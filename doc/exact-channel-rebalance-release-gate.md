@@ -190,8 +190,43 @@ immutable tag was separately owner-approved, pushed, and independently read
 back before the tag-specific rebuild recorded above. The next gate is exact
 owner approval to sign only the 1,564-byte manifest. That approval was received,
 the signature was verified in an isolated keyring containing no secret key, and
-nothing was uploaded. Installation/migration, GitHub publication, and
-portal/companion updates remain distinct later approvals.
+nothing was uploaded.
+
+### RC.4 offline installation and copied-wallet acceptance
+
+The owner-approved offline RC.4 acceptance completed on 2026-10-16. Fresh
+hash-verified application and live-wallet backups were created before
+installation. The installed private RC.4 app read back the exact immutable tag,
+source commit, independent bundle/data identity, universal architectures,
+macOS 15.4 floor, and pinned LDK library hash.
+
+An empty work directory opened the branded welcome flow with external network
+access denied and only a loopback UI socket. A forced offline callback logged
+only `/api/alby/callback`; a narrow scan of all 24 new RC.4 runtime lines found
+zero callback-query, authorization-code, payment-request, or BOLT11 patterns.
+
+The copied-wallet baseline matched the canonical `nwc.db` and LDK SQLite hashes
+and passed both integrity checks. Because the first copy reused the production
+bundle identifier and inherited stale WebView form state, copied-data testing
+was repeated with a disposable test-only bundle identifier while preserving the
+exact RC.4 executable/tag/source and external network-denial boundary. The
+owner entered the unlock password only in the local UI. RC.4 reconstructed the
+same public node identity, then failed at the expected denied Electrum boundary
+before the copied node could become online.
+
+Post-unlock readback preserved 12 NWC applications, 94 permission rows and all
+scope counts, the 262-transaction snapshot, seven static backups, and all five
+channel-monitor identities and lengths. Migration 36 applied only to the
+disposable copy; database integrity remained `ok`. The canonical Hub later
+advanced by one independently created settled outgoing transaction after the
+snapshot, explaining its 263-versus-262 count without indicating a migration
+defect. The disposable copy was stopped and the canonical Hub remains the only
+network-connected wallet process. No invoice, probe, HTLC, payment, swap,
+rebalance, or channel operation was created by the acceptance.
+
+Installation/migration acceptance is closed for this private PGP-verified RC.4
+artifact. GitHub publication and portal/companion production updates remain
+distinct owner approvals.
 
 ## Evidence closed at the current commit
 
