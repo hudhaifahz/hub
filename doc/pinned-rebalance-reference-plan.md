@@ -1577,3 +1577,60 @@ Consequence:
   signing, GitHub release publication, portal/companion updates, upstream PR
   creation, Nostr publication, Stacker News submission/payment, and every new
   Lightning operation remain separately gated.
+
+### 2026-10-16 — RC.3 offline clean-install, copied-wallet, and rollback acceptance
+
+Observed:
+
+- The owner approved one offline, non-paying acceptance run. Canonical Alby Hub
+  was stopped cleanly; no invoice, probe, HTLC, payment, swap, rebalance,
+  channel operation, or value movement was created.
+- The installed RC.3 bundle passed PGP/DMG readback and retained its independent
+  bundle/data identity, universal architectures, macOS 15.4 floor, embedded
+  tag/source, and pinned LDK hash. A new Grynvault container displayed the
+  branded clean-install welcome screen.
+- The first copied-data attempt correctly exposed a path error in the prepared
+  checklist: sandboxed Alby Hub uses
+  `~/Library/Containers/com.getalby.Alby-Hub/Data/Library/Application Support/albyhub`.
+  The small legacy directory is not the live wallet. The test was stopped and
+  not treated as migration evidence.
+- The real 275 MB live work directory passed NWC and LDK SQLite integrity
+  checks. A permission-restricted ZIP outside both application containers
+  passed full archive testing and has SHA-256
+  `e4c3a20dc0de12208ed27ffae074522ba9047e0f884a62a6f875facaba1b4912`.
+  Its two database hashes matched canonical readback before restart.
+- Before launch, the real copied work directory matched both database hashes,
+  all 16 user-config records, all 35 migrations, and all 407 LDK key/value
+  rows. RC.3 ran only under a test-only profile denying external networking.
+  The owner supplied the unlock password solely in the local UI.
+- RC.3 decrypted the copied seed and reconstructed the canonical public node
+  identity, then stopped at the intended Electrum boundary with
+  `NodeError: ConnectionFailed: Network connection closed.` No peer, relay,
+  Alby API, or chain-service connection succeeded.
+- Read-only comparison preserved 12 NWC applications, 94 permission rows and
+  all scopes, 262 transaction records and their aggregate states/types/amounts,
+  seven static channel backups, the channel-manager/payment key sets, and five
+  channel-monitor identities. Both copied databases remained `ok`. Startup
+  reserialized the five monitor blobs only in the disposable copy; key identity
+  and byte length remained stable and canonical data was unchanged.
+- The external-network denial deliberately prevents a copied node from
+  completing chain synchronization or displaying a live channel dashboard.
+  This run therefore proves offline storage/password/identity continuity and
+  rollback, not a second simultaneously online node.
+- The test process was stopped, the Grynvault container was returned to its
+  clean-install state, and untouched canonical Alby Hub restarted successfully.
+  Owner UI readback showed the expected wallet balances and four channels,
+  with three online and Kraken offline. The latter is peer availability, not
+  migration damage.
+- A fresh upstream fetch independently confirmed RC.3 already descends directly
+  from Alby Hub `v1.24.3` commit
+  `5d5e696dfe7d430a365d48939c394376e078a56b`; upstream `master` was still that
+  exact commit at readback. No newer upstream commit required replay.
+
+Consequence:
+
+- The offline installation/migration/rollback gate is closed with its networked
+  second-node limitation stated explicitly. Canonical Hub remains the only
+  online wallet. RC.3 GitHub release publication, portal/companion refresh,
+  upstream PR creation, Nostr publication, Stacker News submission/payment,
+  and every new Lightning operation remain separately gated.

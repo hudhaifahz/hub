@@ -1,12 +1,12 @@
 # Exact-channel rebalance release plan
 
 Status: immutable rc.2 is publicly available as an explicitly unsigned,
-unnotarized experimental release authenticated by the owner's PGP key. The
-read-only companion and Portal 04 are live and independently read back. One
-fresh owner-approved Kraken-return proof pilot has reconciled successfully on
-the installed owner build. Clean installation and copied-data migration of the
-public Grynvault package, additional proof pilots, the installed-app UI repair,
-upstream PR submission, and public launch posts remain open gates.
+unnotarized experimental release authenticated by the owner's PGP key. RC.3 is
+immutable and privately PGP-signed, and its owner-approved offline clean-install,
+real copied-wallet migration, and rollback acceptance completed on 2026-10-16.
+The read-only companion and Portal 04 still publish rc.2. Additional proof
+pilots, upstream PR submission, the separate RC.3 GitHub-release/deployment
+approval, and public launch posts remain open gates.
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
@@ -401,14 +401,14 @@ Prepare three coordinated contributions:
 
 ### Upgrade and rollback acceptance
 
-- [ ] Back up the current wallet and record hashes before any migration test.
-- [ ] Test a clean installation with no wallet data.
-- [ ] Test migration using a copy of the current data, then verify unlock,
+- [x] Back up the current wallet and record hashes before any migration test.
+- [x] Test a clean installation with no wallet data.
+- [x] Test migration using a copy of the current data, then verify unlock,
       database integrity, channels, balances, transaction history, NWC apps,
       permissions, backup state, embedded hashes, and UI behavior.
-- [ ] Keep a verified rollback package and database backup outside the
+- [x] Keep a verified rollback package and database backup outside the
       application directory.
-- [ ] Do not run a real payment or rebalance as part of installation acceptance.
+- [x] Do not run a real payment or rebalance as part of installation acceptance.
       Any later value-moving canary requires its own fresh action packet and owner
       approval.
 

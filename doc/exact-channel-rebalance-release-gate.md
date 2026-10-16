@@ -92,37 +92,55 @@ was verified in a fresh isolated GPG home as `GOODSIG` and `VALIDSIG` for full
 fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. No upload or publication
 was performed.
 
-### Next owner gate: offline clean-install and copied-data acceptance
+### Offline clean-install and copied-data acceptance
 
-Status: **PREPARED — NOT AUTHORIZED**.
+Status: **COMPLETED 2026-10-16 — OFFLINE BOUNDARY RECORDED**.
 
-The live Alby Hub data remains canonical. To avoid ever allowing two copies of
-the same Lightning node identity to communicate with the network, the proposed
-acceptance run will:
+The owner approved this exact non-paying run. `/Applications/Alby Hub.app` was
+quit cleanly, every pre-existing Grynvault directory was preserved, and the
+PGP-verified RC.3 application was installed without replacing the canonical
+Hub. The first launch used a newly created Grynvault container and displayed
+the branded welcome screen. The installed bundle retained the reviewed
+`com.grynvault.rebalance` identity, both architectures, macOS 15.4 floor,
+embedded RC.3 tag/source, and pinned LDK hash.
 
-1. quit `/Applications/Alby Hub.app` cleanly;
-2. create and hash verified copies of the application and
-   `/Users/kode/Library/Application Support/albyhub` outside both application
-   data directories;
-3. preserve every existing Grynvault data directory without overwriting it;
-4. install the PGP-verified RC.3 application and first launch it with an empty,
-   explicitly isolated `WORK_DIR` under a macOS sandbox that denies all network
-   access;
-5. launch the same RC.3 binary against a separate copied-data `WORK_DIR` under
-   the same network-denied sandbox, with the owner entering the unlock password
-   only in the local application UI;
-6. verify database integrity, wallet identity, channels, stored balances,
-   transaction history, NWC apps and permissions, backup state, embedded
-   source/library hashes, and responsive UI without creating any invoice,
-   probe, HTLC, payment, swap, rebalance, or channel operation; and
-7. stop the test copy and restart the untouched canonical Alby Hub. The test
-   copy will not become canonical and will never be connected to peers, relays,
-   or chain services.
+The run exposed and corrected an important macOS path assumption. The live
+sandboxed Hub data is under
+`~/Library/Containers/com.getalby.Alby-Hub/Data/Library/Application Support/albyhub`,
+not the smaller legacy `~/Library/Application Support/albyhub` directory. The
+real live work directory was 275 MB at discovery. Its SQLite databases passed
+integrity checks before copying. A restricted, tested ZIP backup was created
+outside both application containers with SHA-256
+`e4c3a20dc0de12208ed27ffae074522ba9047e0f884a62a6f875facaba1b4912`;
+the application backup and earlier data-directory backups remain preserved.
 
-`sandbox-exec` is present on the host, and a preparation probe confirmed that
-the proposed profile denies network access. This run requires a separate exact
-owner approval because it temporarily stops the live node and creates wallet
-backup/test copies.
+The real live work directory was copied while canonical Hub was stopped. The
+NWC and LDK database hashes, 16 user-config records, 35 migrations, and all 407
+LDK key/value rows matched before launch. RC.3 then ran against that copy under
+a test-only macOS profile that allowed the local application runtime but denied
+all external networking. The owner entered the unlock password only in the
+local RC.3 UI. Successful seed decryption reconstructed the same public node
+identity, after which LDK stopped at the expected Electrum boundary with
+`NodeError: ConnectionFailed: Network connection closed.` This is positive
+evidence that the deny policy held, not a wallet-start failure claim.
+
+Direct copied-data readback preserved 12 NWC apps, 94 permission rows and every
+permission scope, 262 transaction records and their state/type/amount
+aggregates, seven static channel backups, the channel-manager/payment key sets,
+and five channel-monitor identities. Both copied databases remained `ok`.
+Attempted LDK startup reserialized the five monitor blobs inside the disposable
+copy only; their keys and byte lengths remained stable and canonical data did
+not change. The external-network denial necessarily prevents a copied node from
+completing chain synchronization or showing a networked channel dashboard, so
+this run does not claim an online second-node acceptance.
+
+No invoice, probe, HTLC, payment, swap, rebalance, channel operation, or value
+movement occurred. The test process was stopped, the Grynvault container was
+returned to its clean-install state, and the untouched canonical Alby Hub was
+restarted. Its database hashes still matched the verified backup before
+restart. Owner UI readback then showed the expected wallet balances and four
+channels: three online and Kraken offline. That peer state is not evidence of
+migration damage. Canonical Hub remains the only network-connected copy.
 
 ## Evidence closed at the current commit
 
