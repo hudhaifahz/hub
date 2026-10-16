@@ -29,6 +29,8 @@ func TestStageLegacyAlbyWorkdir(t *testing.T) {
 	restore := filepath.Join(target, "restore")
 	require.FileExists(t, filepath.Join(restore, "nwc.db"))
 	require.FileExists(t, filepath.Join(restore, "ldk", "storage", "ldk_node_data.sqlite"))
+	require.NoFileExists(t, filepath.Join(restore, "nwc.db-wal"))
+	require.NoFileExists(t, filepath.Join(restore, "nwc.db-shm"))
 	require.NoFileExists(t, filepath.Join(restore, "log-entry-not-imported.log"))
 	require.FileExists(t, filepath.Join(result.BackupLocation, "albyhub-original-snapshot", "nwc.db"))
 	require.FileExists(t, filepath.Join(source, "nwc.db"))

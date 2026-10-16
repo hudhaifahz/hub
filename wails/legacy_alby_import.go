@@ -183,6 +183,16 @@ func stageLegacyAlbyWorkdir(sourceWorkdir, targetWorkdir string, now time.Time) 
 	if err != nil {
 		return nil, fmt.Errorf("validate copied LDK database: %w", err)
 	}
+	if err = removeGeneratedSQLiteSidecars(stagingDir, stagedHashes); err != nil {
+		return nil, fmt.Errorf("clean up validation sidecars: %w", err)
+	}
+	validatedHashes, err := hashWalletData(stagingDir)
+	if err != nil {
+		return nil, fmt.Errorf("hash validated wallet copy: %w", err)
+	}
+	if err = compareFileHashes(backupHashes, validatedHashes); err != nil {
+		return nil, fmt.Errorf("verify validated wallet copy: %w", err)
+	}
 
 	evidence := legacyImportEvidence{
 		Version:            legacyImportEvidenceVersion,
@@ -235,6 +245,107 @@ func copyWalletData(sourceWorkdir, destination string) (map[string]string, error
 		return nil, errors.New("Alby Hub LDK database is missing")
 	}
 	return hashes, nil
+}
+
+func removeGeneratedSQLiteSidecars(stagingDir string, sourceHashes map[string]string) error {
+	// Read-only SQLite validation can still create empty WAL/SHM sidecars when
+	// the copied database uses WAL journaling. They are validation artifacts,
+	// not source wallet data, so remove them only when the source copy did not
+	// contain the same path. Source sidecars are retained and covered by the
+	// final hash comparison below.
+	sidecars := []string{
+		"nwc.db-shm",
+		"nwc.db-wal",
+		filepath.Join("ldk", "storage", "ldk_node_data.sqlite-shm"),
+		filepath.Join("ldk", "storage", "ldk_node_data.sqlite-wal"),
+	}
+	for _, relativePath := range sidecars {
+		if _, exists := sourceHashes[filepath.ToSlash(relativePath)]; exists {
+			continue
+		}
+		if err := os.Remove(filepath.Join(stagingDir, relativePath)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func hashWalletData(sourceWorkdir string) (map[string]string, error) {
+	roots := []string{
+		"nwc.db",
+		"nwc.db-shm",
+		"nwc.db-wal",
+		filepath.Join("ldk", "storage"),
+		filepath.Join("ldk", "static_channel_backups"),
+	}
+	hashes := make(map[string]string)
+	for _, root := range roots {
+		sourcePath := filepath.Join(sourceWorkdir, root)
+		info, err := os.Lstat(sourcePath)
+		if errors.Is(err, os.ErrNotExist) && root != "nwc.db" && root != filepath.Join("ldk", "storage") {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspect %s: %w", root, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("refusing symbolic link %q", root)
+		}
+
+		if info.IsDir() {
+			err = filepath.WalkDir(sourcePath, func(path string, entry os.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				rel, relErr := filepath.Rel(sourceWorkdir, path)
+				if relErr != nil || !filepath.IsLocal(rel) {
+					return fmt.Errorf("invalid wallet data path %q", path)
+				}
+				if entry.Type()&os.ModeSymlink != 0 {
+					return fmt.Errorf("refusing symbolic link %q", rel)
+				}
+				if entry.IsDir() {
+					return nil
+				}
+				if !entry.Type().IsRegular() {
+					return fmt.Errorf("refusing non-regular wallet file %q", rel)
+				}
+				hash, hashErr := hashFile(path)
+				if hashErr != nil {
+					return hashErr
+				}
+				hashes[filepath.ToSlash(rel)] = hash
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("refusing non-regular wallet file %q", root)
+		}
+		hash, err := hashFile(sourcePath)
+		if err != nil {
+			return nil, err
+		}
+		hashes[filepath.ToSlash(root)] = hash
+	}
+	return hashes, nil
+}
+
+func hashFile(path string) (string, error) {
+	input, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer input.Close()
+	hash := sha256.New()
+	if _, err = io.Copy(hash, input); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func copyDataTree(source, destination string, roots []string) (map[string]string, error) {
