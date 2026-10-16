@@ -92,6 +92,38 @@ was verified in a fresh isolated GPG home as `GOODSIG` and `VALIDSIG` for full
 fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. No upload or publication
 was performed.
 
+### Next owner gate: offline clean-install and copied-data acceptance
+
+Status: **PREPARED — NOT AUTHORIZED**.
+
+The live Alby Hub data remains canonical. To avoid ever allowing two copies of
+the same Lightning node identity to communicate with the network, the proposed
+acceptance run will:
+
+1. quit `/Applications/Alby Hub.app` cleanly;
+2. create and hash verified copies of the application and
+   `/Users/kode/Library/Application Support/albyhub` outside both application
+   data directories;
+3. preserve every existing Grynvault data directory without overwriting it;
+4. install the PGP-verified RC.3 application and first launch it with an empty,
+   explicitly isolated `WORK_DIR` under a macOS sandbox that denies all network
+   access;
+5. launch the same RC.3 binary against a separate copied-data `WORK_DIR` under
+   the same network-denied sandbox, with the owner entering the unlock password
+   only in the local application UI;
+6. verify database integrity, wallet identity, channels, stored balances,
+   transaction history, NWC apps and permissions, backup state, embedded
+   source/library hashes, and responsive UI without creating any invoice,
+   probe, HTLC, payment, swap, rebalance, or channel operation; and
+7. stop the test copy and restart the untouched canonical Alby Hub. The test
+   copy will not become canonical and will never be connected to peers, relays,
+   or chain services.
+
+`sandbox-exec` is present on the host, and a preparation probe confirmed that
+the proposed profile denies network access. This run requires a separate exact
+owner approval because it temporarily stops the live node and creates wallet
+backup/test copies.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit
