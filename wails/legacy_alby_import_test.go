@@ -163,6 +163,21 @@ func TestCopyWalletDataRejectsSymlink(t *testing.T) {
 	require.ErrorContains(t, err, "symbolic link")
 }
 
+func TestCopyWalletDataIgnoresLDKLogsWithSymlink(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "albyhub")
+	destination := filepath.Join(root, "copy")
+	require.NoError(t, createLegacyWalletFixture(source, true))
+	require.NoError(t, os.MkdirAll(filepath.Join(source, "ldk", "logs"), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(source, "ldk", "logs", "ldk_node_2026_10_16.log"), []byte("runtime log"), 0600))
+	require.NoError(t, os.Symlink("ldk_node_2026_10_16.log", filepath.Join(source, "ldk", "logs", "ldk_node_latest.log")))
+
+	_, err := copyWalletData(source, destination)
+	require.NoError(t, err)
+	require.NoDirExists(t, filepath.Join(destination, "ldk", "logs"))
+	require.FileExists(t, filepath.Join(destination, "ldk", "storage", "ldk_node_data.sqlite"))
+}
+
 func createLegacyWalletFixture(workdir string, complete bool) error {
 	if err := os.MkdirAll(filepath.Join(workdir, "ldk", "storage"), 0700); err != nil {
 		return err

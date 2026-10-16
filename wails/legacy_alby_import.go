@@ -212,7 +212,17 @@ func stageLegacyAlbyWorkdir(sourceWorkdir, targetWorkdir string, now time.Time) 
 }
 
 func copyWalletData(sourceWorkdir, destination string) (map[string]string, error) {
-	roots := []string{"nwc.db", "nwc.db-shm", "nwc.db-wal", "ldk"}
+	// Copy durable wallet state and static channel backups, but not runtime logs.
+	// Stock Alby Hub can leave a rotating `ldk_node_latest.log` symlink in the
+	// logs directory; logs are neither required for recovery nor appropriate to
+	// carry into a newly imported wallet.
+	roots := []string{
+		"nwc.db",
+		"nwc.db-shm",
+		"nwc.db-wal",
+		filepath.Join("ldk", "storage"),
+		filepath.Join("ldk", "static_channel_backups"),
+	}
 	hashes, err := copyDataTree(sourceWorkdir, destination, roots)
 	if err != nil {
 		return nil, err
@@ -251,7 +261,7 @@ func copyDataTree(source, destination string, roots []string) (map[string]string
 		}
 		sourcePath := filepath.Join(source, root)
 		info, err := os.Lstat(sourcePath)
-		if errors.Is(err, os.ErrNotExist) && root != "nwc.db" && root != "ldk" {
+		if errors.Is(err, os.ErrNotExist) && root != "nwc.db" && root != filepath.Join("ldk", "storage") {
 			continue
 		}
 		if err != nil {
