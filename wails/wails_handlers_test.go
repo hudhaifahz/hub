@@ -31,6 +31,11 @@ func TestRedactWailsRoute(t *testing.T) {
 			want:  "/api/payments/[REDACTED]",
 		},
 		{
+			name:  "malformed payment request path",
+			route: "/api/payments/lnbc1credential%zz?token=also-secret",
+			want:  "/api/payments/[REDACTED]",
+		},
+		{
 			name:  "ordinary query",
 			route: "/api/transactions?limit=25&cursor=sensitive-cursor",
 			want:  "/api/transactions",

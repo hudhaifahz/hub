@@ -25,11 +25,14 @@ type WailsRequestRouterResponse struct {
 
 func redactWailsRoute(route string) string {
 	parsedURL, err := url.Parse(route)
+	var path string
 	if err != nil {
-		return strings.SplitN(route, "?", 2)[0]
+		path = strings.SplitN(route, "?", 2)[0]
+		path = strings.SplitN(path, "#", 2)[0]
+	} else {
+		path = parsedURL.Path
 	}
 
-	path := parsedURL.Path
 	if strings.HasPrefix(path, "/api/payments/") {
 		return "/api/payments/[REDACTED]"
 	}
