@@ -123,9 +123,11 @@ inspection, ad-hoc package inspection, mounted-DMG inspection, source archive,
 SBOM, and preparation-index run. The disposable tag was deleted. This is
 non-release evidence only: no immutable rc.3 tag, PGP signature, public release,
 installation, migration, or publication exists. GitHub source-compatibility run
-`38857778185` and a fresh release-layer CodeRabbit review must be terminally
-resolved before presenting the immutable-tag approval packet; the latter is
-currently waiting for the public-OSS review quota to reset.
+`38857778185` completed successfully at that exact head, including frontend,
+release-workflow, Go, race, vet, vulnerability, and secret checks. A fresh
+release-layer CodeRabbit review is still required before presenting the
+immutable-tag approval packet and is waiting for the public-OSS review quota to
+reset.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable

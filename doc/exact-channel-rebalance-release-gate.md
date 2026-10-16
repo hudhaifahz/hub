@@ -57,6 +57,10 @@ review is pending because the public OSS CLI quota was exhausted after the
 completed contribution reviews; do not substitute those earlier reviews for a
 fresh RC.3 result.
 
+GitHub independently completed run `38857778185` successfully at exact head
+`9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. Every setup, frontend/release,
+Go/security, and teardown step concluded `success`.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit

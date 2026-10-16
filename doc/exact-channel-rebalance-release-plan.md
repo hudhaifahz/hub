@@ -641,9 +641,12 @@ Implementation evidence on 2026-10-13:
       dependency, secret, universal-build, raw-bundle, ad-hoc package,
       mounted-DMG, source-archive, SBOM, and preparation-index checks using a
       disposable local tag; delete that tag afterward.
-- [ ] Close exact GitHub run `38857778185` and obtain a fresh zero-finding
-      CodeRabbit review of the rc.3 release layer before asking for the immutable
-      rc.3 tag approval.
+- [x] Independently read back exact GitHub run `38857778185` as successful at
+      source commit `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`; every
+      frontend/release and Go/security step completed successfully.
+- [ ] Obtain a fresh zero-finding CodeRabbit review of the rc.3 release layer
+      after the public-OSS quota resets, before asking for the immutable rc.3 tag
+      approval.
 - [x] Make a clean release tag and build and inspect the unsigned application
       from that tag.
 - [x] Build and verify the explicitly unsigned application DMG, source archive,

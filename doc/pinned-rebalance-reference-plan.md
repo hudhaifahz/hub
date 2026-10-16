@@ -1550,8 +1550,10 @@ Observed:
   lockfile components.
 - The disposable tag was deleted after proof. No owner PGP key or passphrase was
   accessed, and no immutable rc.3 tag or public release was created. Exact
-  source-compatibility GitHub run `38857778185` remains the remote acceptance
-  check for this prep commit.
+  source-compatibility GitHub run `38857778185` completed successfully at the
+  exact prep commit. Independent API readback showed every setup,
+  frontend/release-workflow, Go/security, and teardown step concluded
+  `success`.
 - A fresh CodeRabbit release-layer review was attempted after the local matrix,
   but the public-OSS CLI quota was exhausted by the earlier completed reviews;
   the service reported a recoverable reset wait. This is recorded as pending,
@@ -1561,11 +1563,10 @@ Observed:
 
 Consequence:
 
-- RC.3 has a version-controlled, reproducible preparation source and a complete
-  non-public local package proof. The next non-owner actions are to obtain a
-  terminal successful exact-commit CI result and repeat CodeRabbit after its
-  quota resets. Only then should the exact immutable rc.3 tag be presented for
-  owner approval.
+- RC.3 has a version-controlled, reproducible preparation source, a complete
+  non-public local package proof, and successful exact-commit CI. The next
+  non-owner action is to repeat CodeRabbit after its quota resets. Only then
+  should the exact immutable rc.3 tag be presented for owner approval.
 - Installation, copied-wallet migration, installed-app visual acceptance, PGP
   signing, GitHub release publication, portal/companion updates, upstream PR
   creation, Nostr publication, Stacker News submission/payment, and every new
