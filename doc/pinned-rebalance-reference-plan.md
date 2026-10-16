@@ -1634,3 +1634,28 @@ Consequence:
   online wallet. RC.3 GitHub release publication, portal/companion refresh,
   upstream PR creation, Nostr publication, Stacker News submission/payment,
   and every new Lightning operation remain separately gated.
+
+### 2026-10-16 — Desktop route-log credential redaction
+
+Observed:
+
+- The offline test revealed that a failed Wails Alby callback logged the raw
+  route and therefore its one-time authorization-code query value. The exchange
+  was blocked and no code was accepted, but this violates the no-credential-log
+  boundary. The disposable test log was sanitized.
+- Commit `59bb47a4` on owner branch
+  `codex/fix-redact-wails-route-secrets` now strips every query value from Wails
+  route logs and reflected unhandled-route errors, and replaces payment-request
+  path segments with `[REDACTED]`.
+- Regression cases cover OAuth code/state values, payment requests, ordinary
+  query parameters, and query-free routes. Focused Wails tests and the complete
+  `go test ./...` suite pass. The existing Bark macOS deployment-floor linker
+  warnings remain unchanged.
+
+Consequence:
+
+- Immutable RC.3 remains valid historical evidence for the offline migration
+  result but must not be promoted as the final public candidate. A new
+  candidate must be cut from the reviewed security-fix source and repeat build,
+  manifest, signing, installation, migration, and publication gates. No tag,
+  release, deployment, PR, post, or Lightning operation was created here.

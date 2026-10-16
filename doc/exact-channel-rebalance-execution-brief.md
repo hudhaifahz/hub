@@ -143,6 +143,16 @@ copy was ever online. No public RC.3 GitHub release, portal/companion deployment
 upstream PR, Nostr event, Stacker News submission, or Lightning operation was
 created by this acceptance.
 
+The acceptance also exposed a release-blocking log-sanitization defect: a
+failed Wails OAuth callback logged its route with the one-time authorization
+code. Owner-fork commit `59bb47a4` on
+`codex/fix-redact-wails-route-secrets` removes query values from desktop route
+logs/errors, redacts payment-request paths, and passes the focused Wails and
+complete Go test suites. RC.3 is immutable and must not be modified or promoted
+as the final candidate. Prepare a new immutable candidate from the reviewed
+security-fix source and repeat the package/signature/install gates before any
+public RC update.
+
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable
 readback reported `succeeded / succeeded`, exact actual routing fee

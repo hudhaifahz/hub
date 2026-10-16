@@ -4,8 +4,11 @@ Status: immutable rc.2 is publicly available as an explicitly unsigned,
 unnotarized experimental release authenticated by the owner's PGP key. RC.3 is
 immutable and privately PGP-signed, and its owner-approved offline clean-install,
 real copied-wallet migration, and rollback acceptance completed on 2026-10-16.
+That run exposed a desktop route-logging leak for failed OAuth codes; source
+commit `59bb47a4` fixes it, so immutable RC.3 must not become the final public
+candidate and a new candidate must repeat the release gates.
 The read-only companion and Portal 04 still publish rc.2. Additional proof
-pilots, upstream PR submission, the separate RC.3 GitHub-release/deployment
+pilots, upstream PR submission, a new-candidate GitHub-release/deployment
 approval, and public launch posts remain open gates.
 
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.

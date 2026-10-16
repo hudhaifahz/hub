@@ -142,6 +142,26 @@ restart. Owner UI readback then showed the expected wallet balances and four
 channels: three online and Kraken offline. That peer state is not evidence of
 migration damage. Canonical Hub remains the only network-connected copy.
 
+### Post-acceptance security gate: desktop route redaction
+
+Status: **FIXED IN SOURCE — NEW RELEASE CANDIDATE REQUIRED**.
+
+The intentionally failed offline Alby authorization exchange exposed that the
+Wails error logger included the original callback route, including its one-time
+authorization-code query value. The failed codes were never accepted; the
+disposable local log was sanitized. Nevertheless, credential-shaped query
+values and payment requests must never enter logs or reflected unhandled-route
+errors. Immutable RC.3 must therefore not be published as the final candidate.
+
+Owner-fork commit `59bb47a4` on branch
+`codex/fix-redact-wails-route-secrets` removes all query values from desktop
+route logs/errors, redacts payment-request path segments, and adds regression
+coverage. The focused Wails tests and complete `go test ./...` suite pass; only
+the already documented macOS 15.4 Bark linker warnings remain. A new immutable
+candidate must replay package, signature, installation, migration, and release
+checks from this source or a reviewed descendant. No tag or public release was
+created by the fix.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit
