@@ -186,8 +186,8 @@ continuity for this owner-controlled migration only; it does not make RC.4 an
 acceptable general installer.
 
 RC.4 is immutable and must not be relabeled or silently replaced. The active
-successor work is owner-fork commit
-`7fa5309c324b54752d4139ab8857d887e5888f54` on branch
+successor work is owner-fork head
+`78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` on branch
 `codex/guided-alby-import`, based on exact RC.4 source commit
 `4de3883f4d76af2a312962c2d5e7546963bf9261`.
 Before any RC.5 tag, package, publication, portal update, or promotion:
@@ -225,9 +225,12 @@ showed the import action before new-wallet setup. This preview does not exercise
 the Wails directory chooser or native restart path. A reviewed commit,
 universal build, package inspection, real clean-profile import, and
 owner-visible installed-app acceptance remain open before RC.5 can be proposed.
-The source commit and remote branch were independently read back after push;
-no tag, release, pull request, artifact, signature, installation, deployment,
-publication, or Lightning operation was created.
+The source head and remote branch were independently read back after push. It
+contains implementation commit `7fa5309c324b54752d4139ab8857d887e5888f54`
+and follow-up UX commit `78e44201ad67b1b3d865c1ae3aaf5cfbce69994a`,
+which adds the one-app-at-a-time explanation and retains the success screen for
+five seconds before restart. No tag, release, pull request, artifact, signature,
+installation, deployment, publication, or Lightning operation was created.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable

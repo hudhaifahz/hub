@@ -251,14 +251,18 @@ be published because it is owner wallet evidence.
 
 The successor source begins from exact RC.4 commit
 `4de3883f4d76af2a312962c2d5e7546963bf9261` on branch
-`codex/guided-alby-import`. Reviewed implementation commit
-`7fa5309c324b54752d4139ab8857d887e5888f54` is pushed to the matching owner-fork
-branch. It adds a first-run embedded-LDK import, automatic
+`codex/guided-alby-import`. Reviewed implementation head
+`78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` is pushed to the matching owner-fork
+branch. It includes implementation commit
+`7fa5309c324b54752d4139ab8857d887e5888f54` and adds a first-run embedded-LDK
+import, automatic
 recovery copies, per-file SHA-256 comparison, database integrity and continuity
 checks, restart staging, and mutually exclusive desktop locks for official Alby
 Hub and Grynvault. A native macOS conflict alert explicitly says that the wallet
 and channels are safe. It never asks for the unlock password; the owner enters
-that only after restart in the local application UI.
+that only after restart in the local application UI. The final success screen
+also explains the one-app-at-a-time rule and remains visible for five seconds
+before the process exits.
 
 Current non-paying source checks pass: focused Wails-tag import/lock tests, the
 complete Go suite, `go vet`, frontend lint/type/format, and HTTP/Wails builds.

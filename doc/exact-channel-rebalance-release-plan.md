@@ -190,9 +190,10 @@ the moving branch name as the release source.
 - [x] Preview the real first-run/import components at 320 and 375 CSS pixels;
       confirm no horizontal overflow and that import precedes new-wallet setup.
       This is source-level layout evidence, not Wails importer acceptance.
-- [x] Review and commit the exact successor source; push owner-fork commit
-      `7fa5309c324b54752d4139ab8857d887e5888f54` on
-      `codex/guided-alby-import`.
+- [x] Review and commit the exact successor source; push owner-fork head
+      `78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` on
+      `codex/guided-alby-import` (implementation commit
+      `7fa5309c324b54752d4139ab8857d887e5888f54` plus restart-safety UX follow-up).
 - [ ] Run the complete Go/vet/frontend HTTP+Wails/release/security matrix on the
       exact commit.
 - [ ] Build a guarded universal macOS test package and verify identity,
