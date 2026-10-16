@@ -92,12 +92,15 @@ separately audited local companion/upstream capability and a new threat model.
   `05d86840f2184dbe846e260b71e7eeed2bea998a`.
 - LDK Go binding fork head:
   `2d4b8cae5b4188451fbccdb347113838a9981dbf`.
-- Isolated Hub PR-preparation base/head:
-  `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e` / `1fb6c8cd`.
+- Isolated Hub PR-preparation base/head (Alby Hub `v1.24.3`):
+  `5d5e696dfe7d430a365d48939c394376e078a56b` /
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`.
 - Isolated LDK PR-preparation base/head:
-  `74daaf98c7eeee7bca58c703c103d57affbd928a` / `2dc742a8`.
+  `553a2105b38da88fc5d0900007d30e9bd9669900` /
+  `ed72fe992174965bc917d1dc6c6bee1dc7368057`.
 - Isolated LDK Go PR-preparation base/head:
-  `5ba434093284d0dc8291e45d2a3d2c1c5a879698` / `a381cacb`.
+  `25822674b495b8b0f7a8882f6b19a64b70d02396` /
+  `3228bdbb7973a2743aee5e9f699e79afd217617b`.
 - Frontier Crown Portal 04 PR head/merged production commit:
   `e17a7ab78d469e3b676ca1e199db82c781483180` /
   `18b1e6efdc381c3f0ea516150e865c42c2a8eb30`.
@@ -115,8 +118,11 @@ separately audited local companion/upstream capability and a new threat model.
   readback match. The public prerelease is bound to that exact tag and commit.
   Product-code head
   `c41a5e1773030da5fccc174386edc8730423b4a3` also passed run `38483312899`.
-- Reviewed universal macOS LDK library: `43,360,288` bytes, SHA-256
+- RC.2 release universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
+- Current upstream-contribution universal macOS LDK library: `43,212,288`
+  bytes, SHA-256
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`.
 
 Record a new immutable source commit for every release candidate. Never describe
 the moving branch name as the release source.
@@ -597,6 +603,20 @@ Implementation evidence on 2026-10-13:
 - [x] Create isolated clean worktrees for the three PRs in Section 4.
 - [x] Rebase against the then-current upstream commits, rerun the complete test
       and audit matrix, and prepare draft PR bodies and screenshots.
+- [x] Refresh immediately before submission against LDK
+      `553a2105b38da88fc5d0900007d30e9bd9669900`, LDK Go
+      `25822674b495b8b0f7a8882f6b19a64b70d02396`, and Hub `v1.24.3`
+      (`5d5e696dfe7d430a365d48939c394376e078a56b`); push and independently
+      read back exact heads `ed72fe992174965bc917d1dc6c6bee1dc7368057`,
+      `3228bdbb7973a2743aee5e9f699e79afd217617b`, and
+      `cd6bc1e399ba256adb113bbaf44d659c5b22a170`.
+- [x] Resolve CodeRabbit's two valid final-pass findings (dependency-fork
+      provenance and transient reconciliation-status retry), rerun checks, and
+      obtain a zero-finding complete review of the final Hub diff.
+- [ ] Let the owner-fork and upstream PR checks run after PR creation. No status
+      checks attach to these fork branches before a pull request exists, and the
+      local Wails application build remains blocked while the owner's running
+      Hub holds its single-instance port.
 - [ ] Stop for owner review before opening any public PR or security disclosure.
 
 ### Wave C — create the independently identified release candidate

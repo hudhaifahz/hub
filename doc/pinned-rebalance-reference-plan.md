@@ -1420,3 +1420,77 @@ Consequence:
   checks must pass, the guarded app must be installed without changing the
   canonical wallet boundary, and the owner must visually accept the same
   states before this regression can be called fixed in the public package.
+
+### 2026-10-15 — Current-upstream contribution replay and final review
+
+Observed:
+
+- The three contribution branches were replayed in isolated worktrees without
+  changing the installed wallet or rc.2 release. GitHub compare readback shows
+  each branch directly ahead of, and zero commits behind, its selected upstream
+  base:
+  - LDK base `553a2105b38da88fc5d0900007d30e9bd9669900`, final head
+    `ed72fe992174965bc917d1dc6c6bee1dc7368057`;
+  - LDK Go base `25822674b495b8b0f7a8882f6b19a64b70d02396`, final head
+    `3228bdbb7973a2743aee5e9f699e79afd217617b`;
+  - Alby Hub `v1.24.3` base
+    `5d5e696dfe7d430a365d48939c394376e078a56b`, final head
+    `cd6bc1e399ba256adb113bbaf44d659c5b22a170`.
+- LDK strict native and UniFFI builds passed. Native library tests passed 47 of
+  47 and UniFFI library tests passed 57 of 57. A fresh RustSec scan found two
+  newly published advisories in the production `rustls 0.23.45`; the lockfile
+  was updated to `rustls 0.23.46`, those production findings disappeared, and
+  both test sets passed again. Six advisories plus four maintenance warnings
+  remain in pre-existing development/build-only paths through `ldk-node 0.6.2`,
+  `electrsd`, and `corepc-node`. The 35 external integration tests require
+  `BITCOIND_EXE` and Electrs fixtures and fail at fixture startup when those are
+  absent; they did not produce a feature failure.
+- The final universal macOS LDK library was rebuilt independently for arm64 and
+  x86_64 from the exact LDK head. It is `43,212,288` bytes, has SHA-256
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`,
+  reports architectures `x86_64 arm64`, uses
+  `@rpath/libldk_node.dylib`, and exposes the reviewed circular quote, prepare,
+  submit, and evidence symbols in both slices.
+- The generated Go binding points at exact pseudo-version
+  `github.com/hudhaifahz/ldk-node-go v0.0.0-20261016052643-3228bdbb7973`.
+  Remote source and embedded binding-library readback matched the exact pushed
+  commits, and `go test ./...` passed.
+- Hub's complete Go suite and focused `api`/`wails` race suite passed using Go
+  1.27.2. `govulncheck ./...` reports zero reachable vulnerabilities; one
+  package and two required-module advisories are present but unreachable. The
+  same scan under local Go 1.27.1 initially exposed 12 reachable standard-library
+  findings fixed by 1.27.2, so the safer toolchain is required for release and
+  CI claims.
+- Frontend ESLint, TypeScript, formatting, HTTP production build, and production
+  dependency audit passed; the audit found zero vulnerabilities in 134
+  packages. The inherited direct-eval, bundle-size, and stale Browserslist
+  warnings remain. A local Wails application build could not regenerate its
+  bindings because the owner's already-running Hub owns the single-instance
+  port; the check must be repeated in isolated PR CI or after an owner-approved
+  app stop. This is recorded as an open environment check, not a passing build.
+- `go vet` reaches only the inherited Phoenix date-layout typo. The full-tree
+  secret scan contains inherited examples and a generated copy; the exact patch
+  scan reports one reviewed false positive on a Go field named `Secret` in an
+  equality check and no literal token or credential.
+- CodeRabbit first required documentation of why the Hub temporarily replaces
+  the LDK Go dependency with the owner fork and its exact reviewed commit; that
+  provenance and the dependency-order upstream path were added. Its next full
+  review found that one failed reconciliation-status refresh would stop UI
+  polling. The UI now schedules another two-second attempt while reconciliation
+  remains pending. Lint, TypeScript, formatting, HTTP build, full Go tests, and
+  race tests passed after the fix. A final complete CodeRabbit review of all 27
+  changed Hub files reported zero findings.
+- GitHub shows no attached status checks on these fork branches before PR
+  creation. This is neither a failed nor a passed CI result; owner-fork and
+  upstream checks must run on the numbered pull requests.
+
+Consequence:
+
+- The source branches and exact PR bodies are ready for owner review in
+  dependency order: LDK, LDK Go, then Hub. Public PR creation remains a separate
+  approval gate, maintainers own all merge decisions, and a PR must not claim
+  that the local Wails build, external Bitcoin integration fixtures, or
+  independent security review has passed when it has not.
+- No quote, invoice, probe, HTLC, payment, rebalance, migration, application
+  replacement, tag, signature, release, Nostr event, or Stacker News submission
+  was created during this replay.

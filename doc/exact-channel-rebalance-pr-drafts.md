@@ -46,15 +46,21 @@ The public UniFFI surface is extended without changing existing methods.
 
 ### Verification
 
-- native library tests: `41 passed`;
-- UniFFI library tests: `51 passed`;
+- native library tests: `47 passed`;
+- UniFFI library tests: `57 passed`;
 - real in-memory HTLC tests cover exact success, wrong-channel rejection,
   mixed-channel MPP rejection, fixed-route MPP, prepared restart, in-flight
   restart, duplicate submission, and terminal replay;
-- secret scan: no findings;
-- `cargo audit`: four advisories and three maintenance warnings are confined to
-  existing development/test-only dependency paths, not the production library
-  tree;
+- patch secret scan: no findings;
+- strict native and UniFFI builds pass with warnings denied (apart from the two
+  already documented UniFFI deprecations);
+- the production `rustls` dependency is updated to `0.23.46`, closing the two
+  2026 RustSec advisories in the production tree; six remaining advisories and
+  four maintenance warnings are confined to existing development/build-only
+  paths (`ldk-node 0.6.2`, `electrsd`, and `corepc-node`);
+- the full integration suite requires the repository's external
+  `BITCOIND_EXE`/Electrs fixtures; without them, its 35 tests fail at fixture
+  startup rather than exercising this change;
 - upstream baseline also fails current `cargo fmt --check` and all-target Clippy
   at the existing benchmark `Arc<Arc<Node>>` mismatch; the feature library and
   test targets compile and pass.
@@ -74,7 +80,9 @@ their focused tests: `bindings/ldk_node.udl`, `src/builder.rs`,
 `src/data_store.rs`, `src/event.rs`, `src/lib.rs`, `src/payment/`, and
 `src/types.rs`.
 
-Branch head: `2dc742a8b2057519e22d757f510e5cc880731b2c`
+Base: `553a2105b38da88fc5d0900007d30e9bd9669900`
+
+Branch head: `ed72fe992174965bc917d1dc6c6bee1dc7368057`
 
 ## 2. `getAlby/ldk-node-go`
 
@@ -101,9 +109,9 @@ LDK source interface.
   byte;
 - generated header matches apart from generator whitespace;
 - universal library architectures: `x86_64 arm64`;
-- library size: `43,360,288` bytes;
+- library size: `43,212,288` bytes;
 - SHA-256:
-  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`;
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`;
 - `go test ./...` passes;
 - secret scan reports no findings.
 
@@ -113,7 +121,9 @@ Only generated binding outputs and the matching universal macOS library change:
 `ldk_node/ldk_node.go`, `ldk_node/ldk_node.h`, and
 `ldk_node/universal-macos/libldk_node.dylib`.
 
-Branch head: `a381cacb18562dff960f24a12f43232633f8bc25`
+Base: `25822674b495b8b0f7a8882f6b19a64b70d02396`
+
+Branch head: `3228bdbb7973a2743aee5e9f699e79afd217617b`
 
 ## 3. `getAlby/hub`
 
@@ -163,12 +173,19 @@ also applies and rolls back every rebalance migration on both engines.
   1.27.2;
 - `govulncheck ./...` reports zero reachable vulnerabilities after the targeted
   `x/net` and gRPC updates;
-- frontend lint, TypeScript, HTTP build, and Wails production build pass;
+- frontend lint, TypeScript, formatting, and HTTP production build pass;
 - production frontend dependency audit reports zero vulnerabilities;
-- the full branch secret scan has one reviewed false positive: a Go field named
+- the patch secret scan has one reviewed false positive: a Go field named
   `Secret` in a runtime equality check, with no literal credential or token;
 - `go vet ./...` reaches only the existing upstream Phoenix date-layout typo;
-- existing Bark deployment-target linker warnings remain unchanged.
+- existing Bark deployment-target linker warnings remain unchanged;
+- a local Wails application build cannot be repeated while the owner's running
+  Hub holds the single-instance port because Wails executes the app before
+  generating bindings; the PR checks must therefore repeat that build in an
+  isolated CI runner;
+- a complete final CodeRabbit review found one transient-status polling issue;
+  after the retry fix and regression checks, the second complete review reported
+  zero findings.
 
 ### Screenshots
 
@@ -190,4 +207,7 @@ the LDK adapter/interface, exact dependency pins, and the two channel-dialog
 components listed in the branch diff. It adds no NWC method or read-only API
 route.
 
-Branch head: `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`
+Base: Alby Hub `v1.24.3`,
+`5d5e696dfe7d430a365d48939c394376e078a56b`
+
+Branch head: `cd6bc1e399ba256adb113bbaf44d659c5b22a170`

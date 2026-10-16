@@ -186,6 +186,28 @@ connected to a CodeRabbit organization accessible to that account. Therefore
 the evidence is a local CLI review, not a GitHub App review and not an
 independent security audit.
 
+On 2026-10-15 the upstream contribution chain was replayed onto LDK
+`553a2105b38da88fc5d0900007d30e9bd9669900`, LDK Go
+`25822674b495b8b0f7a8882f6b19a64b70d02396`, and Alby Hub `v1.24.3`
+(`5d5e696dfe7d430a365d48939c394376e078a56b`). The exact pushed heads are:
+
+- LDK: `ed72fe992174965bc917d1dc6c6bee1dc7368057`;
+- LDK Go: `3228bdbb7973a2743aee5e9f699e79afd217617b`;
+- Hub: `cd6bc1e399ba256adb113bbaf44d659c5b22a170`.
+
+The Hub replay passes the complete Go suite, focused API/Wails race suite,
+frontend lint/type/format/HTTP build, zero-vulnerability production dependency
+audit, and Go 1.27.2 reachable-vulnerability scan. The final complete CodeRabbit
+review found zero issues after two valid findings were fixed. Patch secret
+scanning reports only a reviewed false positive on the Go field name `Secret`;
+no literal credential is present. The full local Wails application build still
+requires an isolated runner because the owner's running Hub occupies the
+single-instance port before Wails can generate bindings; PR CI must close that
+check. The LDK production RustSec tree is clear after updating `rustls` to
+`0.23.46`; six advisories and four maintenance warnings remain only in existing
+development/build dependency paths. No public upstream PR exists yet, and no
+payment or wallet state was touched by this review.
+
 ## Owner decisions and remaining gates
 
 The owner explicitly declined Apple Developer ID signing, notarization, and
