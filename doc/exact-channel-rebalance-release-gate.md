@@ -35,6 +35,28 @@ object `88cd63322c9f842a271571d621bba51393c9e709` and still peels to
 owner separately approved rc.2 at the newer package-path commit. Both tags are
 immutable and must never be moved.
 
+## RC.3 preparation candidate — not tagged, signed, installed, or published
+
+- owner-fork branch: `codex/grynvault-rebalance-rc3-prep`
+- exact pushed source: `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`
+- reviewed v1.24.3 feature parent:
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`
+- universal raw LDK SHA-256:
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`
+- local-only unsigned DMG SHA-256:
+  `5ad671cfa749896bbe57a6c83c5446db9742eb925934792f8a9631318b943f7d`
+- source-compatibility CI run:
+  `https://github.com/hudhaifahz/hub/actions/runs/38857778185`
+
+The local-only artifact was built from disposable tag
+`grynvault-unsigned-local-9583e7a2`, inspected, mounted read-only, and rejected
+by Gatekeeper with `source=no usable signature` and exit status 3 as expected.
+The tag was then deleted. It is not an rc.3 artifact and must not be signed,
+installed, uploaded, linked, or advertised. The fresh release-layer CodeRabbit
+review is pending because the public OSS CLI quota was exhausted after the
+completed contribution reviews; do not substitute those earlier reviews for a
+fresh RC.3 result.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit

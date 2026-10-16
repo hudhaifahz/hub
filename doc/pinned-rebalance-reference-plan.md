@@ -1494,3 +1494,79 @@ Consequence:
 - No quote, invoice, probe, HTLC, payment, rebalance, migration, application
   replacement, tag, signature, release, Nostr event, or Stacker News submission
   was created during this replay.
+
+### 2026-10-15 — RC.3 preparation replay and local package proof
+
+Observed:
+
+- A separate worktree at `/Users/kode/Development/grynvault-rebalance-rc3`
+  preserves immutable rc.2 and starts from reviewed Hub v1.24.3 feature head
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`. The fifteen established
+  independent branding/package commits were replayed with one narrow conflict
+  in the v1.24.3 About-screen imports; the resolution preserves both upstream's
+  current swap/JIT information and Grynvault's identity/source disclosure.
+- All pinned source records now identify Hub v1.24.3 base
+  `5d5e696dfe7d430a365d48939c394376e078a56b`, reviewed Hub feature head
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`, LDK head
+  `ed72fe992174965bc917d1dc6c6bee1dc7368057`, LDK Go head
+  `3228bdbb7973a2743aee5e9f699e79afd217617b`, and raw universal LDK hash
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`.
+  No stale rc.2 source/hash/version value remains in the rc.3 tree.
+- RC.3 preparation is pushed on branch
+  `codex/grynvault-rebalance-rc3-prep` at exact commit
+  `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. GitHub compare readback shows
+  that it is exactly 16 commits ahead of and zero behind the reviewed v1.24.3
+  contribution head.
+- Local checks passed: release-source boundaries, release-script regressions,
+  complete Go suite, focused API/Wails race suite, `go vet`, current
+  `govulncheck` with zero reachable findings, actionlint, Gitleaks with zero
+  findings across the release tree, frontend ESLint/TypeScript/formatting,
+  HTTP and Wails frontend builds, and a zero-vulnerability production audit of
+  134 packages. Govulncheck continues to expose only `GO-2026-4518` and
+  `GO-2026-5932` without a reachable application symbol path.
+- A disposable local tag `grynvault-unsigned-local-9583e7a2` produced a complete
+  universal application build without colliding with the running owner Hub. Raw
+  inspection confirmed bundle `com.grynvault.rebalance`, independent data
+  identity, macOS 15.4, `x86_64 arm64`, exact embedded source/tag, one expected
+  runtime path, and raw LDK hash
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`.
+- The explicit unsigned packager ad-hoc signed the application and LDK library,
+  mounted the resulting DMG read-only, and repeated bundle/source/architecture/
+  entitlement checks. Gatekeeper rejected it with
+  `source=no usable signature`, exit status 3, as required for this distribution
+  class. The local-only DMG is 79,687,792 bytes with SHA-256
+  `5ad671cfa749896bbe57a6c83c5446db9742eb925934792f8a9631318b943f7d`.
+- Other local-only preparation hashes are: checksum file
+  `f9bb1f70540603f53ccc91ca2985142140e04238db3d8e6ffa153d890d7ee7e9`,
+  Gatekeeper record
+  `a7c1717680c4feb3c31750f4b45e53922a15672c44c44efe1f6a525ffba342e9`,
+  source archive
+  `c0f4d9e3371fbb4f4b03d3b472b67dc2cfa7d2c0403b86bcca0fe1ed451fd3d8`,
+  CycloneDX SBOM
+  `26bcc56eeb18fa540bdd6eeb6a8c822c1c014e442c41ea6a241a402de72f9e27`,
+  and unsigned preparation index
+  `3a3d85ca68d1ea9946e9c95d1a7a3b270fcb9115f19b66157fe3a694c48ebab3`.
+  The SBOM contains 1,106 components: 1,104 libraries and two normalized
+  lockfile components.
+- The disposable tag was deleted after proof. No owner PGP key or passphrase was
+  accessed, and no immutable rc.3 tag or public release was created. Exact
+  source-compatibility GitHub run `38857778185` remains the remote acceptance
+  check for this prep commit.
+- A fresh CodeRabbit release-layer review was attempted after the local matrix,
+  but the public-OSS CLI quota was exhausted by the earlier completed reviews;
+  the service reported a recoverable reset wait. This is recorded as pending,
+  not passed. The underlying contribution diff's final complete review remains
+  zero-finding, while the rc.2 release-layer history retains its earlier review
+  evidence.
+
+Consequence:
+
+- RC.3 has a version-controlled, reproducible preparation source and a complete
+  non-public local package proof. The next non-owner actions are to obtain a
+  terminal successful exact-commit CI result and repeat CodeRabbit after its
+  quota resets. Only then should the exact immutable rc.3 tag be presented for
+  owner approval.
+- Installation, copied-wallet migration, installed-app visual acceptance, PGP
+  signing, GitHub release publication, portal/companion updates, upstream PR
+  creation, Nostr publication, Stacker News submission/payment, and every new
+  Lightning operation remain separately gated.

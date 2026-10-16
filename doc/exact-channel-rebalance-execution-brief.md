@@ -112,6 +112,21 @@ clean-install and copied-data migration gate only after repairing the
 installed-app dialog and producing a new immutable release candidate. RC.2 is
 immutable and must never be replaced in place.
 
+RC.3 preparation now exists separately on owner-fork branch
+`codex/grynvault-rebalance-rc3-prep` at exact commit
+`9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. It is based directly on the
+reviewed Alby Hub v1.24.3 contribution head
+`cd6bc1e399ba256adb113bbaf44d659c5b22a170`, is zero commits behind that base,
+and carries only the independently branded release/package layer above it. A
+disposable local tag produced and passed a universal macOS build, raw bundle
+inspection, ad-hoc package inspection, mounted-DMG inspection, source archive,
+SBOM, and preparation-index run. The disposable tag was deleted. This is
+non-release evidence only: no immutable rc.3 tag, PGP signature, public release,
+installation, migration, or publication exists. GitHub source-compatibility run
+`38857778185` and a fresh release-layer CodeRabbit review must be terminally
+resolved before presenting the immutable-tag approval packet; the latter is
+currently waiting for the public-OSS review quota to reset.
+
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable
 readback reported `succeeded / succeeded`, exact actual routing fee

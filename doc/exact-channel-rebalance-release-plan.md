@@ -118,6 +118,13 @@ separately audited local companion/upstream capability and a new threat model.
   readback match. The public prerelease is bound to that exact tag and commit.
   Product-code head
   `c41a5e1773030da5fccc174386edc8730423b4a3` also passed run `38483312899`.
+- RC.3 preparation branch/head:
+  `codex/grynvault-rebalance-rc3-prep` /
+  `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. This branch is based directly on
+  current reviewed Hub contribution head
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`; GitHub compare reports 16 commits
+  ahead and zero behind. It is preparation only, with no immutable tag, PGP
+  signature, public release, installation, or migration acceptance.
 - RC.2 release universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 - Current upstream-contribution universal macOS LDK library: `43,212,288`
@@ -624,6 +631,19 @@ Implementation evidence on 2026-10-13:
 - [x] Prepare and verify the product name, bundle identifier, icon, data
       directory, updater policy, universal-macOS platform matrix, and
       migration/rollback UX. Public release approval remains separate.
+- [x] Replay the independent package layer onto the reviewed Alby Hub v1.24.3
+      feature head in a separate rc.3 preparation worktree; refresh all pinned
+      Hub/LDK/LDK Go commits, the raw universal-library hash, release notes, and
+      UI version disclosure.
+- [x] At exact prep commit
+      `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`, pass local source-boundary,
+      release-script, Go, race, vet, current govulncheck, frontend, workflow,
+      dependency, secret, universal-build, raw-bundle, ad-hoc package,
+      mounted-DMG, source-archive, SBOM, and preparation-index checks using a
+      disposable local tag; delete that tag afterward.
+- [ ] Close exact GitHub run `38857778185` and obtain a fresh zero-finding
+      CodeRabbit review of the rc.3 release layer before asking for the immutable
+      rc.3 tag approval.
 - [x] Make a clean release tag and build and inspect the unsigned application
       from that tag.
 - [x] Build and verify the explicitly unsigned application DMG, source archive,
