@@ -11,15 +11,16 @@ they receive their own complete acceptance evidence.
 
 ## Pinned inputs
 
-- Alby Hub upstream base: `b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e`
+- Alby Hub upstream base (`v1.24.3`):
+  `5d5e696dfe7d430a365d48939c394376e078a56b`
 - reviewed exact-channel Hub head:
-  `1fb6c8cd0fcb2fbee48c888c6274e2659d74c169`
+  `cd6bc1e399ba256adb113bbaf44d659c5b22a170`
 - LDK Node feature head:
-  `2dc742a8b2057519e22d757f510e5cc880731b2c`
+  `ed72fe992174965bc917d1dc6c6bee1dc7368057`
 - LDK Node Go binding head:
-  `a381cacb18562dff960f24a12f43232633f8bc25`
+  `3228bdbb7973a2743aee5e9f699e79afd217617b`
 - universal LDK library SHA-256:
-  `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`
 - Go toolchain: `go1.27.2`, selected by `go.mod`
 - Node.js: `22.x`
 - Yarn: `1.22.22`

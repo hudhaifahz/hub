@@ -44,9 +44,9 @@ trap 'rm -f "$temporary_manifest"' EXIT
 {
   echo "release_tag=${release_tag}"
   echo "source_commit=${source_commit}"
-  echo "upstream_hub_base=b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e"
-  echo "ldk_node_commit=2dc742a8b2057519e22d757f510e5cc880731b2c"
-  echo "ldk_node_go_commit=a381cacb18562dff960f24a12f43232633f8bc25"
+  echo "upstream_hub_base=5d5e696dfe7d430a365d48939c394376e078a56b"
+  echo "ldk_node_commit=ed72fe992174965bc917d1dc6c6bee1dc7368057"
+  echo "ldk_node_go_commit=3228bdbb7973a2743aee5e9f699e79afd217617b"
   echo "build_workflow=.github/workflows/wails.yml@${source_commit}"
   echo "platform=macos-universal"
   echo "bundle_identifier=com.grynvault.rebalance"

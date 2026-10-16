@@ -1,6 +1,6 @@
 # Pre-release security review
 
-Date: 2026-10-13
+Date: 2026-10-15
 
 Status: internal pre-release review; not an independent third-party audit and
 not a public-release approval.
@@ -24,13 +24,20 @@ live Lightning payment was used.
 | Go unit/integration suite | Go 1.27.2 | Pass |
 | Focused race suite (`./api ./wails`) | Go 1.27.2 | Pass |
 | Go static analysis | Go 1.27.2 `go vet` | Pass |
-| Reachable Go vulnerability scan | `govulncheck` 1.9.0, database updated 2026-10-08 | 0 reachable vulnerabilities |
-| Frontend dependency audit | Yarn 1.22.22 | 0 vulnerabilities in production dependencies |
+| Reachable Go vulnerability scan | `govulncheck` 1.9.0, current database on 2026-10-15 | 0 reachable vulnerabilities |
+| Frontend dependency audit | Yarn 1.22.22 | 0 vulnerabilities in 134 production packages |
 | Current-tree secret scan | Gitleaks 8.30.1 rules, redacted output | 0 findings after remediation |
 | GitHub workflow lint | actionlint 1.7.7 | Pass |
 | Frontend ESLint, TypeScript, Prettier | versions locked by `frontend/yarn.lock` | Pass |
 | HTTP and Wails frontend builds | Node 22 / locked Yarn dependencies | Pass |
 | Source-boundary assertions | `scripts/release/check-source-boundaries.sh` | Pass |
+
+The RC.3 preparation source replays the exact-channel work onto Alby Hub
+`v1.24.3` and pins the reviewed LDK and Go binding heads recorded in
+`PROVENANCE.md`. The final upstream-oriented Hub diff received a complete
+CodeRabbit review with zero findings after fixing dependency provenance and a
+transient reconciliation-status polling gap. CodeRabbit is review input, not an
+independent security audit.
 
 An unsigned universal preflight build identified and fixed duplicate runtime
 path processing caused by `otool` reporting each path once per architecture.

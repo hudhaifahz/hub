@@ -8,6 +8,10 @@ exact channel through which they must return. Route discovery is non-paying;
 execution requires a fresh fingerprint-bound quote and exact typed
 confirmation.
 
+This candidate is replayed onto Alby Hub `v1.24.3`. It also makes long route
+identifiers and balance evidence readable at constrained widths and continues
+polling a submitted operation after a transient status-refresh failure.
+
 ## Why this exists
 
 The built-in Boltz swap rebalance path is no longer available for this use

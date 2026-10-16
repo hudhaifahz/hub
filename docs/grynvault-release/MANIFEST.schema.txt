@@ -2,9 +2,9 @@ Grynvault Rebalance signed manifest fields
 
 release_tag=<immutable tag>
 source_commit=<40-hex Grynvault source commit>
-upstream_hub_base=b7d0b0be829ba387d6c2f95c54a1449b71f6cd0e
-ldk_node_commit=2dc742a8b2057519e22d757f510e5cc880731b2c
-ldk_node_go_commit=a381cacb18562dff960f24a12f43232633f8bc25
+upstream_hub_base=5d5e696dfe7d430a365d48939c394376e078a56b
+ldk_node_commit=ed72fe992174965bc917d1dc6c6bee1dc7368057
+ldk_node_go_commit=3228bdbb7973a2743aee5e9f699e79afd217617b
 build_workflow=.github/workflows/wails.yml@<40-hex source commit>
 platform=macos-universal
 bundle_identifier=com.grynvault.rebalance

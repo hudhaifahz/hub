@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - codex/grynvault-rebalance-release
+      - codex/grynvault-rebalance-rc3-prep
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
