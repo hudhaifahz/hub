@@ -1106,7 +1106,9 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 
 		go func() {
-			time.Sleep(2 * time.Second)
+			// Match the existing restore flow so the user has time to read the
+			// verified-copy result and recovery location before the app closes.
+			time.Sleep(5 * time.Second)
 			logger.Logger.Info("Existing Alby Hub import staged. Shutting down for restart...")
 			app.svc.Shutdown()
 			time.Sleep(time.Second)

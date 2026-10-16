@@ -49,7 +49,8 @@ export function ImportExistingAlby() {
             <p className="text-muted-foreground">
               Grynvault Rebalance will close to finish the import. Reopen it,
               unlock with your existing password, and verify your node and
-              channels. Your original Alby Hub data remains untouched.
+              channels. Your original Alby Hub data remains untouched. Keep Alby
+              Hub closed while Grynvault Rebalance is running.
             </p>
           </div>
           {result.backupLocation && (
@@ -90,6 +91,7 @@ export function ImportExistingAlby() {
                 <li>A hash-verified recovery copy is created automatically.</li>
                 <li>The original Alby Hub data is never deleted or moved.</li>
                 <li>Grynvault restarts before using the copied wallet data.</li>
+                <li>Only Alby Hub or Grynvault may run at one time.</li>
               </ul>
             </div>
           </div>
