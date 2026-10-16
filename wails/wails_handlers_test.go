@@ -14,6 +14,43 @@ import (
 	"github.com/getAlby/hub/logger"
 )
 
+func TestRedactWailsRoute(t *testing.T) {
+	tests := []struct {
+		name  string
+		route string
+		want  string
+	}{
+		{
+			name:  "oauth authorization code",
+			route: "/api/alby/callback?code=one-time-secret&state=also-secret",
+			want:  "/api/alby/callback",
+		},
+		{
+			name:  "payment request path",
+			route: "/api/payments/lnbc1credentialshapedinvoice",
+			want:  "/api/payments/[REDACTED]",
+		},
+		{
+			name:  "ordinary query",
+			route: "/api/transactions?limit=25&cursor=sensitive-cursor",
+			want:  "/api/transactions",
+		},
+		{
+			name:  "ordinary route",
+			route: "/api/channels",
+			want:  "/api/channels",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := redactWailsRoute(test.route); got != test.want {
+				t.Fatalf("redactWailsRoute(%q) = %q, want %q", test.route, got, test.want)
+			}
+		})
+	}
+}
+
 type mockRouterAPI struct {
 	api.API
 	paidInvoices []string
@@ -68,7 +105,7 @@ func TestWailsRequestRouter_PaymentRouteRequiresPost(t *testing.T) {
 	response := app.WailsRequestRouter(route, "GET", "")
 
 	assert.Empty(t, mockAPI.paidInvoices)
-	assert.Equal(t, "Unhandled route: GET "+route, response.Error)
+	assert.Equal(t, "Unhandled route: GET /api/payments/[REDACTED]", response.Error)
 }
 
 type rebalanceRouterAPI struct {
