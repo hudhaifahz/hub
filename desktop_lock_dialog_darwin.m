@@ -1,3 +1,6 @@
+//go:build darwin && wails && !bindings
+// +build darwin,wails,!bindings
+
 #import <Cocoa/Cocoa.h>
 
 void showDesktopWalletLockConflict(void) {
