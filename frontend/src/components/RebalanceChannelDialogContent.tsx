@@ -1,9 +1,10 @@
-import { AlertTriangleIcon, CheckCircle2Icon } from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon, CopyIcon } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 import { FormattedBitcoinAmount } from "src/components/FormattedBitcoinAmount";
 import Loading from "src/components/Loading";
 import { Alert, AlertDescription, AlertTitle } from "src/components/ui/alert";
+import { Button } from "src/components/ui/button";
 import { LoadingButton } from "src/components/ui/custom/loading-button";
 import { Input } from "src/components/ui/input";
 import { Label } from "src/components/ui/label";
@@ -15,6 +16,7 @@ import {
   SelectValue,
 } from "src/components/ui/select";
 import { useChannels } from "src/hooks/useChannels";
+import { copyToClipboard } from "src/lib/clipboard";
 import { Channel } from "src/types";
 import { request } from "src/utils/request";
 import {
@@ -125,6 +127,71 @@ function sats(amountMsat: number) {
 
 function channelIdentity(channel: Channel) {
   return `${channel.remotePubkey.slice(0, 12)}… · ${channel.id}`;
+}
+
+function ReviewDatum({
+  children,
+  emphasis = false,
+  label,
+}: {
+  children: React.ReactNode;
+  emphasis?: boolean;
+  label: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md bg-muted/40 px-3 py-2">
+      <dt
+        className={
+          emphasis
+            ? "text-xs font-semibold text-foreground"
+            : "text-xs text-muted-foreground"
+        }
+      >
+        {label}
+      </dt>
+      <dd
+        className={
+          emphasis
+            ? "mt-1 min-w-0 break-words font-semibold text-foreground"
+            : "mt-1 min-w-0 break-words text-foreground"
+        }
+      >
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+function CopyableIdentifier({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md border bg-background/60 px-3 py-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          {label}
+        </span>
+        <Button
+          aria-label={`Copy ${label.toLowerCase()}`}
+          className="-my-1 -mr-1 shrink-0"
+          onClick={() => void copyToClipboard(value)}
+          size="icon-xs"
+          title={`Copy ${label.toLowerCase()}`}
+          type="button"
+          variant="ghost"
+        >
+          <CopyIcon />
+        </Button>
+      </div>
+      <code className="mt-1 block min-w-0 select-all whitespace-normal [overflow-wrap:anywhere] text-xs leading-relaxed text-foreground">
+        {value}
+      </code>
+    </div>
+  );
 }
 
 export function RebalanceChannelDialogContent({
@@ -310,406 +377,424 @@ export function RebalanceChannelDialogContent({
   }
 
   return (
-    <AlertDialogContent className="max-h-[calc(100dvh-2rem)] min-w-0 w-[calc(100%-2rem)] max-w-2xl overflow-hidden p-0">
+    <AlertDialogContent className="h-[min(52rem,calc(100dvh-1rem))] max-h-[calc(100dvh-1rem)] min-w-0 w-[calc(100%-1rem)] overflow-hidden p-0 data-[size=default]:sm:max-w-3xl">
       <form
-        className="flex max-h-[calc(100dvh-2rem)] min-h-0 min-w-0 flex-col"
+        className="flex h-full min-h-0 min-w-0 flex-col"
         onSubmit={createQuote}
       >
-        <AlertDialogHeader className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-6 pb-4">
+        <AlertDialogHeader className="shrink-0 border-b px-4 py-3 text-left sm:px-5 sm:py-4">
           <AlertDialogTitle>Exact-channel rebalance</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="min-w-0 w-full max-w-full space-y-4 text-left">
-              <p>
-                Choose both exact channels. This searches the local routing
-                graph and saves an expiring review record; it creates no
-                invoice, probe, HTLC, or payment.
-              </p>
+          <AlertDialogDescription className="max-w-2xl text-left leading-relaxed">
+            Choose both exact channels. Route search is non-paying: it creates
+            no invoice, probe, HTLC, or payment.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+          <div className="min-w-0 w-full max-w-full space-y-4 text-left">
+            <div className="space-y-2">
+              <Label>Leave through this channel</Label>
+              <Select
+                disabled={Boolean(operation)}
+                value={outgoingChannelId}
+                onValueChange={(value) => {
+                  setOutgoingChannelId(value);
+                  setQuote(undefined);
+                }}
+              >
+                <SelectTrigger className="min-w-0 w-full max-w-full [&>span]:truncate">
+                  <SelectValue placeholder="Select exact outgoing channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {outgoingChannels.map((channel) => (
+                    <SelectItem
+                      key={`${channel.remotePubkey}:${channel.id}`}
+                      value={channel.id}
+                      disabled={channel.status !== "online"}
+                    >
+                      {channelIdentity(channel)} ·{" "}
+                      {Math.floor(
+                        channel.localSpendableBalanceSat
+                      ).toLocaleString()}{" "}
+                      sats spendable
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {outgoingChannel && (
+                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+                  <CopyableIdentifier
+                    label="Outgoing peer"
+                    value={outgoingChannel.remotePubkey}
+                  />
+                  <CopyableIdentifier
+                    label="Outgoing channel"
+                    value={outgoingChannel.id}
+                  />
+                </div>
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label>Leave through this channel</Label>
-                <Select
+            <div className="space-y-2">
+              <Label>Return through this channel</Label>
+              <div className="min-w-0 space-y-2 rounded-md border p-3 text-sm">
+                <div className="min-w-0 [overflow-wrap:anywhere] font-medium">
+                  {channelIdentity(incomingChannel)}
+                </div>
+                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+                  <CopyableIdentifier
+                    label="Incoming peer"
+                    value={incomingChannel.remotePubkey}
+                  />
+                  <CopyableIdentifier
+                    label="Incoming channel"
+                    value={incomingChannel.id}
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Receiving capacity:{" "}
+                  {Math.floor(
+                    incomingChannel.remoteBalanceSat
+                  ).toLocaleString()}{" "}
+                  sats
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0">
+                <Label htmlFor="rebalance-amount">Principal (sats)</Label>
+                <Input
                   disabled={Boolean(operation)}
-                  value={outgoingChannelId}
-                  onValueChange={(value) => {
-                    setOutgoingChannelId(value);
+                  id="rebalance-amount"
+                  type="number"
+                  required
+                  min={10000}
+                  step={1}
+                  value={amountSat}
+                  onChange={(event) => {
+                    setAmountSat(event.target.value);
                     setQuote(undefined);
                   }}
-                >
-                  <SelectTrigger className="min-w-0 w-full max-w-full [&>span]:truncate">
-                    <SelectValue placeholder="Select exact outgoing channel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {outgoingChannels.map((channel) => (
-                      <SelectItem
-                        key={`${channel.remotePubkey}:${channel.id}`}
-                        value={channel.id}
-                        disabled={channel.status !== "online"}
-                      >
-                        {channelIdentity(channel)} ·{" "}
-                        {Math.floor(
-                          channel.localSpendableBalanceSat
-                        ).toLocaleString()}{" "}
-                        sats spendable
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {outgoingChannel && (
-                  <p className="break-all text-xs text-muted-foreground">
-                    Peer: {outgoingChannel.remotePubkey}
-                    <br />
-                    Channel: {outgoingChannel.id}
-                  </p>
-                )}
+                />
               </div>
-
-              <div className="space-y-2">
-                <Label>Return through this channel</Label>
-                <div className="min-w-0 rounded-md border p-3 text-sm">
-                  <div className="truncate">
-                    {channelIdentity(incomingChannel)}
-                  </div>
-                  <div className="mt-1 break-all text-xs text-muted-foreground">
-                    Peer: {incomingChannel.remotePubkey}
-                    <br />
-                    Channel: {incomingChannel.id}
-                    <br />
-                    Receiving capacity:{" "}
-                    {Math.floor(
-                      incomingChannel.remoteBalanceSat
-                    ).toLocaleString()}{" "}
-                    sats
-                  </div>
-                </div>
+              <div className="min-w-0">
+                <Label htmlFor="routing-fee-cap">Routing fee cap</Label>
+                <Input
+                  disabled={Boolean(operation)}
+                  id="routing-fee-cap"
+                  type="number"
+                  required
+                  min={0}
+                  step={1}
+                  value={maxRoutingFeeSat}
+                  onChange={(event) => {
+                    setMaxRoutingFeeSat(event.target.value);
+                    setQuote(undefined);
+                  }}
+                />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="min-w-0">
-                  <Label htmlFor="rebalance-amount">Principal (sats)</Label>
-                  <Input
-                    disabled={Boolean(operation)}
-                    id="rebalance-amount"
-                    type="number"
-                    required
-                    min={10000}
-                    step={1}
-                    value={amountSat}
-                    onChange={(event) => {
-                      setAmountSat(event.target.value);
-                      setQuote(undefined);
-                    }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <Label htmlFor="routing-fee-cap">Routing fee cap</Label>
-                  <Input
-                    disabled={Boolean(operation)}
-                    id="routing-fee-cap"
-                    type="number"
-                    required
-                    min={0}
-                    step={1}
-                    value={maxRoutingFeeSat}
-                    onChange={(event) => {
-                      setMaxRoutingFeeSat(event.target.value);
-                      setQuote(undefined);
-                    }}
-                  />
-                </div>
-              </div>
-
-              {quote && (
-                <div className="space-y-3 rounded-md border p-4">
-                  <h3 className="font-medium">Quote review</h3>
-                  <dl className="grid min-w-0 grid-cols-1 gap-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-left sm:grid-cols-2 sm:[&>dd]:text-right">
-                    <dt>Principal</dt>
-                    <dd className="text-right">
-                      <FormattedBitcoinAmount amountMsat={quote.amountMsat} />
-                    </dd>
-                    <dt>Estimated routing fee</dt>
-                    <dd className="text-right">
-                      <FormattedBitcoinAmount
-                        amountMsat={quote.totalRoutingFeeMsat}
-                      />
-                    </dd>
-                    <dt>Routing fee cap</dt>
-                    <dd className="text-right">
-                      <FormattedBitcoinAmount
-                        amountMsat={quote.maxRoutingFeeMsat}
-                      />
-                    </dd>
-                    <dt className="font-medium">Maximum source debit</dt>
-                    <dd className="text-right font-medium">
-                      <FormattedBitcoinAmount
-                        amountMsat={quote.maxTotalDebitMsat}
-                      />
-                    </dd>
-                    <dt>Principal in BTC</dt>
-                    <dd className="text-right font-mono">
+            {quote && (
+              <div className="space-y-3 rounded-md border p-4">
+                <h3 className="font-medium">Quote review</h3>
+                <dl className="grid min-w-0 grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                  <ReviewDatum label="Principal">
+                    <FormattedBitcoinAmount amountMsat={quote.amountMsat} />
+                  </ReviewDatum>
+                  <ReviewDatum label="Estimated routing fee">
+                    <FormattedBitcoinAmount
+                      amountMsat={quote.totalRoutingFeeMsat}
+                    />
+                  </ReviewDatum>
+                  <ReviewDatum label="Routing fee cap">
+                    <FormattedBitcoinAmount
+                      amountMsat={quote.maxRoutingFeeMsat}
+                    />
+                  </ReviewDatum>
+                  <ReviewDatum emphasis label="Maximum source debit">
+                    <FormattedBitcoinAmount
+                      amountMsat={quote.maxTotalDebitMsat}
+                    />
+                  </ReviewDatum>
+                  <ReviewDatum label="Principal in BTC">
+                    <span className="font-mono">
                       {exactBtc(quote.amountMsat)} BTC
-                    </dd>
-                    <dt>Outgoing spendable at quote</dt>
-                    <dd className="text-right">
-                      {sats(quote.outgoingSpendableSnapshotMsat)} sats
-                    </dd>
-                    <dt>Projected outgoing spendable</dt>
-                    <dd className="text-right">
+                    </span>
+                  </ReviewDatum>
+                  <ReviewDatum label="Outgoing spendable at quote">
+                    {sats(quote.outgoingSpendableSnapshotMsat)} sats
+                  </ReviewDatum>
+                  <ReviewDatum label="Projected outgoing spendable">
+                    {sats(
+                      quote.outgoingSpendableSnapshotMsat -
+                        quote.maxTotalDebitMsat
+                    )}{" "}
+                    sats
+                  </ReviewDatum>
+                </dl>
+                <div className="space-y-2 rounded-md border p-3 text-xs">
+                  <div className="font-medium">
+                    Fingerprint-bound channel balance evidence
+                  </div>
+                  <dl className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+                    <ReviewDatum label="Outgoing local → projected">
+                      {sats(quote.outgoingLocalSnapshotMsat)} →{" "}
                       {sats(
-                        quote.outgoingSpendableSnapshotMsat -
+                        quote.outgoingLocalSnapshotMsat -
                           quote.maxTotalDebitMsat
                       )}{" "}
                       sats
-                    </dd>
+                    </ReviewDatum>
+                    <ReviewDatum label="Outgoing remote → projected">
+                      {sats(quote.outgoingRemoteSnapshotMsat)} →{" "}
+                      {sats(
+                        quote.outgoingRemoteSnapshotMsat +
+                          quote.maxTotalDebitMsat
+                      )}{" "}
+                      sats
+                    </ReviewDatum>
+                    <ReviewDatum label="Outgoing reserves (local / remote)">
+                      {sats(quote.outgoingLocalReserveMsat)} /{" "}
+                      {sats(quote.outgoingRemoteReserveMsat)} sats
+                    </ReviewDatum>
+                    <ReviewDatum label="Incoming local → projected">
+                      {sats(quote.incomingLocalSnapshotMsat)} →{" "}
+                      {sats(quote.incomingLocalSnapshotMsat + quote.amountMsat)}{" "}
+                      sats
+                    </ReviewDatum>
+                    <ReviewDatum label="Incoming remote → projected">
+                      {sats(quote.incomingRemoteSnapshotMsat)} →{" "}
+                      {sats(
+                        quote.incomingRemoteSnapshotMsat - quote.amountMsat
+                      )}{" "}
+                      sats
+                    </ReviewDatum>
+                    <ReviewDatum label="Incoming reserves (local / remote)">
+                      {sats(quote.incomingLocalReserveMsat)} /{" "}
+                      {sats(quote.incomingRemoteReserveMsat)} sats
+                    </ReviewDatum>
+                    <ReviewDatum label="Expected on-chain change">
+                      0 sats
+                    </ReviewDatum>
                   </dl>
-                  <div className="space-y-2 rounded-md border p-3 text-xs">
-                    <div className="font-medium">
-                      Fingerprint-bound channel balance evidence
-                    </div>
-                    <dl className="grid min-w-0 grid-cols-1 gap-1 [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-left sm:grid-cols-2 sm:[&>dd]:text-right">
-                      <dt>Outgoing local → projected</dt>
-                      <dd className="text-right">
-                        {sats(quote.outgoingLocalSnapshotMsat)} →{" "}
-                        {sats(
-                          quote.outgoingLocalSnapshotMsat -
-                            quote.maxTotalDebitMsat
-                        )}{" "}
-                        sats
-                      </dd>
-                      <dt>Outgoing remote → projected</dt>
-                      <dd className="text-right">
-                        {sats(quote.outgoingRemoteSnapshotMsat)} →{" "}
-                        {sats(
-                          quote.outgoingRemoteSnapshotMsat +
-                            quote.maxTotalDebitMsat
-                        )}{" "}
-                        sats
-                      </dd>
-                      <dt>Outgoing reserves (local / remote)</dt>
-                      <dd className="text-right">
-                        {sats(quote.outgoingLocalReserveMsat)} /{" "}
-                        {sats(quote.outgoingRemoteReserveMsat)} sats
-                      </dd>
-                      <dt>Incoming local → projected</dt>
-                      <dd className="text-right">
-                        {sats(quote.incomingLocalSnapshotMsat)} →{" "}
-                        {sats(
-                          quote.incomingLocalSnapshotMsat + quote.amountMsat
-                        )}{" "}
-                        sats
-                      </dd>
-                      <dt>Incoming remote → projected</dt>
-                      <dd className="text-right">
-                        {sats(quote.incomingRemoteSnapshotMsat)} →{" "}
-                        {sats(
-                          quote.incomingRemoteSnapshotMsat - quote.amountMsat
-                        )}{" "}
-                        sats
-                      </dd>
-                      <dt>Incoming reserves (local / remote)</dt>
-                      <dd className="text-right">
-                        {sats(quote.incomingLocalReserveMsat)} /{" "}
-                        {sats(quote.incomingRemoteReserveMsat)} sats
-                      </dd>
-                      <dt>Expected on-chain change</dt>
-                      <dd className="text-right">0 sats</dd>
-                    </dl>
-                    <p className="text-muted-foreground">
-                      Projections use the quoted fixed-route debit. While the
-                      payment is in flight, the amount is temporarily committed
-                      in HTLCs; final balances are accepted only after both
-                      durable payment records reconcile.
-                    </p>
+                  <p className="text-muted-foreground">
+                    Projections use the quoted fixed-route debit. While the
+                    payment is in flight, the amount is temporarily committed in
+                    HTLCs; final balances are accepted only after both durable
+                    payment records reconcile.
+                  </p>
+                </div>
+                <div className="space-y-2 rounded-md bg-muted p-3 text-xs">
+                  <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+                    <CopyableIdentifier
+                      label="Quote ID"
+                      value={quote.quoteId}
+                    />
+                    <CopyableIdentifier
+                      label="Route fingerprint"
+                      value={quote.routeFingerprint}
+                    />
+                    <CopyableIdentifier
+                      label="First hop SCID"
+                      value={quote.outgoingShortChannelId}
+                    />
+                    <CopyableIdentifier
+                      label="Final hop SCID / alias"
+                      value={quote.incomingShortChannelId}
+                    />
                   </div>
-                  <div className="rounded-md bg-muted p-3 text-xs">
-                    <div className="break-all">Quote ID: {quote.quoteId}</div>
-                    <div className="break-all">
-                      Route fingerprint: {quote.routeFingerprint}
-                    </div>
+                  <div className="grid gap-1 text-muted-foreground sm:grid-cols-2">
                     <div>
                       Quoted: {new Date(quote.quotedAt).toLocaleString()}
                     </div>
                     <div>
                       Expires: {new Date(quote.expiresAt).toLocaleString()}
                     </div>
-                    <div className="break-all">
-                      First hop SCID: {quote.outgoingShortChannelId}
-                    </div>
-                    <div className="break-all">
-                      Final hop SCID/alias: {quote.incomingShortChannelId}
-                    </div>
                   </div>
-                  {quote.paths.map((path, pathIndex) => (
-                    <div
-                      className="space-y-1 rounded-md border p-3 text-xs"
-                      key={`${pathIndex}:${path.feeMsat}`}
-                    >
-                      <div className="font-medium">
-                        Path {pathIndex + 1} · {path.hops.length} hops ·{" "}
-                        {path.feeMsat.toLocaleString()} msat fee
-                      </div>
+                </div>
+                {quote.paths.map((path, pathIndex) => (
+                  <div
+                    className="space-y-1 rounded-md border p-3 text-xs"
+                    key={`${pathIndex}:${path.feeMsat}`}
+                  >
+                    <div className="font-medium">
+                      Path {pathIndex + 1} · {path.hops.length} hops ·{" "}
+                      {path.feeMsat.toLocaleString()} msat fee
+                    </div>
+                    <div className="grid min-w-0 gap-2">
                       {path.hops.map((hop, hopIndex) => (
-                        <div
-                          className="break-all text-muted-foreground"
+                        <CopyableIdentifier
                           key={`${hopIndex}:${hop.shortChannelId}`}
-                        >
-                          {hopIndex + 1}. {hop.nodePubkey} via SCID{" "}
-                          {hop.shortChannelId}
-                        </div>
+                          label={`Hop ${hopIndex + 1}`}
+                          value={`${hop.nodePubkey} via SCID ${hop.shortChannelId}`}
+                        />
                       ))}
                     </div>
-                  ))}
-                  {(!operation || operation.requiresExactRetry) && (
-                    <div className="space-y-2 rounded-md border border-destructive p-3">
-                      <Label htmlFor="rebalance-confirmation">
-                        Type this exact confirmation
-                      </Label>
-                      <code className="block break-all text-xs">
-                        {quote.executionConfirmation}
-                      </code>
-                      <Input
-                        autoComplete="off"
-                        id="rebalance-confirmation"
-                        value={confirmation}
-                        onChange={(event) =>
-                          setConfirmation(event.target.value)
-                        }
+                  </div>
+                ))}
+                {(!operation || operation.requiresExactRetry) && (
+                  <div className="space-y-2 rounded-md border border-destructive p-3">
+                    <Label htmlFor="rebalance-confirmation">
+                      Type this exact confirmation
+                    </Label>
+                    <CopyableIdentifier
+                      label="Required confirmation"
+                      value={quote.executionConfirmation}
+                    />
+                    <Input
+                      autoComplete="off"
+                      id="rebalance-confirmation"
+                      value={confirmation}
+                      onChange={(event) => setConfirmation(event.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {operation && (
+              <Alert
+                variant={
+                  operation.state === "succeeded" ? "default" : "destructive"
+                }
+              >
+                {operation.state === "succeeded" ? (
+                  <CheckCircle2Icon className="h-4 w-4" />
+                ) : (
+                  <AlertTriangleIcon className="h-4 w-4" />
+                )}
+                <AlertTitle>
+                  {operation.state === "succeeded"
+                    ? "Rebalance reconciled"
+                    : operation.state === "failed"
+                      ? "Rebalance failed"
+                      : operation.requiresExactRetry
+                        ? "Exact-operation recovery required"
+                        : "Payment submitted; reconciliation pending"}
+                </AlertTitle>
+                <AlertDescription>
+                  <div className="min-w-0 w-full space-y-2 text-xs">
+                    <div>
+                      State/phase: {operation.state} / {operation.phase}
+                    </div>
+                    <CopyableIdentifier
+                      label="Operation ID"
+                      value={operation.operationId}
+                    />
+                    {operation.paymentHash && (
+                      <CopyableIdentifier
+                        label="Payment hash"
+                        value={operation.paymentHash}
                       />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {operation && (
-                <Alert
-                  variant={
-                    operation.state === "succeeded" ? "default" : "destructive"
-                  }
-                >
-                  {operation.state === "succeeded" ? (
-                    <CheckCircle2Icon className="h-4 w-4" />
-                  ) : (
-                    <AlertTriangleIcon className="h-4 w-4" />
-                  )}
-                  <AlertTitle>
-                    {operation.state === "succeeded"
-                      ? "Rebalance reconciled"
-                      : operation.state === "failed"
-                        ? "Rebalance failed"
-                        : operation.requiresExactRetry
-                          ? "Exact-operation recovery required"
-                          : "Payment submitted; reconciliation pending"}
-                  </AlertTitle>
-                  <AlertDescription>
-                    <div className="space-y-1 break-all text-xs">
+                    )}
+                    {operation.outboundPaymentId && (
+                      <CopyableIdentifier
+                        label="Outbound payment ID"
+                        value={operation.outboundPaymentId}
+                      />
+                    )}
+                    {operation.actualRoutingFeeMsat !== undefined && (
                       <div>
-                        State/phase: {operation.state} / {operation.phase}
+                        Actual routing fee:{" "}
+                        {operation.actualRoutingFeeMsat.toLocaleString()} msat
                       </div>
-                      <div>Operation ID: {operation.operationId}</div>
-                      {operation.paymentHash && (
-                        <div>Payment hash: {operation.paymentHash}</div>
-                      )}
-                      {operation.outboundPaymentId && (
-                        <div>
-                          Outbound payment ID: {operation.outboundPaymentId}
-                        </div>
-                      )}
-                      {operation.actualRoutingFeeMsat !== undefined && (
-                        <div>
-                          Actual routing fee:{" "}
-                          {operation.actualRoutingFeeMsat.toLocaleString()} msat
-                        </div>
-                      )}
-                      {operation.terminalEvidenceHash && (
-                        <div>
-                          Evidence hash: {operation.terminalEvidenceHash}
-                        </div>
-                      )}
-                      {operation.failureReason && (
+                    )}
+                    {operation.terminalEvidenceHash && (
+                      <CopyableIdentifier
+                        label="Evidence hash"
+                        value={operation.terminalEvidenceHash}
+                      />
+                    )}
+                    {operation.failureReason && (
+                      <div className="font-medium">
+                        {operation.failureReason}
+                      </div>
+                    )}
+                    {operation.state === "failed" && (
+                      <div className="mt-2 space-y-1 rounded-md border border-destructive/40 p-2">
                         <div className="font-medium">
-                          {operation.failureReason}
+                          Local safety diagnostic
                         </div>
-                      )}
-                      {operation.state === "failed" && (
-                        <div className="mt-2 space-y-1 rounded-md border border-destructive/40 p-2">
-                          <div className="font-medium">
-                            Local safety diagnostic
-                          </div>
+                        <CopyableIdentifier
+                          label="Expected return channel"
+                          value={operation.incomingChannelId}
+                        />
+                        {operation.failureCode && (
+                          <div>Failure code: {operation.failureCode}</div>
+                        )}
+                        {operation.observedReceivingChannelIds?.map(
+                          (channelId, index) => (
+                            <CopyableIdentifier
+                              key={channelId + "-" + index}
+                              label={`Observed return channel ${index + 1}`}
+                              value={channelId}
+                            />
+                          )
+                        )}
+                        {!!operation.unidentifiedReceivingChannelCount && (
                           <div>
-                            Expected return channel:{" "}
-                            {operation.incomingChannelId}
+                            Unidentified arriving parts:{" "}
+                            {operation.unidentifiedReceivingChannelCount}
                           </div>
-                          {operation.failureCode && (
-                            <div>Failure code: {operation.failureCode}</div>
-                          )}
-                          {operation.observedReceivingChannelIds?.map(
-                            (channelId, index) => (
-                              <div key={channelId + "-" + index}>
-                                Observed return channel {index + 1}: {channelId}
-                              </div>
-                            )
-                          )}
-                          {!!operation.unidentifiedReceivingChannelCount && (
-                            <div>
-                              Unidentified arriving parts:{" "}
-                              {operation.unidentifiedReceivingChannelCount}
-                            </div>
-                          )}
-                          <div>
-                            Both exact-bound payment records ended failed; no
-                            rebalance principal settled.
-                          </div>
-                        </div>
-                      )}
-                      {operation.reconciliationPending && (
+                        )}
                         <div>
-                          Status is read from both durable payment records every
-                          two seconds.
+                          Both exact-bound payment records ended failed; no
+                          rebalance principal settled.
                         </div>
-                      )}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
+                      </div>
+                    )}
+                    {operation.reconciliationPending && (
+                      <div>
+                        Status is read from both durable payment records every
+                        two seconds.
+                      </div>
+                    )}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
 
-              {!operation && quote && (
-                <Alert variant="destructive">
-                  <AlertTriangleIcon className="h-4 w-4" />
-                  <AlertTitle>This action moves funds</AlertTitle>
-                  <AlertDescription className="min-w-0 break-words">
-                    One fixed-route payment will debit at most{" "}
-                    {Math.ceil(quote.maxTotalDebitMsat / 1000).toLocaleString()}{" "}
-                    sats from channel{" "}
-                    <span className="break-all">
-                      {quote.outgoingChannelId},
-                    </span>{" "}
-                    return{" "}
-                    {Math.floor(quote.amountMsat / 1000).toLocaleString()} sats
-                    through channel{" "}
-                    <span className="break-all">
-                      {quote.incomingChannelId},
-                    </span>{" "}
-                    use no automatic fallback route, and remain locked until
-                    both durable payment records agree.
-                  </AlertDescription>
-                </Alert>
-              )}
+            {!operation && quote && (
+              <Alert variant="destructive">
+                <AlertTriangleIcon className="h-4 w-4" />
+                <AlertTitle>This action moves funds</AlertTitle>
+                <AlertDescription className="min-w-0 break-words">
+                  One fixed-route payment will debit at most{" "}
+                  {Math.ceil(quote.maxTotalDebitMsat / 1000).toLocaleString()}{" "}
+                  sats from channel{" "}
+                  <code className="select-all whitespace-normal [overflow-wrap:anywhere] font-mono text-xs">
+                    {quote.outgoingChannelId},
+                  </code>{" "}
+                  return {Math.floor(quote.amountMsat / 1000).toLocaleString()}{" "}
+                  sats through channel{" "}
+                  <code className="select-all whitespace-normal [overflow-wrap:anywhere] font-mono text-xs">
+                    {quote.incomingChannelId},
+                  </code>{" "}
+                  use no automatic fallback route, and remain locked until both
+                  durable payment records agree.
+                </AlertDescription>
+              </Alert>
+            )}
 
-              {!quote && (
-                <Alert>
-                  <AlertTriangleIcon className="h-4 w-4" />
-                  <AlertTitle>Quote first</AlertTitle>
-                  <AlertDescription>
-                    Finding a route is non-paying. Execution requires a fresh
-                    quote and a separate exact confirmation.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="mt-0 shrink-0 border-t p-4 [&>*]:w-full sm:flex-wrap sm:p-6 sm:pt-4 sm:[&>*]:w-auto">
-          <AlertDialogCancel onClick={closeDialog}>Close</AlertDialogCancel>
+            {!quote && (
+              <Alert>
+                <AlertTriangleIcon className="h-4 w-4" />
+                <AlertTitle>Quote first</AlertTitle>
+                <AlertDescription>
+                  Finding a route is non-paying. Execution requires a fresh
+                  quote and a separate exact confirmation.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        </div>
+        <AlertDialogFooter className="mt-0 grid shrink-0 grid-cols-2 gap-2 border-t bg-background/95 p-3 backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:grid-cols-[auto_1fr_1fr]">
+          <AlertDialogCancel className="w-full sm:w-auto" onClick={closeDialog}>
+            Close
+          </AlertDialogCancel>
           <LoadingButton
+            className="w-full"
             disabled={Boolean(operation)}
             loading={isQuoting}
             type="submit"
@@ -717,6 +802,7 @@ export function RebalanceChannelDialogContent({
             Find local route
           </LoadingButton>
           <LoadingButton
+            className="col-span-2 w-full sm:col-span-1"
             disabled={
               !quote?.executionEnabled ||
               confirmation !== quote.executionConfirmation ||
