@@ -1376,3 +1376,47 @@ Required follow-up:
   failed, and recovery states. Acceptance requires every label/value pair,
   exact identifier, status value, and action to remain readable without
   horizontal clipping.
+
+### 2026-10-15 — Source UI repair and real-component geometry accepted
+
+Observed:
+
+- Hub commit `2302ad8a61497e01309c340f1840ba9389715a6b` repairs the
+  rejected dialog without changing any quote, execution, reconciliation, or
+  wallet logic. It overrides the base alert-dialog size variant correctly,
+  keeps the title and compact action footer fixed, and gives the evidence body
+  its own bounded vertical scroll region.
+- Quote and balance evidence now groups each label with its value instead of
+  splitting them across a fragile definition-list grid. Full peer keys, channel
+  IDs, quote IDs, fingerprints, SCIDs, hop identities, confirmation text,
+  operation IDs, payment hashes, outbound IDs, evidence hashes, and diagnostic
+  channel IDs use compact monospace fields with `overflow-wrap: anywhere`,
+  select-all behavior, and explicit copy buttons backed by the existing
+  clipboard fallback. Only the selector's non-authoritative summary truncates;
+  its full exact values appear immediately below it.
+- A privacy-safe synthetic harness rendered the real component in pre-quote,
+  quoted, executing, succeeded, failed, and exact-recovery states at 320, 375,
+  768, and 1280 CSS pixels. Across all 24 combinations, document client and
+  scroll widths matched, the evidence pane client and scroll widths matched,
+  zero `code` fields overflowed, and every footer action remained inside the
+  viewport.
+- Brave at an explicit 200% zoom reported `devicePixelRatio = 4`, effective
+  viewport `756 x 404` CSS pixels, document width `756 / 756`, and evidence-pane
+  width `738 / 738`; the footer remained visible. Zoom was restored to 100%.
+  The exact confirmation input precedes the execution action in focus order,
+  and the execution action remained disabled until the synthetic confirmation
+  matched.
+- Frontend ESLint, TypeScript, formatting, HTTP production build, and Wails
+  production build pass. Only the inherited direct-eval, bundle-size, and stale
+  Browserslist warnings remain. The temporary synthetic harness was deleted.
+- No live Hub API was called, and no quote, invoice, probe, HTLC, payment,
+  rebalance, database migration, application replacement, or wallet state
+  change occurred.
+
+Consequence:
+
+- The source and real-component portion of the reopened usability gate is
+  closed. The installed-app half is deliberately still open: build/package
+  checks must pass, the guarded app must be installed without changing the
+  canonical wallet boundary, and the owner must visually accept the same
+  states before this regression can be called fixed in the public package.

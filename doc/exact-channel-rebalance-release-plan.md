@@ -198,15 +198,45 @@ right edge; the footer consumes too much height; and scrolling can expose labels
 without their corresponding values. The safety logic remains intact, but this
 presentation is not release-quality for a financial confirmation surface.
 
-- [ ] Use a stacked responsive label/value layout at constrained widths.
-- [ ] Show full exact identifiers in compact monospace, copyable fields with
+- [x] Use a stacked responsive label/value layout at constrained widths.
+- [x] Show full exact identifiers in compact monospace, copyable fields with
       `overflow-wrap: anywhere`; do not rely on truncation or ellipses for proof.
-- [ ] Keep the current quote/status section clearly bounded and scrollable while
+- [x] Keep the current quote/status section clearly bounded and scrollable while
       reducing the sticky footer footprint so it never masks evidence.
 - [ ] Repeat real-component and installed-app checks at 320, 375, 768, and 1280
       CSS pixels and 200% zoom for pre-quote, quoted, executing, succeeded,
-      failed, and recovery states.
+      failed, and recovery states. The real-component half is complete at Hub
+      commit `2302ad8a61497e01309c340f1840ba9389715a6b`; installed-app proof remains
+      open.
 - [ ] Require owner visual acceptance before calling the dialog fixed again.
+
+The source repair at `2302ad8a61497e01309c340f1840ba9389715a6b`
+corrects the underlying size-variant override that had kept the dialog at the
+base `sm:max-w-lg` width, separates the fixed title and compact two-row/one-row
+action footer from the independently scrolling evidence region, groups each
+label with its value, and adds full copy controls using the application's
+existing secure-context/fallback clipboard helper. The only deliberately
+truncated value is the channel selector summary; both full pubkey and exact
+channel ID appear immediately below it in copyable proof fields.
+
+A fresh synthetic real-component run covered pre-quote, quoted, executing,
+succeeded, failed, and recovery at 320, 375, 768, and 1280 CSS pixels. For all
+24 combinations, document client width equalled scroll width, evidence-pane
+client width equalled scroll width, no `code` value overflowed its box, and all
+footer actions remained inside the viewport. At 200% Brave zoom,
+`devicePixelRatio` was 4, the effective viewport was 756 by 404 CSS pixels,
+document width remained 756/756, and the evidence pane remained 738/738 while
+the footer stayed visible. Zoom was restored to 100%. The confirmation field
+preceded the execution action in focus order, and the action remained disabled
+until the exact synthetic confirmation matched. No Hub wallet API, quote,
+invoice, probe, HTLC, payment, or rebalance was invoked.
+
+Frontend ESLint, TypeScript, formatting, HTTP production build, and Wails
+production build passed after the repair. Output remained limited to the
+pre-existing direct-eval, bundle-size, and stale Browserslist warnings. The
+temporary fixture was deleted. This is source/fixture acceptance only; do not
+claim the owner-rejected installed dialog fixed until a guarded build is
+installed and the owner accepts the real app at the same widths and zoom.
 
 The explicit browser-zoom check used Brave at 200% on the real component's
 synthetic quote and recovery fixtures. Retina `devicePixelRatio` increased from
