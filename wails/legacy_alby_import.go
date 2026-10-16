@@ -49,7 +49,23 @@ func canonicalLegacyAlbyWorkdir() string {
 	if err != nil {
 		return ""
 	}
+	home = userHomeOutsideSandbox(home)
 	return filepath.Join(home, "Library", "Containers", "com.getalby.Alby-Hub", "Data", "Library", "Application Support", "albyhub")
+}
+
+func userHomeOutsideSandbox(home string) string {
+	home = filepath.Clean(home)
+	if filepath.Base(home) != "Data" {
+		return home
+	}
+
+	containerDir := filepath.Dir(home)
+	containersDir := filepath.Dir(containerDir)
+	libraryDir := filepath.Dir(containersDir)
+	if filepath.Base(containersDir) != "Containers" || filepath.Base(libraryDir) != "Library" {
+		return home
+	}
+	return filepath.Dir(libraryDir)
 }
 
 func resolveLegacyAlbyWorkdir(selected string) (string, error) {
