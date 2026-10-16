@@ -24,7 +24,7 @@ live Lightning payment was used.
 | Go unit/integration suite             | Go 1.27.2                                           | Pass                                         |
 | Focused race suite (`./api ./wails`)  | Go 1.27.2                                           | Pass                                         |
 | Go static analysis                    | Go 1.27.2 `go vet`                                  | Pass                                         |
-| Reachable Go vulnerability scan       | `govulncheck` 1.9.0, current database on 2026-10-15 | 0 reachable vulnerabilities                  |
+| Reachable Go vulnerability scan       | `govulncheck` 1.9.0, current database on 2026-10-16 | 0 reachable vulnerabilities                  |
 | Frontend dependency audit             | Yarn 1.22.22                                        | 0 vulnerabilities in 134 production packages |
 | Current-tree secret scan              | Gitleaks 8.30.1 rules, redacted output              | 0 findings after remediation                 |
 | GitHub workflow lint                  | actionlint 1.7.7                                    | Pass                                         |
