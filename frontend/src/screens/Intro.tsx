@@ -91,9 +91,19 @@ export function Intro() {
                   An experimental independent Alby Hub fork with exact-channel
                   rebalance controls.
                 </div>
-                <div className="mt-20">
-                  <Button onClick={() => api?.scrollNext()} size="lg">
-                    Next
+                <div className="mt-20 grid gap-3">
+                  <Button
+                    onClick={() => navigate("/setup/import-existing-alby")}
+                    size="lg"
+                  >
+                    Import existing Alby Hub LDK wallet
+                  </Button>
+                  <Button
+                    onClick={() => api?.scrollNext()}
+                    size="lg"
+                    variant="secondary"
+                  >
+                    Set up a new wallet
                   </Button>
                 </div>
               </div>

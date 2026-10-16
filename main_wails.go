@@ -21,13 +21,16 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
-	// Get a port lock on a rare port to prevent the app running twice
-	listener, err := net.Listen("tcp", "127.0.0.1:21421")
+	// Hold Grynvault's lock and Alby Hub's desktop lock for the complete app
+	// lifetime. This prevents both apps from starting the same copied Lightning
+	// node at once after an import.
+	listeners, err := acquireDesktopLocks(net.Listen)
 	if err != nil {
-		log.Println("Another instance of Grynvault Rebalance is already running.")
+		log.Println("Alby Hub or Grynvault Rebalance is already running.")
+		showDesktopLockConflict()
 		return
 	}
-	defer listener.Close()
+	defer closeDesktopLocks(listeners)
 
 	log.Info("Grynvault Rebalance starting in WAILS mode")
 	ctx, cancel := context.WithCancel(context.Background())

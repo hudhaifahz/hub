@@ -51,6 +51,13 @@ export function Welcome() {
         </div>
         <div className="grid gap-2">
           <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => navigate("/setup/import-existing-alby")}
+          >
+            Import existing Alby Hub LDK wallet
+          </Button>
+          <Button
             className="w-full"
             onClick={() =>
               navigateToAuthPage(
@@ -60,7 +67,7 @@ export function Welcome() {
               )
             }
           >
-            Get Started
+            Set up a new wallet
             {info?.backendType && ` (${info?.backendType})`}
           </Button>
 

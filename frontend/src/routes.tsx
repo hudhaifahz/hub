@@ -57,6 +57,7 @@ import DeveloperSettings from "src/screens/settings/DeveloperSettings";
 import Settings from "src/screens/settings/Settings";
 
 import { ImportMnemonic } from "src/screens/setup/ImportMnemonic";
+import { ImportExistingAlby } from "src/screens/setup/ImportExistingAlby";
 import { RestoreNode } from "src/screens/setup/RestoreNode";
 import { SetupAdvanced } from "src/screens/setup/SetupAdvanced";
 import { SetupFinish } from "src/screens/setup/SetupFinish";
@@ -579,6 +580,10 @@ const routes: RouteObject[] = [
           {
             path: "import-mnemonic",
             element: <ImportMnemonic />,
+          },
+          {
+            path: "import-existing-alby",
+            element: <ImportExistingAlby />,
           },
           {
             path: "node-restore",

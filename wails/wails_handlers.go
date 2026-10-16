@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -1075,6 +1076,44 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+
+		defaultDirectory := canonicalLegacyAlbyWorkdir()
+		selectedDirectory, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+			Title:            "Select your existing Alby Hub data folder",
+			DefaultDirectory: defaultDirectory,
+		})
+		if err != nil {
+			logger.Logger.WithError(err).Error("Failed to open Alby Hub data folder picker")
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to open the Alby Hub folder picker"}
+		}
+		if selectedDirectory == "" {
+			return WailsRequestRouterResponse{Body: LegacyAlbyImportResult{Cancelled: true}, Error: ""}
+		}
+
+		targetWorkdir := app.svc.GetConfig().GetEnv().Workdir
+		result, err := stageLegacyAlbyWorkdir(selectedDirectory, targetWorkdir, time.Now())
+		if err != nil {
+			logger.Logger.WithError(err).Error("Failed to stage existing Alby Hub import")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+
+		go func() {
+			time.Sleep(2 * time.Second)
+			logger.Logger.Info("Existing Alby Hub import staged. Shutting down for restart...")
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+
+		return WailsRequestRouterResponse{Body: result, Error: ""}
 	case "GET /api/health":
 		nodeHealth, err := app.api.Health(ctx)
 		if err != nil {
