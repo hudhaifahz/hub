@@ -230,7 +230,7 @@ distinct owner approvals.
 
 ### RC.4 first-launch trust regression and RC.5 migration gate
 
-Status: **RC.4 PUBLICATION BLOCKED — GUIDED IMPORT IMPLEMENTED IN UNRELEASED SOURCE — INSTALLED ACCEPTANCE OPEN**.
+Status: **RC.4 PUBLICATION BLOCKED — OWNER WALLET CONTINUITY PASSED — DISPOSABLE GUIDED-IMPORT ACCEPTANCE OPEN**.
 
 The independent bundle and data identity worked as designed, but RC.4 showed a
 clean wallet welcome screen without first explaining that the existing Alby Hub
@@ -252,7 +252,7 @@ be published because it is owner wallet evidence.
 The successor source begins from exact RC.4 commit
 `4de3883f4d76af2a312962c2d5e7546963bf9261` on branch
 `codex/guided-alby-import`. Reviewed implementation head
-`78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` is pushed to the matching owner-fork
+`952a6042fb85fbf5fddc4814602e152a13e75ebe` is pushed to the matching owner-fork
 branch. It includes implementation commit
 `7fa5309c324b54752d4139ab8857d887e5888f54` and adds a first-run embedded-LDK
 import, automatic
@@ -270,7 +270,28 @@ A real-component browser preview at 320 CSS pixels had equal document client
 and scroll widths (`320/320`), while the 375-pixel first slide displayed the
 guided-import action ahead of new-wallet setup. Those checks do not exercise
 the sandboxed Wails directory chooser, process restart, or native conflict
-alert, so installed-app acceptance remains open.
+alert, so first-run importer acceptance remains open.
+
+An owner-approved guarded universal build from runtime commit
+`f7bf3881fea11f19c8fc4d6ae9de7e74b88d4ecc` passed bundle identity,
+architecture, entitlement, embedded source, pinned library, and ad-hoc signature
+inspection. Before installation, fresh application and complete wallet-data
+archives were hash-verified. After the owner unlocked only in the local UI,
+readback proved exactly one Grynvault process, all three SQLite databases `ok`,
+all four channels visibly `Online`, 1,080,604 sats Lightning, 4,796,755 sats
+receive limit, and 41,883 sats on-chain. No Lightning or channel operation was
+created. This closes live-wallet continuity for the successor, but not the
+first-run importer itself because the already-migrated live profile correctly
+bypassed onboarding.
+
+Two source-only release-check repairs then advanced the clean owner-fork head to
+`952a6042fb85fbf5fddc4814602e152a13e75ebe`. At that head, source-boundary and
+release-script tests pass; the complete Go suite, Wails-tag root tests, and
+`go vet` pass; and `govulncheck` reports zero reachable vulnerabilities. The
+remaining publication blocker is a disposable clean-profile Wails acceptance
+covering the actual importer, restart, dual-app warning, continuity readback,
+and rollback, followed by an owner-approved exact RC.5 tag and rebuilt signed
+manifest/artifacts.
 
 No RC.5 tag, artifact, signature, installation, GitHub release, portal update,
 companion update, or publication exists. Close this gate only after all of the

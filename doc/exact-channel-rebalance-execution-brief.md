@@ -187,7 +187,7 @@ acceptable general installer.
 
 RC.4 is immutable and must not be relabeled or silently replaced. The active
 successor work is owner-fork head
-`78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` on branch
+`952a6042fb85fbf5fddc4814602e152a13e75ebe` on branch
 `codex/guided-alby-import`, based on exact RC.4 source commit
 `4de3883f4d76af2a312962c2d5e7546963bf9261`.
 Before any RC.5 tag, package, publication, portal update, or promotion:
@@ -222,15 +222,21 @@ crypto-externalization, stale Browserslist, and Node deprecation warnings
 remain. A source-level browser preview at 320 CSS pixels measured document
 width `320/320` with no horizontal overflow, and the 375-pixel first slide
 showed the import action before new-wallet setup. This preview does not exercise
-the Wails directory chooser or native restart path. A reviewed commit,
-universal build, package inspection, real clean-profile import, and
-owner-visible installed-app acceptance remain open before RC.5 can be proposed.
+the Wails directory chooser or native restart path. A reviewed commit, guarded
+universal owner-test build, package inspection, and owner-visible wallet
+continuity readback are complete. A disposable clean-profile import, native
+restart/conflict exercise, rollback, and exact tagged RC.5 artifact remain open
+before publication can be proposed.
 The source head and remote branch were independently read back after push. It
 contains implementation commit `7fa5309c324b54752d4139ab8857d887e5888f54`
 and follow-up UX commit `78e44201ad67b1b3d865c1ae3aaf5cfbce69994a`,
-which adds the one-app-at-a-time explanation and retains the success screen for
-five seconds before restart. No tag, release, pull request, artifact, signature,
-installation, deployment, publication, or Lightning operation was created.
+plus native binding-generation and release-inspection repairs through
+`952a6042fb85fbf5fddc4814602e152a13e75ebe`. The installed owner test used
+runtime commit `f7bf3881fea11f19c8fc4d6ae9de7e74b88d4ecc`; after local-only unlock it
+showed all four channels online, preserved balances, and passed all three SQLite
+integrity checks with exactly one Grynvault process. No tag, release, pull
+request, public artifact, deployment, publication, or Lightning operation was
+created.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable

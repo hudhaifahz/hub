@@ -191,9 +191,11 @@ the moving branch name as the release source.
       confirm no horizontal overflow and that import precedes new-wallet setup.
       This is source-level layout evidence, not Wails importer acceptance.
 - [x] Review and commit the exact successor source; push owner-fork head
-      `78e44201ad67b1b3d865c1ae3aaf5cfbce69994a` on
+      `952a6042fb85fbf5fddc4814602e152a13e75ebe` on
       `codex/guided-alby-import` (implementation commit
-      `7fa5309c324b54752d4139ab8857d887e5888f54` plus restart-safety UX follow-up).
+      `7fa5309c324b54752d4139ab8857d887e5888f54`, restart-safety UX follow-up,
+      native binding-generation repair, bundle-inspector repair, and desktop-lock
+      release-boundary repair).
 - [ ] Run the complete Go/vet/frontend HTTP+Wails/release/security matrix on the
       exact commit.
 - [ ] Build a guarded universal macOS test package and verify identity,
@@ -206,6 +208,31 @@ the moving branch name as the release source.
 - [ ] Only then prepare an exact RC.5 tag approval packet. Tagging, PGP signing,
       GitHub publication, portal/companion updates, and promotion remain
       separately approved actions.
+
+#### Installed owner-wallet continuity readback (2026-10-16)
+
+The owner-approved successor test installed and launched exact runtime commit
+`f7bf3881fea11f19c8fc4d6ae9de7e74b88d4ecc` after creating and validating a
+fresh application archive and complete 267 MB wallet-data archive. Recovery
+evidence is stored locally at
+`/Users/kode/Documents/Grynvault-Guided-Import-Owner-Test-20261016.o5LxfR` and
+must not be published because it contains owner recovery material. The owner
+entered the unlock password only in the local application UI.
+
+Post-unlock readback proved one Grynvault process, no official Alby Hub process,
+valid ad-hoc bundle integrity, all three SQLite databases `ok`, and the same four
+channels visibly `Online`. The UI showed 1,080,604 sats Lightning,
+4,796,755 sats receive limit, and 41,883 sats on-chain. No invoice, probe, HTLC,
+payment, swap, rebalance, or channel operation was created. The owner reported
+that the restored wallet UI looked correct.
+
+The later source-only commits `f7bf3881fea11f19c8fc4d6ae9de7e74b88d4ecc`
+and `952a6042fb85fbf5fddc4814602e152a13e75ebe` repair release inspection only;
+the latter is the pushed branch head. At that head, source-boundary and release
+script tests pass, the complete Go suite and Wails-tag root tests pass, `go vet`
+passes, and `govulncheck` reports zero reachable vulnerabilities. The installed
+wallet continuity proof does not close the remaining disposable clean-profile
+first-run/import, native restart/conflict, and rollback acceptance gate.
 
 ## 2. Fix the dialog and failure evidence
 
