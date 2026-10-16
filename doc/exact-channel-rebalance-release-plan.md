@@ -703,9 +703,10 @@ Implementation evidence on 2026-10-13:
 - [x] Rebuild and verify all RC.4 tag-specific artifacts and present unsigned
       manifest SHA-256
       `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`.
-- [ ] Obtain separate owner approval to create one detached armored signature
+- [x] Obtain separate owner approval to create one detached armored signature
       over that exact manifest with the release key; verify it in an isolated
-      public-key-only keyring and do not upload it.
+      public-key-only keyring and do not upload it. Signature SHA-256:
+      `21d5aebc2e07917e6ba1653343086ca41a5f7b70399ddc3256bb8d02f51cf129`.
 - [ ] Repeat the narrow clean-install and copied-data migration/rollback checks
       with the PGP-verified RC.4 package and no Lightning operation.
 - [ ] Obtain separate owner approval before GitHub RC.4 publication and again

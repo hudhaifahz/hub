@@ -1745,3 +1745,30 @@ Consequence:
   the exact manifest above using fingerprint
   `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. Installation, publication,
   deployment, PR, post, and Lightning actions remain unauthorized.
+
+### 2026-10-16 — RC.4 owner-controlled manifest signature
+
+Observed:
+
+- The owner approved one detached armored signature over only the 1,564-byte
+  RC.4 manifest with SHA-256
+  `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`
+  using full fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`.
+- The owner entered the private-key passphrase only through the local terminal
+  prompt. No passphrase or private key entered chat, source, logs, or artifacts.
+- The 265-byte detached signature has SHA-256
+  `21d5aebc2e07917e6ba1653343086ca41a5f7b70399ddc3256bb8d02f51cf129`.
+  The exported 721-byte public key has SHA-256
+  `5f70e12180ccf1120b27e15eae214cb27ca3e82edd8afab4dd40e61755ab8714`.
+- Verification in a fresh isolated keyring containing only the exported public
+  key returned `GOODSIG` and `VALIDSIG` for the full primary fingerprint. The
+  isolated keyring contained no secret key. A fresh artifact-directory scan
+  found no secrets.
+- The GitHub RC.4 release remains absent. No file was uploaded or published.
+
+Consequence:
+
+- Step 4 is complete. Stop for a fresh action-time approval packet before the
+  narrow RC.4 clean-install and copied-data migration/rollback checks. That
+  check must remain non-paying and offline, preserve canonical wallet data and
+  backups, and leave the canonical Alby Hub as the only network-connected node.

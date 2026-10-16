@@ -353,3 +353,11 @@ mounted inspection, expected Gatekeeper rejection, hash verification, SBOM
 generation, and artifact secret scanning. The unsigned 1,564-byte manifest has
 SHA-256 `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`.
 No signature or GitHub release exists. Stop for separate PGP-signing approval.
+
+The owner subsequently approved and completed that local signing gate. The
+265-byte detached armored signature has SHA-256
+`21d5aebc2e07917e6ba1653343086ca41a5f7b70399ddc3256bb8d02f51cf129`.
+A fresh public-key-only keyring returned `GOODSIG` and `VALIDSIG` for full
+fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126` and contained no secret
+key. Nothing was uploaded or published. Stop for fresh action-time approval
+before the offline installation/migration check.

@@ -179,13 +179,19 @@ created by the fix.
   `534d258c9c59b4ac63758de306899ee932f31457d54eb9a849757c931c41345e`
 - unsigned manifest SHA-256:
   `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`
+- detached armored signature SHA-256:
+  `21d5aebc2e07917e6ba1653343086ca41a5f7b70399ddc3256bb8d02f51cf129`
+- exported public key SHA-256:
+  `5f70e12180ccf1120b27e15eae214cb27ca3e82edd8afab4dd40e61755ab8714`
+- isolated public-key-only verification: `GOODSIG` and `VALIDSIG`
 
 The disposable preflight tag and its hashes remain non-release evidence. The
 immutable tag was separately owner-approved, pushed, and independently read
 back before the tag-specific rebuild recorded above. The next gate is exact
-owner approval to sign only the 1,564-byte manifest. Installation/migration,
-GitHub publication, and portal/companion updates remain distinct later
-approvals.
+owner approval to sign only the 1,564-byte manifest. That approval was received,
+the signature was verified in an isolated keyring containing no secret key, and
+nothing was uploaded. Installation/migration, GitHub publication, and
+portal/companion updates remain distinct later approvals.
 
 ## Evidence closed at the current commit
 
