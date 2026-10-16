@@ -21,7 +21,8 @@ require_literal 'export MACOSX_DEPLOYMENT_TARGET=15.4' scripts/release/build-mac
 require_literal '<string>com.grynvault.rebalance.dev</string>' build/darwin/Info.dev.plist
 require_literal 'const defaultWorkdirName = "grynvault-rebalance"' service/workdir.go
 require_literal '//go:build wails && !bindings' main_wails.go
-require_literal '127.0.0.1:21421' main_wails.go
+require_literal '127.0.0.1:21421' desktop_locks.go
+require_literal '127.0.0.1:21420' desktop_locks.go
 require_literal '//go:build wails && bindings' main_wails_bindings.go
 require_literal 'hubwails.NewBindingsApp()' main_wails_bindings.go
 require_literal '//go:build bindings' wails/wails_app_bindings.go
