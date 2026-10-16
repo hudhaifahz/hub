@@ -11,6 +11,14 @@ The read-only companion and Portal 04 still publish rc.2. Additional proof
 pilots, upstream PR submission, a new-candidate GitHub-release/deployment
 approval, and public launch posts remain open gates.
 
+RC.4 also exposed a release-blocking first-launch migration UX defect: its
+independent macOS data identity presented an empty setup flow without clearly
+offering the existing official Alby Hub wallet. The channels were never lost,
+and a backed-up, hash-verified manual migration restored all four channels, but
+the experience looked like loss and is unacceptable for a wallet product.
+RC.4 remains immutable and must not be promoted as the general installer. The
+next candidate must include and pass the guided-import gate recorded below.
+
 Execution-agent instructions: `doc/exact-channel-rebalance-execution-brief.md`.
 
 This checklist records completed owner-approved actions but does not authorize
@@ -155,6 +163,48 @@ the moving branch name as the release source.
       unrelated changes.
 - [x] Maintain a dated engineering log with source hashes, test results,
       security findings, release artifacts, and owner approvals.
+
+### RC.5 guided existing-wallet import gate (opened 2026-10-16)
+
+- [x] Record that RC.4 opened the independent Grynvault container and that the
+      apparent empty wallet was not channel loss.
+- [x] Preserve the original official Alby Hub data and create hash-verified
+      source and target recovery copies before the owner migration.
+- [x] Read back the migrated owner wallet: both databases `ok`, same four online
+      channels, 1,080,605 sats Lightning, 4,796,754 sats receiving, 41,883 sats
+      on-chain, 12 apps, 94 permissions, 266 transactions, 16 configurations,
+      35 migrations, and 13 rebalance records.
+- [x] Add a first-run explanation and place “Import existing Alby Hub LDK
+      wallet” before new-wallet setup.
+- [x] Implement a non-destructive desktop importer with source/target recovery
+      copies, exact-file SHA-256 comparison, SQLite integrity checks, continuity
+      counts, stock-database compatibility, and restart staging.
+- [x] Reject incomplete wallets, non-LDK wallets, symbolic links, overlapping
+      source/target paths, and a second staged import.
+- [x] Prevent official Alby Hub and Grynvault desktop from running concurrently;
+      show a native safety explanation on conflict.
+- [x] Add focused regression tests and pass focused Wails-tag Go tests plus
+      frontend lint, TypeScript, and formatting checks.
+- [x] Pass the complete Go suite, `go vet`, HTTP frontend build, and Wails
+      frontend build; record only the pre-existing build warnings.
+- [x] Preview the real first-run/import components at 320 and 375 CSS pixels;
+      confirm no horizontal overflow and that import precedes new-wallet setup.
+      This is source-level layout evidence, not Wails importer acceptance.
+- [x] Review and commit the exact successor source; push owner-fork commit
+      `7fa5309c324b54752d4139ab8857d887e5888f54` on
+      `codex/guided-alby-import`.
+- [ ] Run the complete Go/vet/frontend HTTP+Wails/release/security matrix on the
+      exact commit.
+- [ ] Build a guarded universal macOS test package and verify identity,
+      entitlements, architectures, embedded hashes, and warning behavior.
+- [ ] On a disposable clean profile, exercise every negative import case and a
+      valid stock-Alby LDK import, restart, local unlock, continuity readback,
+      dual-app conflict, and rollback without any Lightning operation.
+- [ ] Obtain owner visual acceptance of the first-run/import/restart/conflict
+      experience.
+- [ ] Only then prepare an exact RC.5 tag approval packet. Tagging, PGP signing,
+      GitHub publication, portal/companion updates, and promotion remain
+      separately approved actions.
 
 ## 2. Fix the dialog and failure evidence
 

@@ -228,6 +228,68 @@ Installation/migration acceptance is closed for this private PGP-verified RC.4
 artifact. GitHub publication and portal/companion production updates remain
 distinct owner approvals.
 
+### RC.4 first-launch trust regression and RC.5 migration gate
+
+Status: **RC.4 PUBLICATION BLOCKED — GUIDED IMPORT IMPLEMENTED IN UNRELEASED SOURCE — INSTALLED ACCEPTANCE OPEN**.
+
+The independent bundle and data identity worked as designed, but RC.4 showed a
+clean wallet welcome screen without first explaining that the existing Alby Hub
+wallet remained in a different macOS container. The resulting empty channel
+list looked like data loss. No channels or wallet data were lost. The defect is
+the onboarding and migration UX, and it is severe enough to block publication.
+
+An owner-controlled recovery on 2026-10-16 stopped both apps, created and
+hash-verified fresh source and target backups, copied the embedded-LDK wallet,
+and independently checked both SQLite databases. Grynvault then unlocked the
+same node and showed all four channels online. Readback recorded 1,080,605 sats
+Lightning balance, 4,796,754 sats receiving capacity, 41,883 sats on-chain, 12
+NWC apps, 94 permission rows, 266 transactions, 16 user configurations, 35
+migrations, and 13 local rebalance records. The official Alby source remains
+untouched. Recovery evidence is stored locally at
+`/Users/kode/Documents/Grynvault-RC4-Live-Migration-20261016.OHMIs1` and must not
+be published because it is owner wallet evidence.
+
+The successor source begins from exact RC.4 commit
+`4de3883f4d76af2a312962c2d5e7546963bf9261` on branch
+`codex/guided-alby-import`. Reviewed implementation commit
+`7fa5309c324b54752d4139ab8857d887e5888f54` is pushed to the matching owner-fork
+branch. It adds a first-run embedded-LDK import, automatic
+recovery copies, per-file SHA-256 comparison, database integrity and continuity
+checks, restart staging, and mutually exclusive desktop locks for official Alby
+Hub and Grynvault. A native macOS conflict alert explicitly says that the wallet
+and channels are safe. It never asks for the unlock password; the owner enters
+that only after restart in the local application UI.
+
+Current non-paying source checks pass: focused Wails-tag import/lock tests, the
+complete Go suite, `go vet`, frontend lint/type/format, and HTTP/Wails builds.
+A real-component browser preview at 320 CSS pixels had equal document client
+and scroll widths (`320/320`), while the 375-pixel first slide displayed the
+guided-import action ahead of new-wallet setup. Those checks do not exercise
+the sandboxed Wails directory chooser, process restart, or native conflict
+alert, so installed-app acceptance remains open.
+
+No RC.5 tag, artifact, signature, installation, GitHub release, portal update,
+companion update, or publication exists. Close this gate only after all of the
+following are recorded against one exact reviewed commit:
+
+- [ ] complete Go, Wails-tag, vet, frontend lint, HTTP/Wails build, dependency,
+      secret, and release checks pass;
+- [ ] the macOS package contains the intended bundle identity, entitlements,
+      embedded source/library hashes, and native conflict alert;
+- [ ] a clean profile sees the channel-safety explanation and import action
+      before new-wallet setup;
+- [ ] cancel, wrong-folder, incomplete, non-LDK, symlink, stock-database, and
+      already-staged cases fail safely without changing the source;
+- [ ] a valid import creates readable recovery copies and hash evidence, then
+      restarts into the copied wallet;
+- [ ] owner-only unlock proves exact node identity, channels, stored balances,
+      history, NWC apps/permissions, backup state, and route-log redaction;
+- [ ] starting official Alby Hub and Grynvault together produces a clear native
+      warning and never starts a second copy of the Lightning node;
+- [ ] rollback to the untouched official Alby data is proven; and
+- [ ] no invoice, probe, HTLC, payment, swap, rebalance, or channel operation is
+      created during acceptance.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit

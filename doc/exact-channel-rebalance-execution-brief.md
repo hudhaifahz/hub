@@ -170,6 +170,65 @@ Alby Hub is the only network-connected wallet process. No Lightning operation
 was created. RC.4 GitHub publication and portal/companion production updates
 still require separate owner approvals.
 
+The later live installation exposed a separate release-blocking first-launch
+trust failure. Grynvault correctly used its independent
+`com.grynvault.rebalance` container, but the clean welcome flow did not explain
+that the owner's existing Alby Hub channels remained in the separate
+`com.getalby.Alby-Hub` container or offer an integrated import. This looked like
+lost channels even though no wallet data or channel state had been lost. A
+manual, hash-verified copy restored the live owner wallet in Grynvault: both
+SQLite integrity checks returned `ok`, 12 apps, 94 permissions, 266
+transactions, 16 configuration rows, 35 migrations, and 13 local rebalance
+records were present, and owner UI readback showed the same four online
+channels, 1,080,605 sats Lightning balance, 4,796,754 sats receive limit, and
+41,883 sats on-chain. The original Alby Hub data remains untouched. This proves
+continuity for this owner-controlled migration only; it does not make RC.4 an
+acceptable general installer.
+
+RC.4 is immutable and must not be relabeled or silently replaced. The active
+successor work is owner-fork commit
+`7fa5309c324b54752d4139ab8857d887e5888f54` on branch
+`codex/guided-alby-import`, based on exact RC.4 source commit
+`4de3883f4d76af2a312962c2d5e7546963bf9261`.
+Before any RC.5 tag, package, publication, portal update, or promotion:
+
+1. first run must prominently say that channels are not missing and that the
+   independent app uses a separate data folder;
+2. existing Alby Hub embedded-LDK users must be offered a guided desktop import
+   before new-wallet setup;
+3. the importer must require the official Hub to be closed, preserve the
+   original, create recovery copies of both source and target, reject
+   incomplete/non-LDK/symlinked inputs, hash-verify every copied file, validate
+   both SQLite databases, record non-secret continuity counts, and stage the
+   import for a clean restart;
+4. Grynvault and official Alby Hub desktop must hold mutually exclusive
+   process locks so copied node data cannot run in both apps simultaneously;
+5. a lock conflict must produce a native explanation that the wallet and
+   channels are safe instead of an apparently failed launch;
+6. clean-install acceptance must exercise cancel, wrong folder, incomplete
+   wallet, stock database without Grynvault tables, valid import, restart,
+   unlock, identity/channel/balance/history/NWC/backup continuity, rollback,
+   and the two-app lock conflict; and
+7. installation acceptance must remain non-paying: no invoice, probe, HTLC,
+   payment, swap, rebalance, or channel operation.
+
+The current source tests cover verified staging, container-parent discovery,
+fresh-target backup, compatibility with a stock database that has no local
+rebalance table, incomplete/non-LDK rejection, symlink rejection, and dual-lock
+cleanup/retention. Focused Go/Wails tests and frontend lint/type/format checks
+pass. The complete Go suite, `go vet`, HTTP build, and Wails build also pass;
+only the already recorded Bark macOS-floor, Lottie direct-eval, bundle-size,
+crypto-externalization, stale Browserslist, and Node deprecation warnings
+remain. A source-level browser preview at 320 CSS pixels measured document
+width `320/320` with no horizontal overflow, and the 375-pixel first slide
+showed the import action before new-wallet setup. This preview does not exercise
+the Wails directory chooser or native restart path. A reviewed commit,
+universal build, package inspection, real clean-profile import, and
+owner-visible installed-app acceptance remain open before RC.5 can be proposed.
+The source commit and remote branch were independently read back after push;
+no tag, release, pull request, artifact, signature, installation, deployment,
+publication, or Lightning operation was created.
+
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable
 readback reported `succeeded / succeeded`, exact actual routing fee
