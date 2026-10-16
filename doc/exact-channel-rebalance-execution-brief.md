@@ -112,23 +112,24 @@ clean-install and copied-data migration gate only after repairing the
 installed-app dialog and producing a new immutable release candidate. RC.2 is
 immutable and must never be replaced in place.
 
-RC.3 preparation now exists separately on owner-fork branch
+RC.3 immutable source now exists separately on owner-fork branch
 `codex/grynvault-rebalance-rc3-prep` at exact commit
 `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. It is based directly on the
 reviewed Alby Hub v1.24.3 contribution head
 `cd6bc1e399ba256adb113bbaf44d659c5b22a170`, is zero commits behind that base,
-and carries only the independently branded release/package layer above it. A
-disposable local tag produced and passed a universal macOS build, raw bundle
-inspection, ad-hoc package inspection, mounted-DMG inspection, source archive,
-SBOM, and preparation-index run. The disposable tag was deleted. This is
-non-release evidence only: no immutable rc.3 tag, PGP signature, public release,
-installation, migration, or publication exists. GitHub source-compatibility run
-`38857778185` completed successfully at that exact head, including frontend,
-release-workflow, Go, race, vet, vulnerability, and secret checks. On
-2026-10-16, a fresh CodeRabbit CLI review of the complete RC.3 release layer
-against exact parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` completed with
-zero findings across 64 reviewed files. The immutable-tag approval packet is
-therefore ready, but no tag or later publication action is authorized yet.
+and carries only the independently branded release/package layer above it. On
+2026-10-16, the owner approved and the repository published annotated tag
+`grynvault-rebalance-v0.1.0-rc.3`, tag object
+`613a9a63a0842d2895ba1d0461bae6a9dd819d45`, peeling to that exact commit.
+GitHub source-compatibility run `38857778185` completed successfully, and a
+fresh CodeRabbit CLI review of the complete RC.3 release layer against exact
+parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` completed with zero findings
+across 64 reviewed files. A tag-specific universal macOS build, raw and mounted
+bundle inspections, ad-hoc package inspection, source archive, 1,106-component
+SBOM, unsigned manifest, and preparation index all passed. The private DMG has
+SHA-256 `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`.
+No PGP signature, public RC.3 release, installation, migration, deployment, or
+publication exists yet.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable

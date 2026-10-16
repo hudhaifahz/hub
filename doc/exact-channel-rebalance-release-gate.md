@@ -35,16 +35,24 @@ object `88cd63322c9f842a271571d621bba51393c9e709` and still peels to
 owner separately approved rc.2 at the newer package-path commit. Both tags are
 immutable and must never be moved.
 
-## RC.3 preparation candidate — not tagged, signed, installed, or published
+## RC.3 immutable candidate — tagged, not PGP-signed, installed, or published
 
 - owner-fork branch: `codex/grynvault-rebalance-rc3-prep`
 - exact pushed source: `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`
+- annotated tag: `grynvault-rebalance-v0.1.0-rc.3`
+- tag object: `613a9a63a0842d2895ba1d0461bae6a9dd819d45`
 - reviewed v1.24.3 feature parent:
   `cd6bc1e399ba256adb113bbaf44d659c5b22a170`
 - universal raw LDK SHA-256:
   `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`
-- local-only unsigned DMG SHA-256:
-  `5ad671cfa749896bbe57a6c83c5446db9742eb925934792f8a9631318b943f7d`
+- final-tag private unsigned DMG SHA-256:
+  `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`
+- unsigned manifest SHA-256:
+  `731b31e877c664beb1afe35f8cd1ebe5368e57511b9874fba18a869c191df850`
+- source archive SHA-256:
+  `36e69e8d26a5b0cd6e693abd4086a866a79da8c984c998c0b9f168aabeb824e0`
+- CycloneDX SBOM SHA-256:
+  `5067c57976852123cd392616276a8545944b2aed37f77be08c155a10d2570ab6`
 - source-compatibility CI run:
   `https://github.com/hudhaifahz/hub/actions/runs/38857778185`
 
@@ -61,8 +69,7 @@ GitHub independently completed run `38857778185` successfully at exact head
 `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. Every setup, frontend/release,
 Go/security, and teardown step concluded `success`.
 
-The fresh RC.3 CodeRabbit review is closed. The proposed immutable-tag action
-packet is:
+On 2026-10-16, the owner approved this exact immutable-tag action packet:
 
 - tag: `grynvault-rebalance-v0.1.0-rc.3`;
 - exact commit: `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`;
@@ -70,11 +77,13 @@ packet is:
 - exclusions: no PGP signing, GitHub release, installation, deployment,
   publication, or Lightning operation in the tag action.
 
-The tag and matching GitHub release are currently absent. The approval text
-must name both the exact tag and full commit. Final artifacts will differ from
-the disposable-build hashes because the immutable release tag is embedded in
-the application; rebuild and re-verify them only after tag approval. PGP signing
-then requires its own later owner-controlled approval.
+The tag was created and pushed, then independently read back through GitHub's
+Git-object API as tag object `613a9a63a0842d2895ba1d0461bae6a9dd819d45`
+peeling to the approved commit. The matching GitHub release remains absent.
+Final tag-specific artifacts were rebuilt and verified privately; they differ
+from the disposable-build hashes because the immutable release tag is embedded
+in the application. PGP signing still requires its own later owner-controlled
+approval.
 
 ## Evidence closed at the current commit
 

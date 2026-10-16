@@ -123,8 +123,11 @@ separately audited local companion/upstream capability and a new threat model.
   `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`. This branch is based directly on
   current reviewed Hub contribution head
   `cd6bc1e399ba256adb113bbaf44d659c5b22a170`; GitHub compare reports 16 commits
-  ahead and zero behind. It is preparation only, with no immutable tag, PGP
-  signature, public release, installation, or migration acceptance.
+  ahead and zero behind. Immutable annotated tag
+  `grynvault-rebalance-v0.1.0-rc.3` has tag object
+  `613a9a63a0842d2895ba1d0461bae6a9dd819d45` and peels to that exact head. No
+  PGP signature, public RC.3 release, installation, or migration acceptance
+  exists yet.
 - RC.2 release universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 - Current upstream-contribution universal macOS LDK library: `43,212,288`
@@ -648,8 +651,19 @@ Implementation evidence on 2026-10-13:
       against exact parent `cd6bc1e399ba256adb113bbaf44d659c5b22a170` before
       asking for immutable rc.3 tag approval. On 2026-10-16, the complete review
       closed with zero findings across 64 reviewed files.
-- [x] Make a clean release tag and build and inspect the unsigned application
-      from that tag.
+- [x] Obtain exact owner approval for immutable annotated rc.3 at commit
+      `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`, create and push the tag, and
+      independently read back tag object
+      `613a9a63a0842d2895ba1d0461bae6a9dd819d45` and the peeled commit.
+- [x] Build and inspect the unsigned universal application from immutable rc.3;
+      verify the raw bundle, mounted DMG, exact embedded tag/source, both
+      architectures, macOS 15.4 floor, LDK hash, ad-hoc integrity signatures,
+      and expected Gatekeeper rejection.
+- [x] Generate and verify the rc.3 checksum, source archive, 1,106-component
+      CycloneDX SBOM, unsigned preparation index, and unsigned manifest. The
+      private DMG SHA-256 is
+      `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`;
+      dedicated artifact-directory secret scanning found no leaks.
 - [x] Build and verify the explicitly unsigned application DMG, source archive,
       checksum, SBOM, Gatekeeper evidence, and provenance artifacts from a
       local-only exact-commit test tag; delete that tag after proof.
