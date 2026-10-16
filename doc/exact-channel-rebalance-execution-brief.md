@@ -345,3 +345,11 @@ remotely. Stop for exact owner approval before creating or pushing it. After tag
 approval, rebuild tag-specific artifacts and stop again for approval of the
 exact manifest SHA-256 before PGP signing. Installation/migration, GitHub
 publication, and portal/companion updates remain later, separate gates.
+
+The owner subsequently approved that exact tag action. Annotated tag object
+`df8597eb314217d3b40e89135079e1a0ca2da4cc` is now pushed and independently
+peels to the approved commit. Tag-specific private artifacts passed raw and
+mounted inspection, expected Gatekeeper rejection, hash verification, SBOM
+generation, and artifact secret scanning. The unsigned 1,564-byte manifest has
+SHA-256 `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`.
+No signature or GitHub release exists. Stop for separate PGP-signing approval.

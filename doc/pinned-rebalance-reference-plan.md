@@ -1706,3 +1706,42 @@ Consequence:
   create and push one immutable annotated RC.4 tag at the source commit above.
   Final tag-specific artifacts must then be rebuilt; the preflight hashes are
   evidence only and must never be published as RC.4.
+
+### 2026-10-16 — Immutable RC.4 tag and private artifact rebuild
+
+Observed:
+
+- The owner approved creating and pushing only annotated tag
+  `grynvault-rebalance-v0.1.0-rc.4` at exact commit
+  `4de3883f4d76af2a312962c2d5e7546963bf9261`. Remote Git and GitHub API
+  readback identify tag object `df8597eb314217d3b40e89135079e1a0ca2da4cc`,
+  which peels to the approved commit. The GitHub release endpoint still returns 404.
+- The universal application was rebuilt from the immutable tag. Raw and mounted
+  inspection passed the independent bundle/data identity, `x86_64 arm64`
+  slices, macOS 15.4 floor, exact embedded tag/source, pinned raw LDK hash,
+  required entitlements, and ad-hoc-only integrity signatures. Gatekeeper
+  rejected the package with exit status 3 as required.
+- Tag-specific private artifact SHA-256 values are: DMG
+  `534d258c9c59b4ac63758de306899ee932f31457d54eb9a849757c931c41345e`,
+  checksum file
+  `598c39cd5ead57b4fbf3771bcabd5763179247280b43d2c03384ad87f896ef7d`,
+  Gatekeeper record
+  `af88373258bed94f0d9a5922fc536bbf2a9ea40be56879e4aae60a0a73d3137a`,
+  source archive
+  `cd8c895820bd8214d70589b0c41a67bbe07a06c1b997700ab3ce26a0a94a3bea`,
+  1,106-component SBOM
+  `340df7826be2755345f15a78abb6c863cfab68c134f5139b850117334ea8515f`,
+  and preparation index
+  `457ed52345b826ddec68fd6d5f70358e50c43c13425db93f5550c2836aba3593`.
+- The unsigned 1,564-byte manifest has SHA-256
+  `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`.
+  Every artifact name, size, and digest in it was independently read back.
+  Gitleaks reported no artifact-directory findings.
+
+Consequence:
+
+- Steps 2 and 3 are complete. No PGP signature exists. The next action requires
+  separate owner approval to create one detached armored signature over only
+  the exact manifest above using fingerprint
+  `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. Installation, publication,
+  deployment, PR, post, and Lightning actions remain unauthorized.

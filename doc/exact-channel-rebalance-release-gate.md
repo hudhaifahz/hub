@@ -167,21 +167,25 @@ created by the fix.
 - exact pushed source:
   `4de3883f4d76af2a312962c2d5e7546963bf9261`
 - branch: `codex/fix-redact-wails-route-secrets`
-- proposed immutable tag: `grynvault-rebalance-v0.1.0-rc.4`
-- tag state: absent locally and remotely
+- immutable annotated tag: `grynvault-rebalance-v0.1.0-rc.4`
+- tag object: `df8597eb314217d3b40e89135079e1a0ca2da4cc`
+- peeled commit: `4de3883f4d76af2a312962c2d5e7546963bf9261`
 - final CodeRabbit review: zero findings across three changed files
 - complete non-paying local matrix: pass
 - universal preflight bundle and mounted DMG inspection: pass
 - Gatekeeper result: expected rejection, exit status 3
 - SBOM: 1,106 components
-- final-preflight DMG SHA-256:
-  `bb57c35a189d6427b0606cfa9310804dd33d6801a1f0db5d37403ad5f9f672d7`
+- final-tag private DMG SHA-256:
+  `534d258c9c59b4ac63758de306899ee932f31457d54eb9a849757c931c41345e`
+- unsigned manifest SHA-256:
+  `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`
 
-The disposable preflight tag was deleted. These local-only hashes cannot become
-RC.4 release hashes because the immutable tag is embedded in the application.
-The next gate is exact owner approval to create and push one annotated RC.4 tag
-at the source commit above. Rebuild/sign, installation/migration, GitHub
-publication, and portal/companion updates remain distinct later approvals.
+The disposable preflight tag and its hashes remain non-release evidence. The
+immutable tag was separately owner-approved, pushed, and independently read
+back before the tag-specific rebuild recorded above. The next gate is exact
+owner approval to sign only the 1,564-byte manifest. Installation/migration,
+GitHub publication, and portal/companion updates remain distinct later
+approvals.
 
 ## Evidence closed at the current commit
 

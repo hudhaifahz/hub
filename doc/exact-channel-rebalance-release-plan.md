@@ -696,12 +696,16 @@ Implementation evidence on 2026-10-13:
       fallback found by CodeRabbit, document the RC.3 log issue in the shipped
       security review, obtain a final zero-finding review, pass the complete
       non-paying matrix, and verify a disposable-tag universal preflight.
-- [ ] Obtain exact owner approval to create and push immutable annotated tag
+- [x] Obtain exact owner approval to create and push immutable annotated tag
       `grynvault-rebalance-v0.1.0-rc.4` at the exact successor commit. Never move
-      RC.1, RC.2, RC.3, or RC.4.
-- [ ] Rebuild and verify all RC.4 tag-specific artifacts, then present the exact
-      unsigned manifest SHA-256 for a separate owner-controlled PGP-signing
-      approval.
+      RC.1, RC.2, RC.3, or RC.4. Remote tag object
+      `df8597eb314217d3b40e89135079e1a0ca2da4cc` peels to the approved commit.
+- [x] Rebuild and verify all RC.4 tag-specific artifacts and present unsigned
+      manifest SHA-256
+      `8f2f5d921249b279993300a88925eb6ebeec476f8290bd80b8ef97ca36b17c7b`.
+- [ ] Obtain separate owner approval to create one detached armored signature
+      over that exact manifest with the release key; verify it in an isolated
+      public-key-only keyring and do not upload it.
 - [ ] Repeat the narrow clean-install and copied-data migration/rollback checks
       with the PGP-verified RC.4 package and no Lightning operation.
 - [ ] Obtain separate owner approval before GitHub RC.4 publication and again
