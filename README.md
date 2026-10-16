@@ -14,6 +14,13 @@ See [the usage guide](./docs/grynvault-release/USAGE.md),
 [RELEASE_NOTES.md](./RELEASE_NOTES.md) for the Grynvault distribution. The
 upstream Alby Hub documentation follows unchanged below.
 
+> [!IMPORTANT]
+> Public release is currently blocked on the
+> [guided migration release plan](./docs/grynvault-release/GUIDED_MIGRATION_PLAN.md).
+> The finished importer must support both the standard Alby data location and a
+> user-selected custom `WORK_DIR`, detect stale or competing copies, and keep an
+> imported LDK node offline until local identity and continuity checks pass.
+
 <img alt="Alby Hub Logo" src="./doc/logo.svg" width="400">
 
 <br/>

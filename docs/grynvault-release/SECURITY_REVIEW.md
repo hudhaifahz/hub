@@ -122,3 +122,19 @@ against a live wallet, a public download, DNS changes, an upstream pull request,
 or any Lightning value movement. Those steps require their separate owner and
 acceptance gates. Apple signing and notarization are intentionally omitted from
 the selected path rather than treated as pending approvals.
+
+The guided importer is also a release blocker. A later internal acceptance run
+showed that its copy, hash, and SQLite checks could faithfully accept an older
+work directory for the same embedded-LDK node. When that stale copy was started
+online, LDK detected lost channel state and stopped; a peer subsequently
+force-closed the two channels it shared with that instance. The exact-channel
+rebalance implementation was not involved, but the migration lifecycle was not
+safe enough for publication.
+
+No successor candidate may ship until the requirements in
+`GUIDED_MIGRATION_PLAN.md` pass, including competing-copy detection, verified
+source quiescence, custom-`WORK_DIR` handling, and a startup-level network
+quarantine that prevents an imported node from contacting peers before local
+identity and continuity acceptance. Public documentation must keep the incident
+sanitized and must not include a real node public key, channel ID, transaction
+ID, wallet path, balance, or credential.

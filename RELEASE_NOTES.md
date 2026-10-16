@@ -1,12 +1,20 @@
 # Grynvault Rebalance release notes
 
-Status: **PREPARED — APPLE SIGNING DECLINED — PGP NOT SIGNED — NOT PUBLISHED**
+Status: **BLOCKED ON GUIDED MIGRATION SAFETY — NOT TAGGED — NOT SIGNED — NOT PUBLISHED**
 
 Grynvault Rebalance adds a fail-closed exact-channel circular rebalance flow to
 Alby Hub. The owner chooses the exact channel sats must leave through and the
 exact channel through which they must return. Route discovery is non-paying;
 execution requires a fresh fingerprint-bound quote and exact typed
 confirmation.
+
+Seamless guided migration from an existing Alby Hub embedded-LDK wallet is a
+core release requirement. Internal acceptance proved that byte-perfect copying
+does not prove that a selected Lightning work directory is current. The next
+candidate must implement custom-`WORK_DIR` discovery, competing-copy detection,
+source quiescence, crash-safe recovery, and a persistent network quarantine
+before an imported node can contact peers. See
+`docs/grynvault-release/GUIDED_MIGRATION_PLAN.md`.
 
 This candidate is replayed onto Alby Hub `v1.24.3`. It also makes long route
 identifiers and balance evidence readable at constrained widths and continues
