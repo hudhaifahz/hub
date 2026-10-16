@@ -125,9 +125,11 @@ separately audited local companion/upstream capability and a new threat model.
   `cd6bc1e399ba256adb113bbaf44d659c5b22a170`; GitHub compare reports 16 commits
   ahead and zero behind. Immutable annotated tag
   `grynvault-rebalance-v0.1.0-rc.3` has tag object
-  `613a9a63a0842d2895ba1d0461bae6a9dd819d45` and peels to that exact head. No
-  PGP signature, public RC.3 release, installation, or migration acceptance
-  exists yet.
+  `613a9a63a0842d2895ba1d0461bae6a9dd819d45` and peels to that exact head. The
+  owner-approved RC.3 manifest has a detached armored signature independently
+  verified against full fingerprint
+  `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. No public RC.3 release,
+  installation, or migration acceptance exists yet.
 - RC.2 release universal macOS LDK library: `43,360,288` bytes, SHA-256
   `cf43f66815c44c0796402faafaaa3ed70201d036124438e63f541ec6a05208bd`.
 - Current upstream-contribution universal macOS LDK library: `43,212,288`
@@ -664,6 +666,12 @@ Implementation evidence on 2026-10-13:
       private DMG SHA-256 is
       `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`;
       dedicated artifact-directory secret scanning found no leaks.
+- [x] Obtain separate owner approval to sign only the exact rc.3 manifest,
+      create its detached armored PGP signature, export only the public key,
+      and verify `GOODSIG` and `VALIDSIG` in a fresh isolated GPG home. The
+      signature SHA-256 is
+      `c064ac2807a9eab41f7f90bb56ac27ec5fb2a29df9f7d66f4f73f8d827a7c9e3`;
+      no upload or publication occurred.
 - [x] Build and verify the explicitly unsigned application DMG, source archive,
       checksum, SBOM, Gatekeeper evidence, and provenance artifacts from a
       local-only exact-commit test tag; delete that tag after proof.

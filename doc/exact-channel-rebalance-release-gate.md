@@ -35,7 +35,7 @@ object `88cd63322c9f842a271571d621bba51393c9e709` and still peels to
 owner separately approved rc.2 at the newer package-path commit. Both tags are
 immutable and must never be moved.
 
-## RC.3 immutable candidate — tagged, not PGP-signed, installed, or published
+## RC.3 immutable candidate — PGP-signed privately, not installed or published
 
 - owner-fork branch: `codex/grynvault-rebalance-rc3-prep`
 - exact pushed source: `9583e7a230b57d02fe4bb187f47a1fcb9804ddab`
@@ -49,6 +49,10 @@ immutable and must never be moved.
   `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`
 - unsigned manifest SHA-256:
   `731b31e877c664beb1afe35f8cd1ebe5368e57511b9874fba18a869c191df850`
+- detached armored signature SHA-256:
+  `c064ac2807a9eab41f7f90bb56ac27ec5fb2a29df9f7d66f4f73f8d827a7c9e3`
+- exported public key SHA-256:
+  `5f70e12180ccf1120b27e15eae214cb27ca3e82edd8afab4dd40e61755ab8714`
 - source archive SHA-256:
   `36e69e8d26a5b0cd6e693abd4086a866a79da8c984c998c0b9f168aabeb824e0`
 - CycloneDX SBOM SHA-256:
@@ -82,8 +86,11 @@ Git-object API as tag object `613a9a63a0842d2895ba1d0461bae6a9dd819d45`
 peeling to the approved commit. The matching GitHub release remains absent.
 Final tag-specific artifacts were rebuilt and verified privately; they differ
 from the disposable-build hashes because the immutable release tag is embedded
-in the application. PGP signing still requires its own later owner-controlled
-approval.
+in the application. The owner separately approved signing only the exact
+1,564-byte manifest above. The resulting 265-byte detached armored signature
+was verified in a fresh isolated GPG home as `GOODSIG` and `VALIDSIG` for full
+fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`. No upload or publication
+was performed.
 
 ## Evidence closed at the current commit
 

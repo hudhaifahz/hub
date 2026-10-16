@@ -128,8 +128,13 @@ across 64 reviewed files. A tag-specific universal macOS build, raw and mounted
 bundle inspections, ad-hoc package inspection, source archive, 1,106-component
 SBOM, unsigned manifest, and preparation index all passed. The private DMG has
 SHA-256 `253941da436a04bb5a314b45b915544b8fcac9e65f8f3be8fe59cdc560c1511e`.
-No PGP signature, public RC.3 release, installation, migration, deployment, or
-publication exists yet.
+The owner separately approved a detached armored PGP signature over manifest
+SHA-256 `731b31e877c664beb1afe35f8cd1ebe5368e57511b9874fba18a869c191df850`.
+An isolated-keyring verification returned `GOODSIG` and `VALIDSIG` for full
+fingerprint `D131A3D0EAB0CF98A8413853CD9FDBF9D075C126`; the signature SHA-256 is
+`c064ac2807a9eab41f7f90bb56ac27ec5fb2a29df9f7d66f4f73f8d827a7c9e3`.
+No public RC.3 release, installation, migration, deployment, or publication
+exists yet.
 
 One fresh owner-approved `10,000 sats` (`0.00010000 BTC`) Kraken-return proof
 pilot has reconciled successfully on the installed owner build. Durable
