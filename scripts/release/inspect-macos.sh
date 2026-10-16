@@ -111,7 +111,8 @@ if ! rg -a -F -q "https://github.com/hudhaifahz/hub/commit/${expected_source_com
   exit 1
 fi
 
-if rg -a -l 'com\.getalby\.Alby-?Hub|https://getalby\.com/update/hub' "$app_path" >/dev/null; then
+if rg -a -l 'com\.getalby\.Alby-?Hub' "$plist_path" >/dev/null || \
+  rg -a -l 'https://getalby\.com/update/hub' "$app_path" >/dev/null; then
   echo "bundle retains an official Alby bundle or updater identity" >&2
   exit 1
 fi
