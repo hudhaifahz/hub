@@ -267,4 +267,9 @@ require (
 // allows us to specify that as an option.
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.33.0-hex-display
 
-replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261016045357-d6bc4e85771e
+// Exact-channel circular-payment APIs are not yet available in upstream
+// ldk-node-go v0.7.1. This temporary dependency-order pin is reviewed at
+// hudhaifahz/ldk-node-go commit 3228bdbb7973a2743aee5e9f699e79afd217617b.
+// Upstream path: hudhaifahz:codex/exact-channel-rebalance-v1243 -> getAlby:master,
+// after the corresponding ldk-node contribution is accepted.
+replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261016052643-3228bdbb7973
