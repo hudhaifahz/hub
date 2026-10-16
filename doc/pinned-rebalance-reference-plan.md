@@ -1659,3 +1659,50 @@ Consequence:
   candidate must be cut from the reviewed security-fix source and repeat build,
   manifest, signing, installation, migration, and publication gates. No tag,
   release, deployment, PR, post, or Lightning operation was created here.
+
+### 2026-10-16 — RC.4 source review and exact-commit preflight
+
+Observed:
+
+- Owner branch `codex/fix-redact-wails-route-secrets` and its remote now resolve
+  to exact commit `4de3883f4d76af2a312962c2d5e7546963bf9261`. The shipped security
+  review records why RC.3 was withheld and what the successor redacts.
+- CodeRabbit found one valid major edge case in the first fix: a malformed
+  percent escape could make URL parsing fail before a payment-request path was
+  redacted. Commit `6b189575d5492d8145d0404843b730c618e3b405` applies the same
+  payment-path redaction in the parse-error fallback and adds a regression.
+  The final complete review of the RC.3-to-successor diff reported zero
+  findings across the Wails handler, its tests, and the shipped security review.
+- Source-boundary and release-script checks, complete Go tests, focused race
+  tests, vet, actionlint, frontend lint/type/format/HTTP/Wails builds, production
+  dependency audit, Gitleaks, and `govulncheck` all pass. `govulncheck` reports
+  zero reachable vulnerabilities and retains the two documented non-reachable
+  advisories.
+- A universal macOS preflight was built from a disposable local tag
+  `preflight-4de3883f`. Raw and mounted inspection verified the independent
+  bundle/data identity, both architectures, macOS 15.4 floor, exact source and
+  tag metadata, pinned raw LDK SHA-256
+  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`,
+  required entitlements, and ad-hoc-only integrity signatures. Gatekeeper
+  rejected the DMG with exit status 3 as required.
+- The local-only final preflight hashes are: DMG
+  `bb57c35a189d6427b0606cfa9310804dd33d6801a1f0db5d37403ad5f9f672d7`,
+  source archive
+  `ea6fd64140742007ba3ec65a2cbab13654f32fc5b9178382659380c7773e2e75`,
+  1,106-component CycloneDX SBOM
+  `d43c8c5ebb6a0fa72bfb21f6df34bab6d187c4dadba8071c8bcdcbd174571b75`,
+  Gatekeeper record
+  `2cbd5b74b1c20a8e24c5c9b8482d08f1900bdd96986cced97ff4b8576fa02246`,
+  and unsigned preparation index
+  `0dd4e9a290476f00f56a6c039a7727f4e892015b3060d1586464299df3852d60`.
+  Full-tree and artifact-directory scans found no secrets.
+- The disposable tag was deleted. Proposed immutable tag
+  `grynvault-rebalance-v0.1.0-rc.4` is absent locally and remotely. No signing,
+  installation, publication, deployment, PR, post, or Lightning action occurred.
+
+Consequence:
+
+- Step 1 is complete. The next action requires the owner's exact approval to
+  create and push one immutable annotated RC.4 tag at the source commit above.
+  Final tag-specific artifacts must then be rebuilt; the preflight hashes are
+  evidence only and must never be published as RC.4.

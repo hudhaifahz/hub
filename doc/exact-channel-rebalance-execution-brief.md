@@ -329,3 +329,19 @@ action request.
 Completion means every item in the release plan's `Completion evidence` section
 is satisfied with current, independently read-back evidence. A local build,
 successful test, deployment indicator, or health check alone is not completion.
+
+## Current RC.4 checkpoint — 2026-10-16
+
+Step 1 of the owner-requested successor sequence is complete at exact owner-fork
+commit `4de3883f4d76af2a312962c2d5e7546963bf9261`. The route-redaction fix,
+malformed-payment-path regression, shipped security disclosure, complete local
+matrix, zero-finding final CodeRabbit review, universal macOS preflight, mounted
+DMG inspection, expected Gatekeeper rejection, 1,106-component SBOM, source
+archive, and secret scans all pass. Disposable tag `preflight-4de3883f` was
+deleted after proof.
+
+Proposed immutable tag `grynvault-rebalance-v0.1.0-rc.4` is absent locally and
+remotely. Stop for exact owner approval before creating or pushing it. After tag
+approval, rebuild tag-specific artifacts and stop again for approval of the
+exact manifest SHA-256 before PGP signing. Installation/migration, GitHub
+publication, and portal/companion updates remain later, separate gates.

@@ -691,6 +691,21 @@ Implementation evidence on 2026-10-13:
       hashes, and static macOS 15.4+ package metadata from a fresh download.
 - [ ] Clean-install the public package on a clean macOS 15.4+ profile before
       treating clean-install acceptance as proven.
+- [x] Prepare the RC.4 successor at exact pushed commit
+      `4de3883f4d76af2a312962c2d5e7546963bf9261`; fix the malformed-payment-route
+      fallback found by CodeRabbit, document the RC.3 log issue in the shipped
+      security review, obtain a final zero-finding review, pass the complete
+      non-paying matrix, and verify a disposable-tag universal preflight.
+- [ ] Obtain exact owner approval to create and push immutable annotated tag
+      `grynvault-rebalance-v0.1.0-rc.4` at the exact successor commit. Never move
+      RC.1, RC.2, RC.3, or RC.4.
+- [ ] Rebuild and verify all RC.4 tag-specific artifacts, then present the exact
+      unsigned manifest SHA-256 for a separate owner-controlled PGP-signing
+      approval.
+- [ ] Repeat the narrow clean-install and copied-data migration/rollback checks
+      with the PGP-verified RC.4 package and no Lightning operation.
+- [ ] Obtain separate owner approval before GitHub RC.4 publication and again
+      before portal/companion production updates.
 
 ### Wave D — build and privately accept the companion
 

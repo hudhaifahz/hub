@@ -162,6 +162,27 @@ candidate must replay package, signature, installation, migration, and release
 checks from this source or a reviewed descendant. No tag or public release was
 created by the fix.
 
+### RC.4 successor source — reviewed and preflighted, tag approval pending
+
+- exact pushed source:
+  `4de3883f4d76af2a312962c2d5e7546963bf9261`
+- branch: `codex/fix-redact-wails-route-secrets`
+- proposed immutable tag: `grynvault-rebalance-v0.1.0-rc.4`
+- tag state: absent locally and remotely
+- final CodeRabbit review: zero findings across three changed files
+- complete non-paying local matrix: pass
+- universal preflight bundle and mounted DMG inspection: pass
+- Gatekeeper result: expected rejection, exit status 3
+- SBOM: 1,106 components
+- final-preflight DMG SHA-256:
+  `bb57c35a189d6427b0606cfa9310804dd33d6801a1f0db5d37403ad5f9f672d7`
+
+The disposable preflight tag was deleted. These local-only hashes cannot become
+RC.4 release hashes because the immutable tag is embedded in the application.
+The next gate is exact owner approval to create and push one annotated RC.4 tag
+at the source commit above. Rebuild/sign, installation/migration, GitHub
+publication, and portal/companion updates remain distinct later approvals.
+
 ## Evidence closed at the current commit
 
 - The owner-fork branch and remote ref both resolve to exact commit
