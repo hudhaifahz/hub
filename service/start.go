@@ -299,6 +299,9 @@ func (svc *service) WithStartLock(fn func() error) error {
 }
 
 func (svc *service) StartApp(encryptionKey string) error {
+	if svc.isMigrationQuarantined() {
+		return ErrMigrationQuarantined
+	}
 	// do not allow to start twice in case this is somehow called twice
 	return svc.WithStartLock(func() error {
 		return svc.startAppInternal(encryptionKey)

@@ -352,6 +352,8 @@ type InfoResponse struct {
 	HideUpdateBanner            bool                `json:"hideUpdateBanner"`
 	SupportsBolt12              bool                `json:"supportsBolt12"`
 	NodeMigrationFileCreated    bool                `json:"nodeMigrationFileCreated"`
+	MigrationQuarantined        bool                `json:"migrationQuarantined"`
+	MigrationPhase              string              `json:"migrationPhase,omitempty"`
 }
 
 type JitChannelsInfoResponse struct {

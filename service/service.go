@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/events"
+	"github.com/getAlby/hub/guidedmigration"
 	"github.com/getAlby/hub/logger"
 	"github.com/getAlby/hub/service/keys"
 	"github.com/getAlby/hub/swaps"
@@ -49,6 +52,8 @@ type service struct {
 	keys                 keys.Keys
 	relayStatuses        []RelayStatus
 	startupState         string
+	migrationMu          sync.Mutex
+	migrationQuarantine  *guidedmigration.Quarantine
 }
 
 func NewService(ctx context.Context) (*service, error) {
@@ -67,8 +72,17 @@ func NewService(ctx context.Context) (*service, error) {
 		appConfig.Workdir = defaultWorkdir(xdg.DataHome)
 		logger.Logger.WithField("workdir", appConfig.Workdir).Info("No workdir specified, using default")
 	}
+	finishResult, err := guidedmigration.FinishPending(appConfig.Workdir, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("finish guided wallet import: %w", err)
+	}
+	if finishResult.Blocked {
+		logger.Logger.WithField("reason", finishResult.Reason).Warn("Guided wallet import remains blocked; original Grynvault data was preserved")
+	}
 	// make sure workdir exists
-	os.MkdirAll(appConfig.Workdir, os.ModePerm)
+	if err = os.MkdirAll(appConfig.Workdir, 0700); err != nil {
+		return nil, err
+	}
 
 	if appConfig.LogToFile {
 		err = logger.AddFileLogger(appConfig.Workdir)
@@ -100,6 +114,39 @@ func NewService(ctx context.Context) (*service, error) {
 	cfg, err := config.NewConfig(appConfig, gormDB)
 	if err != nil {
 		return nil, err
+	}
+	var migrationQuarantine *guidedmigration.Quarantine
+	migrationQuarantine, err = guidedmigration.LoadQuarantine(appConfig.Workdir)
+	if errors.Is(err, os.ErrNotExist) {
+		migrationQuarantine = nil
+	} else if err != nil {
+		return nil, fmt.Errorf("load guided migration quarantine: %w", err)
+	}
+	if migrationQuarantine != nil && migrationQuarantine.Phase == guidedmigration.PhaseActivating {
+		migrationQuarantine.Phase = guidedmigration.PhaseActivationFailed
+		migrationQuarantine.LastError = "the previous activation was interrupted before completion"
+		migrationQuarantine.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if err = guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(appConfig.Workdir), migrationQuarantine); err != nil {
+			return nil, fmt.Errorf("recover interrupted migration activation: %w", err)
+		}
+	}
+	if finishResult.Blocked && migrationQuarantine == nil {
+		control, controlErr := guidedmigration.LoadControl(appConfig.Workdir)
+		if controlErr != nil {
+			return nil, fmt.Errorf("load blocked guided import: %w", controlErr)
+		}
+		migrationQuarantine = &guidedmigration.Quarantine{
+			Version:           guidedmigration.QuarantineVersion,
+			ImportID:          control.ImportID,
+			Phase:             guidedmigration.PhaseBlocked,
+			SourcePath:        control.SourcePath,
+			TargetPath:        control.TargetPath,
+			BackupLocation:    control.BackupLocation,
+			EvidencePath:      control.EvidencePath,
+			WalletFingerprint: control.WalletFingerprint,
+			SourceFiles:       control.SourceFiles,
+			LastError:         control.BlockedReason,
+		}
 	}
 
 	// write auto unlock password from env to user config
@@ -135,6 +182,7 @@ func NewService(ctx context.Context) (*service, error) {
 		transactionsService: transactionsSvc,
 		db:                  gormDB,
 		keys:                keys,
+		migrationQuarantine: migrationQuarantine,
 	}
 
 	eventPublisher.RegisterSubscriber(svc.transactionsService)
@@ -144,18 +192,20 @@ func NewService(ctx context.Context) (*service, error) {
 		db: gormDB,
 	})
 
-	eventPublisher.Publish(&events.Event{
-		Event: "nwc_started",
-		Properties: map[string]interface{}{
-			"version": version.Tag,
-		},
-	})
+	if !svc.isMigrationQuarantined() {
+		eventPublisher.Publish(&events.Event{
+			Event: "nwc_started",
+			Properties: map[string]interface{}{
+				"version": version.Tag,
+			},
+		})
+	}
 
 	if appConfig.GoProfilerAddr != "" {
 		startProfiler(ctx, appConfig.GoProfilerAddr)
 	}
 
-	if autoUnlockPassword != "" {
+	if autoUnlockPassword != "" && !svc.isMigrationQuarantined() {
 		nodeLastStartTime, _ := cfg.Get("NodeLastStartTime", "")
 		if nodeLastStartTime != "" {
 			// do not block startup of the web UI: if the start attempt fails
@@ -166,13 +216,16 @@ func NewService(ctx context.Context) (*service, error) {
 	}
 
 	go func() {
+		cleanupTicker := time.NewTicker(10 * time.Minute)
+		defer cleanupTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			default:
-				time.Sleep(10 * time.Minute)
-				svc.removeExcessEvents()
+			case <-cleanupTicker.C:
+				if !svc.isMigrationQuarantined() {
+					svc.removeExcessEvents()
+				}
 			}
 		}
 	}()

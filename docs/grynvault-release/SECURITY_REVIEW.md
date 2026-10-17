@@ -22,15 +22,65 @@ live Lightning payment was used.
 | Check                                 | Pinned tool/runtime                                 | Result                                       |
 | ------------------------------------- | --------------------------------------------------- | -------------------------------------------- |
 | Go unit/integration suite             | Go 1.27.2                                           | Pass                                         |
-| Focused race suite (`./api ./wails`)  | Go 1.27.2                                           | Pass                                         |
+| Focused race suite                    | Go 1.27.2; migration, service, API, Wails packages  | Pass                                         |
 | Go static analysis                    | Go 1.27.2 `go vet`                                  | Pass                                         |
 | Reachable Go vulnerability scan       | `govulncheck` 1.9.0, current database on 2026-10-16 | 0 reachable vulnerabilities                  |
 | Frontend dependency audit             | Yarn 1.22.22                                        | 0 vulnerabilities in 134 production packages |
 | Current-tree secret scan              | Gitleaks 8.30.1 rules, redacted output              | 0 findings after remediation                 |
 | GitHub workflow lint                  | actionlint 1.7.7                                    | Pass                                         |
 | Frontend ESLint, TypeScript, Prettier | versions locked by `frontend/yarn.lock`             | Pass                                         |
-| HTTP and Wails frontend builds        | Node 22 / locked Yarn dependencies                  | Pass                                         |
+| HTTP and Wails frontend builds        | Node 26.11.1 / locked Yarn dependencies             | Pass                                         |
 | Source-boundary assertions            | `scripts/release/check-source-boundaries.sh`        | Pass                                         |
+
+### Guided migration addendum
+
+The 2026-10-16 successor working tree was reviewed and tested separately from
+the already-withheld RC.4 artifact. It introduces no release tag or artifact.
+The migration security boundary now includes:
+
+- a stable local-only wallet comparison fingerprint and fail-closed matching
+  copy detection across known Alby and Grynvault locations;
+- two quiescence snapshots plus post-copy source hashing and process checks;
+- byte-verified, permission-restricted source recovery and staging trees;
+- deterministic resume when interruption occurs before or after target moves;
+- a startup-consumed quarantine marker that prevents auto-unlock, LDK client
+  construction, peer/relay startup, ordinary setup, and non-migration Wails
+  routes;
+- offline identity/channel/balance/history/NWC verification using a disposable
+  LDK storage copy;
+- a fresh continuity and source-process check immediately before activation;
+- automatic return to offline quarantine after interrupted or failed
+  activation;
+- a restart-safe abandon transition that archives the failed target/stage and
+  control record, restores prior Grynvault data when present, and records the
+  action before permitting a new import; and
+- synthetic responsive fixtures that are visibly labeled and contain no real
+  wallet data.
+
+The real disposable acceptance path created two 500,000-sat regtest channels
+and both incoming and outgoing history, exercised standard and custom source
+paths, proved the destination listener remained unused while quarantined,
+activated deliberately, observed peer reconnection, and blocked a matching
+stale clone before any network check. No production wallet or public network
+was involved.
+
+The current rerun passed the full Go suite with Wails tags, focused race tests
+for `guidedmigration`, `service`, `api`, and `wails`, `go vet`, both frontend
+build modes, source-boundary assertions, Gitleaks 8.30.1, actionlint 1.7.7,
+Yarn's production dependency audit, and govulncheck 1.9.0. Govulncheck again
+reported zero reachable vulnerabilities and the same two non-reachable notices
+recorded below. The inherited frontend build still reports the existing
+`lottie-web` direct-`eval` warning and oversized bundle warning; neither is
+introduced by the migration component, and the production dependency audit
+reports zero advisories.
+
+CodeRabbit's complete review of the staged migration diff first identified a
+misleading default-folder error, unsafe skipping of a corrupt known competing
+wallet, the absence of a supported archive/reset path for blocked imports, and
+two status/documentation clarity issues. Each was reproduced or confirmed,
+fixed, and covered where appropriate by regression tests. The final complete
+review reported zero findings. CodeRabbit remains review input rather than an
+independent security audit.
 
 The candidate source replays the exact-channel work onto Alby Hub
 `v1.24.3` and pins the reviewed LDK and Go binding heads recorded in

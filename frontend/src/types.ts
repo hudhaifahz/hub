@@ -187,6 +187,8 @@ export interface InfoResponse {
   hideUpdateBanner: boolean;
   supportsBolt12: boolean;
   nodeMigrationFileCreated: boolean;
+  migrationQuarantined: boolean;
+  migrationPhase?: string;
 }
 
 export interface JitChannelsInfoResponse {

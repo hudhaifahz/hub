@@ -24,7 +24,7 @@ func main() {
 	// Hold Grynvault's lock and Alby Hub's desktop lock for the complete app
 	// lifetime. This prevents both apps from starting the same copied Lightning
 	// node at once after an import.
-	listeners, err := acquireDesktopLocks(net.Listen)
+	listeners, err := acquireDesktopLocksForLaunch(net.Listen)
 	if err != nil {
 		log.Println("Alby Hub or Grynvault Rebalance is already running.")
 		showDesktopLockConflict()

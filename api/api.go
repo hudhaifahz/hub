@@ -1495,6 +1495,14 @@ func (api *api) RequestMempoolApi(ctx context.Context, endpoint string) (interfa
 
 func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 	info := InfoResponse{}
+	if provider, ok := api.svc.(service.MigrationStatusProvider); ok {
+		migrationStatus, err := provider.GetGuidedMigrationStatus()
+		if err != nil {
+			return nil, fmt.Errorf("read guided migration status: %w", err)
+		}
+		info.MigrationQuarantined = migrationStatus.Active && migrationStatus.LightningOffline
+		info.MigrationPhase = string(migrationStatus.Phase)
+	}
 
 	if api.nodeMigrationFileCreated.Load() {
 		// the hub is halted and the database is closed after a migration file
@@ -1743,6 +1751,9 @@ func (api *api) Start(startRequest *StartRequest) {
 }
 
 func (api *api) Setup(ctx context.Context, setupRequest *SetupRequest) error {
+	if guard, ok := api.svc.(service.MigrationGuard); ok && guard.IsGuidedMigrationQuarantined() {
+		return service.ErrMigrationQuarantined
+	}
 	// hold the start/stop lock so setup cannot run concurrently with a start
 	return api.svc.WithStartLock(func() error {
 		return api.setupInternal(ctx, setupRequest)

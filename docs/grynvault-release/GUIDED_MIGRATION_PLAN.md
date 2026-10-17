@@ -1,6 +1,7 @@
 # Guided migration release plan
 
-Status: **RELEASE BLOCKER — DESIGN ACCEPTED, IMPLEMENTATION AND ACCEPTANCE PENDING**
+Status: **IMPLEMENTED — SYNTHETIC ACCEPTANCE PASSED — OWNER-SUPERVISED
+ACCEPTANCE AND RELEASE APPROVALS PENDING**
 
 Owner requirement: a seamless migration from an existing Alby Hub embedded-LDK
 wallet is a core product capability. Grynvault Rebalance must not be published
@@ -321,20 +322,22 @@ Acceptance must independently read back:
 
 ## Release gates
 
-All boxes are closed until supported by pinned evidence.
+Checked boxes below are supported by the working-tree evidence recorded on
+2026-10-16. A checked engineering gate does not authorize any later owner gate.
 
-- [ ] Plan reviewed against the current code and incident evidence.
-- [ ] Discovery/preflight and custom-path handling implemented.
-- [ ] Duplicate/stale-state detection implemented fail-closed.
-- [ ] Process exclusion and quiescence implemented.
-- [ ] Persistent network quarantine implemented below the UI layer.
-- [ ] Guided UI implemented and responsive.
-- [ ] Automated matrix passes from a clean checkout.
-- [ ] Synthetic/regtest migration and stale-clone tests pass.
-- [ ] Security review updated; reachable vulnerability and secret scans pass.
-- [ ] Code review has no unresolved safety-critical findings.
+- [x] Plan reviewed against the current code and incident evidence.
+- [x] Discovery/preflight and custom-path handling implemented.
+- [x] Duplicate/stale-state detection implemented fail-closed.
+- [x] Process exclusion and quiescence implemented, including a final
+      activation-time source-process check.
+- [x] Persistent network quarantine implemented below the UI layer.
+- [x] Guided UI implemented and responsive.
+- [x] Automated matrix passes from a clean detached checkout.
+- [x] Synthetic/regtest migration and stale-clone tests pass.
+- [x] Security review updated; reachable vulnerability and secret scans pass.
+- [x] Code review has no unresolved safety-critical findings.
 - [ ] Owner-supervised non-paying acceptance passes.
-- [ ] Migration documentation and screenshots are complete.
+- [x] Migration documentation and screenshots are complete.
 - [ ] Exact release commit is approved for an immutable tag.
 - [ ] Rebuilt artifacts and manifest are independently verified.
 - [ ] Owner approves the PGP signature for the exact manifest hash.
@@ -367,3 +370,28 @@ running concurrently.
 
 Copy success, a green unit test, a working folder picker, a build, or an empty
 fresh-wallet launch is not completion.
+
+## 2026-10-16 implementation evidence
+
+The current working tree adds a versioned guided-migration state machine,
+quiescent-source snapshots, recovery and staging hashes, known-copy conflict
+detection, crash-resume checkpoints, startup-level quarantine, offline LDK
+continuity inspection, final re-verification, explicit activation, and a
+restart-safe archive/reset path for blocked imports. It also keeps routine
+database cleanup paused while quarantine is active. A control-only blocked
+state remains under the backend route quarantine rather than relying on UI
+navigation.
+
+Disposable regtest acceptance used three real LDK nodes and a native regtest
+Bitcoin node. The migrating wallet opened two 500,000-sat channels, recorded
+both outgoing and incoming payment history, migrated from the standard macOS
+container and a custom path containing spaces and Unicode, remained
+network-dark before activation, then reconnected after deliberate activation.
+A matching stale clone was blocked before process or network checks. No
+production wallet, channel, or funds were used.
+
+The responsive documentation fixtures are rendered by the real migration
+component and pinned in `MIGRATION.md`. The current checks and their exact scope
+are recorded in `SECURITY_REVIEW.md`. The next boundary remains the documented
+owner-supervised non-paying acceptance; tagging, signing, publication, and any
+Lightning value action remain closed.

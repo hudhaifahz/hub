@@ -15,11 +15,14 @@ See [the usage guide](./docs/grynvault-release/USAGE.md),
 upstream Alby Hub documentation follows unchanged below.
 
 > [!IMPORTANT]
-> Public release is currently blocked on the
-> [guided migration release plan](./docs/grynvault-release/GUIDED_MIGRATION_PLAN.md).
-> The finished importer must support both the standard Alby data location and a
-> user-selected custom `WORK_DIR`, detect stale or competing copies, and keep an
+> The guided importer now supports the standard Alby data location and a
+> user-selected custom `WORK_DIR`, blocks known matching copies, and keeps an
 > imported LDK node offline until local identity and continuity checks pass.
+> Disposable two-channel regtest acceptance passes. Public release remains
+> blocked until owner-supervised non-paying acceptance and the remaining
+> release gates in the
+> [guided migration plan](./docs/grynvault-release/GUIDED_MIGRATION_PLAN.md)
+> are complete.
 
 <img alt="Alby Hub Logo" src="./doc/logo.svg" width="400">
 

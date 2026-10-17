@@ -602,6 +602,10 @@ const routes: RouteObject[] = [
     element: <CreateNodeMigrationFileSuccess />,
   },
   {
+    path: "migration/verify",
+    element: <ImportExistingAlby />,
+  },
+  {
     path: "intro",
     element: <Intro />,
   },

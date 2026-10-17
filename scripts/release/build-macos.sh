@@ -21,6 +21,7 @@ if [[ -n "$(git status --porcelain=v1)" ]]; then
 fi
 
 source_commit="$(git rev-parse HEAD)"
+ldk_library_sha256="879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf"
 tag_ref="refs/tags/${release_tag}"
 tag_commit="$(git rev-parse --verify "${tag_ref}^{commit}" 2>/dev/null || true)"
 if [[ -z "$tag_commit" || "$tag_commit" != "$source_commit" ]]; then
@@ -78,7 +79,7 @@ wails build \
   -webview2 embed \
   -o "Grynvault Rebalance" \
   -tags "wails" \
-  -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -extldflags '-Wl,-headerpad_max_install_names -framework UniformTypeIdentifiers'"
+  -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -X 'github.com/getAlby/hub/version.SourceCommit=${source_commit}' -X 'github.com/getAlby/hub/version.LDKLibrarySHA256=${ldk_library_sha256}' -extldflags '-Wl,-headerpad_max_install_names -framework UniformTypeIdentifiers'"
 
 if [[ -n "$(git status --porcelain=v1 --untracked-files=no)" ]]; then
   echo "release build changed tracked files in the tagged checkout" >&2

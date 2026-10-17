@@ -12,6 +12,10 @@ export function SetupRedirect() {
     if (!info) {
       return;
     }
+    if (info.migrationQuarantined) {
+      navigate("/migration/verify", { replace: true });
+      return;
+    }
     if (info.setupCompleted && info.running) {
       navigate("/");
       return;

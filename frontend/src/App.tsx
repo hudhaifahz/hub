@@ -19,6 +19,9 @@ const router = createRouterFunc(routes, {
 
 function App() {
   const { data: info } = useInfo();
+  const syntheticMigrationFixture =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).has("migration-fixture");
 
   useRegisterProtocolHandler(basePath);
 
@@ -30,7 +33,9 @@ function App() {
           defaultDarkMode="system"
           storageKey="vite-ui-theme"
         >
-          {info && <RouterProvider router={router} />}
+          {(info || syntheticMigrationFixture) && (
+            <RouterProvider router={router} />
+          )}
           <Toaster position="bottom-right" richColors={true} />
         </ThemeProvider>
       </TouchProvider>

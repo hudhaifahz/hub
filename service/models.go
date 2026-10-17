@@ -25,6 +25,9 @@ var (
 	ErrInvalidPassword = errors.New("invalid password")
 	// ErrIncompleteWalletData is returned when the unlock password check is missing from the database.
 	ErrIncompleteWalletData = errors.New("your wallet data is incomplete and cannot be unlocked. Please restore from a backup")
+	// ErrMigrationQuarantined prevents every ordinary start path from bringing an
+	// imported LDK node online before the guided continuity review is accepted.
+	ErrMigrationQuarantined = errors.New("migration verification is required before Lightning can start")
 )
 
 type RelayStatus struct {

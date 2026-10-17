@@ -1,5 +1,10 @@
 # Using exact-channel rebalance
 
+Migrating an existing Alby Hub embedded-LDK wallet is a separate, local-only
+desktop workflow. Complete the network-quarantined steps in
+[`MIGRATION.md`](../../MIGRATION.md) before attempting a rebalance. The hosted
+companion cannot import, unlock, or operate a wallet.
+
 Grynvault Rebalance moves Lightning liquidity between two channels on the same
 node. It sends one circular payment that must leave through the selected
 outgoing channel and return through the selected incoming channel. It does not

@@ -102,6 +102,14 @@ if ! grep -Fq "$expected_tag" "$strings_path"; then
   echo "expected release tag is not embedded in the executable" >&2
   exit 1
 fi
+if ! grep -Fq "$expected_source_commit" "$strings_path"; then
+  echo "expected source commit is not embedded in the executable" >&2
+  exit 1
+fi
+if ! grep -Fq "$expected_ldk_sha" "$strings_path"; then
+  echo "expected LDK digest is not embedded in the executable" >&2
+  exit 1
+fi
 if ! grep -Fq "grynvault-rebalance" "$strings_path"; then
   echo "independent data-directory identity is not embedded" >&2
   exit 1

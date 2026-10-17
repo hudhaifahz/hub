@@ -1,6 +1,7 @@
 # Grynvault Rebalance release notes
 
-Status: **BLOCKED ON GUIDED MIGRATION SAFETY — NOT TAGGED — NOT SIGNED — NOT PUBLISHED**
+Status: **GUIDED MIGRATION SYNTHETIC ACCEPTANCE PASSED — OWNER ACCEPTANCE
+PENDING — NOT TAGGED — NOT SIGNED — NOT PUBLISHED**
 
 Grynvault Rebalance adds a fail-closed exact-channel circular rebalance flow to
 Alby Hub. The owner chooses the exact channel sats must leave through and the
@@ -9,12 +10,20 @@ execution requires a fresh fingerprint-bound quote and exact typed
 confirmation.
 
 Seamless guided migration from an existing Alby Hub embedded-LDK wallet is a
-core release requirement. Internal acceptance proved that byte-perfect copying
-does not prove that a selected Lightning work directory is current. The next
-candidate must implement custom-`WORK_DIR` discovery, competing-copy detection,
-source quiescence, crash-safe recovery, and a persistent network quarantine
-before an imported node can contact peers. See
-`docs/grynvault-release/GUIDED_MIGRATION_PLAN.md`.
+core release requirement. The successor importer implements custom-`WORK_DIR`
+discovery, fail-closed competing-copy detection, source quiescence, byte-exact
+recovery and staging, deterministic crash recovery, and a persistent network
+quarantine before an imported node can contact peers.
+
+A disposable regtest acceptance creates a real LDK wallet with two channels
+and inbound/outbound payment history. It passes migration from both the normal
+macOS container and a custom path with spaces and Unicode, proves the copied
+node remains network-dark before activation, verifies identity and continuity,
+then activates and reconnects. An intentionally stale matching clone is blocked
+before process or network checks. No production wallet or funds are used.
+
+Publication remains blocked on owner-supervised non-paying acceptance and the
+remaining gates in `docs/grynvault-release/GUIDED_MIGRATION_PLAN.md`.
 
 This candidate is replayed onto Alby Hub `v1.24.3`. It also makes long route
 identifiers and balance evidence readable at constrained widths and continues
@@ -56,7 +65,8 @@ to warn or block it. Public availability still requires a PGP-signed artifact
 manifest, fresh-download verification, and independent readback of every
 published URL.
 
-See `docs/grynvault-release/USAGE.md` for the non-paying quote flow, exact
+See `MIGRATION.md` for the guided import and recovery flow and
+`docs/grynvault-release/USAGE.md` for the non-paying quote flow, exact
 confirmation boundary, failure interpretation, and privacy-safe screenshots.
 
 ## Attribution

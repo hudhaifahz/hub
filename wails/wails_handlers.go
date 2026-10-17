@@ -2,9 +2,11 @@ package wails
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,7 +18,9 @@ import (
 
 	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/api"
+	"github.com/getAlby/hub/guidedmigration"
 	"github.com/getAlby/hub/logger"
+	"github.com/getAlby/hub/service"
 )
 
 type WailsRequestRouterResponse struct {
@@ -45,6 +49,9 @@ func redactWailsRoute(route string) string {
 func (app *WailsApp) WailsRequestRouter(route string, method string, body string) WailsRequestRouterResponse {
 	ctx := app.ctx
 	safeRoute := redactWailsRoute(route)
+	if guard, ok := app.svc.(service.MigrationGuard); ok && guard.IsGuidedMigrationQuarantined() && !guidedMigrationRouteAllowed(method, safeRoute) {
+		return WailsRequestRouterResponse{Body: nil, Error: "migration verification is active; Lightning and wallet actions remain offline"}
+	}
 
 	// the grouping is done to avoid other parameters like &unused=true
 	albyCallbackRegex := regexp.MustCompile(
@@ -1076,7 +1083,45 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "POST /api/import-existing-alby":
+	case "GET /api/import-existing-alby/status":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: status, Error: ""}
+	case "POST /api/import-existing-alby/discover":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+		defaultDirectory := canonicalLegacyAlbyWorkdir()
+		summary, inspectErr := guidedmigration.InspectSource(defaultDirectory)
+		if inspectErr != nil {
+			blockingReason := "No embedded-LDK Alby Hub wallet was found in the standard location."
+			if _, statErr := os.Stat(defaultDirectory); statErr == nil {
+				logger.Logger.WithError(inspectErr).WithField("source_path", defaultDirectory).Warn("Standard Alby Hub wallet could not be validated")
+				blockingReason = fmt.Sprintf("The standard Alby Hub folder exists but could not be validated: %v", inspectErr)
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				logger.Logger.WithError(statErr).WithField("source_path", defaultDirectory).Warn("Standard Alby Hub wallet location could not be inspected")
+				blockingReason = fmt.Sprintf("The standard Alby Hub location could not be inspected: %v", statErr)
+			}
+			return WailsRequestRouterResponse{Body: guidedmigration.SourceSummary{
+				SourcePath:      defaultDirectory,
+				DefaultLocation: true,
+				Ready:           false,
+				BlockingReason:  blockingReason,
+			}, Error: ""}
+		}
+		summary.DefaultLocation = true
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/select":
 		info, err := app.api.GetInfo(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
@@ -1086,6 +1131,9 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 
 		defaultDirectory := canonicalLegacyAlbyWorkdir()
+		if _, statErr := os.Stat(defaultDirectory); statErr != nil {
+			defaultDirectory, _ = os.UserHomeDir()
+		}
 		selectedDirectory, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
 			Title:            "Select your existing Alby Hub data folder",
 			DefaultDirectory: defaultDirectory,
@@ -1095,27 +1143,131 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: "failed to open the Alby Hub folder picker"}
 		}
 		if selectedDirectory == "" {
-			return WailsRequestRouterResponse{Body: LegacyAlbyImportResult{Cancelled: true}, Error: ""}
+			return WailsRequestRouterResponse{Body: guidedImportSelectionResponse{Cancelled: true}, Error: ""}
+		}
+		summary, err := guidedmigration.InspectSource(selectedDirectory)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: guidedImportSelectionResponse{Summary: summary}, Error: ""}
+	case "POST /api/import-existing-alby/stage":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+		request := &guidedImportStageRequest{}
+		if err = json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid guided import request"}
 		}
 
 		targetWorkdir := app.svc.GetConfig().GetEnv().Workdir
-		result, err := stageLegacyAlbyWorkdir(selectedDirectory, targetWorkdir, time.Now())
+		result, err := guidedmigration.Stage(request.SourcePath, targetWorkdir, guidedmigration.DefaultStageOptions())
 		if err != nil {
 			logger.Logger.WithError(err).Error("Failed to stage existing Alby Hub import")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 
 		go func() {
-			// Match the existing restore flow so the user has time to read the
-			// verified-copy result and recovery location before the app closes.
+			// Give the user time to read the verified-copy result and recovery
+			// location. The replacement process waits for both wallet locks, so it
+			// cannot race this service during shutdown.
 			time.Sleep(5 * time.Second)
-			logger.Logger.Info("Existing Alby Hub import staged. Shutting down for restart...")
+			if err := startGuidedMigrationRelaunch(); err != nil {
+				logger.Logger.WithError(err).Error("Failed to schedule guided migration restart; leaving Grynvault open for manual restart")
+				return
+			}
+			logger.Logger.Info("Existing Alby Hub import staged. Restarting into network quarantine...")
 			app.svc.Shutdown()
 			time.Sleep(time.Second)
 			os.Exit(0)
 		}()
 
 		return WailsRequestRouterResponse{Body: result, Error: ""}
+	case "POST /api/import-existing-alby/verify":
+		request := &guidedImportVerifyRequest{}
+		if err := json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid migration verification request"}
+		}
+		verifier, ok := app.svc.(service.MigrationVerifier)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration verification is unavailable"}
+		}
+		summary, err := verifier.VerifyGuidedMigration(request.UnlockPassword)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/activate":
+		request := &guidedImportActivateRequest{}
+		if err := json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid migration activation request"}
+		}
+		verifier, ok := app.svc.(service.MigrationVerifier)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration activation is unavailable"}
+		}
+		if err := verifier.ActivateGuidedMigration(request.UnlockPassword, request.NodeIDConfirmation); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/open-evidence":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || status.BackupLocation == "" {
+			return WailsRequestRouterResponse{Body: nil, Error: "no guided migration recovery folder is available"}
+		}
+		if err = revealLocalDirectory(status.BackupLocation); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/return-to-source":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || !status.LightningOffline {
+			return WailsRequestRouterResponse{Body: nil, Error: "the migration is not in offline recovery mode"}
+		}
+		go func() {
+			time.Sleep(750 * time.Millisecond)
+			logger.Logger.Info("Quitting guided migration without activating Lightning; source wallet remains unchanged")
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/abandon":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || !status.LightningOffline {
+			return WailsRequestRouterResponse{Body: nil, Error: "the migration is not in offline recovery mode"}
+		}
+		if _, err = guidedmigration.RequestAbandon(app.svc.GetConfig().GetEnv().Workdir, time.Now()); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		go func() {
+			time.Sleep(750 * time.Millisecond)
+			if err := startGuidedMigrationRelaunch(); err != nil {
+				logger.Logger.WithError(err).Error("Failed to relaunch while archiving guided migration")
+				return
+			}
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby":
+		return WailsRequestRouterResponse{Body: nil, Error: "the one-step importer is disabled; use the guided discovery and review flow"}
 	case "GET /api/health":
 		nodeHealth, err := app.api.Health(ctx)
 		if err != nil {
@@ -1439,4 +1591,36 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		"method": method,
 	}).Error("Unhandled route")
 	return WailsRequestRouterResponse{Body: nil, Error: fmt.Sprintf("Unhandled route: %s %s", method, safeRoute)}
+}
+
+func guidedMigrationRouteAllowed(method, route string) bool {
+	if method == "GET" && (route == "/api/info" || route == "/api/import-existing-alby/status") {
+		return true
+	}
+	if method != "POST" {
+		return false
+	}
+	switch route {
+	case "/api/import-existing-alby/verify",
+		"/api/import-existing-alby/activate",
+		"/api/import-existing-alby/open-evidence",
+		"/api/import-existing-alby/return-to-source",
+		"/api/import-existing-alby/abandon":
+		return true
+	default:
+		return false
+	}
+}
+
+func startGuidedMigrationRelaunch() error {
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate Grynvault executable: %w", err)
+	}
+	command := exec.Command(executable)
+	command.Env = append(os.Environ(), "GRYNVAULT_GUIDED_MIGRATION_RELAUNCH=1")
+	if err = command.Start(); err != nil {
+		return fmt.Errorf("start Grynvault replacement process: %w", err)
+	}
+	return command.Process.Release()
 }
