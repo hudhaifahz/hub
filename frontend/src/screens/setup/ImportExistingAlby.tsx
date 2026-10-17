@@ -321,8 +321,13 @@ export function ImportExistingAlby() {
         "/api/import-existing-alby/discover",
         { method: "POST" }
       );
-      if (discovered && !manualSourceSelectionStarted.current) {
-        setSource(discovered);
+      if (discovered) {
+        // Check again when React applies the update. Discovery may have
+        // resolved just before the owner opened the picker while its state
+        // update was still queued.
+        setSource((current) =>
+          manualSourceSelectionStarted.current ? current : discovered
+        );
       }
     } catch (error) {
       handleRequestError("Could not inspect Alby Hub", error);
