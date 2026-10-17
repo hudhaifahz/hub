@@ -88,6 +88,36 @@ func TestInspectSourceRejectsInvalidWalletData(t *testing.T) {
 		_, err := InspectSource(workdir)
 		require.ErrorContains(t, err, "not an Alby Hub")
 	})
+
+	t.Run("permission denied", func(t *testing.T) {
+		workdir := t.TempDir()
+		require.NoError(t, createWalletFixture(workdir, "encrypted-wallet-a"))
+		databasePath := filepath.Join(workdir, "nwc.db")
+		require.NoError(t, os.Chmod(databasePath, 0000))
+		_, err := InspectSource(workdir)
+		require.NoError(t, os.Chmod(databasePath, 0600))
+		if err == nil {
+			t.Skip("this platform or test user can read mode-000 files")
+		}
+		require.Error(t, err)
+	})
+}
+
+func TestValidationDoesNotCreateSidecarsInSource(t *testing.T) {
+	workdir := t.TempDir()
+	require.NoError(t, createWalletFixture(workdir, "encrypted-wallet-a"))
+	before, err := HashWalletData(workdir)
+	require.NoError(t, err)
+
+	_, _, _, _, _, err = ValidateWalletDataWithoutMutation(workdir)
+	require.NoError(t, err)
+	after, err := HashWalletData(workdir)
+	require.NoError(t, err)
+	require.NoError(t, CompareHashes(before, after))
+	require.NoFileExists(t, filepath.Join(workdir, "nwc.db-wal"))
+	require.NoFileExists(t, filepath.Join(workdir, "nwc.db-shm"))
+	require.NoFileExists(t, filepath.Join(workdir, "ldk", "storage", "ldk_node_data.sqlite-wal"))
+	require.NoFileExists(t, filepath.Join(workdir, "ldk", "storage", "ldk_node_data.sqlite-shm"))
 }
 
 func TestStageAndFinishPendingPreserveSourceAndActivateQuarantine(t *testing.T) {
@@ -172,6 +202,63 @@ func TestStageRejectsKnownMatchingWalletCopy(t *testing.T) {
 	_, err := Stage(source, target, testStageOptions(root, time.Now()))
 	require.ErrorContains(t, err, "matching wallet copy found")
 	require.NoFileExists(t, ControlPath(target))
+}
+
+func TestStageAllowsKnownUnrelatedWalletCopy(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "custom", "albyhub")
+	target := filepath.Join(root, "target")
+	unrelated := filepath.Join(root, "Library", "Containers", "com.grynvault.rebalance", "Data", "Library", "Application Support", "grynvault-rebalance")
+	require.NoError(t, createWalletFixture(source, "encrypted-wallet-a"))
+	require.NoError(t, createWalletFixture(unrelated, "encrypted-wallet-b"))
+	require.NoError(t, os.MkdirAll(target, 0700))
+
+	result, err := Stage(source, target, testStageOptions(root, time.Now()))
+	require.NoError(t, err)
+	require.True(t, result.RestartRequired)
+	require.FileExists(t, ControlPath(target))
+}
+
+func TestStageRejectsNonLocalSourceOrTarget(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	target := filepath.Join(root, "target")
+	require.NoError(t, createWalletFixture(source, "encrypted-wallet-a"))
+	require.NoError(t, os.MkdirAll(target, 0700))
+
+	for _, rejected := range []string{source, target} {
+		options := testStageOptions(root, time.Now())
+		options.LocalPathChecker = func(path string) (bool, error) {
+			return filepath.Base(path) != filepath.Base(rejected), nil
+		}
+		_, err := Stage(source, target, options)
+		require.ErrorContains(t, err, "local filesystem")
+		require.NoFileExists(t, ControlPath(target))
+	}
+}
+
+func TestStageReportsAuthoritativeProgress(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	target := filepath.Join(root, "target")
+	require.NoError(t, createWalletFixture(source, "encrypted-wallet-a"))
+	require.NoError(t, os.MkdirAll(target, 0700))
+	options := testStageOptions(root, time.Now())
+	var steps []string
+	options.Progress = func(progress Progress) {
+		steps = append(steps, progress.Step)
+		require.NotEmpty(t, progress.Detail)
+	}
+
+	_, err := Stage(source, target, options)
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"source_validated",
+		"source_quiescent",
+		"recovery_verified",
+		"staged_verified",
+		"ready_to_restart",
+	}, steps)
 }
 
 func TestStageRejectsUnreadableOrCorruptKnownWalletCandidate(t *testing.T) {
@@ -323,6 +410,34 @@ func TestFinishPendingResumesAfterStagedWalletWasMovedIntoPlace(t *testing.T) {
 	require.FileExists(t, QuarantinePath(target))
 }
 
+func TestFinishPendingPreservesPostMoveRecoveryPhases(t *testing.T) {
+	for _, phase := range []Phase{
+		PhaseVerificationNeeded,
+		PhaseVerified,
+		PhaseActivationFailed,
+		PhaseActivating,
+		PhaseActivated,
+	} {
+		t.Run(string(phase), func(t *testing.T) {
+			target := t.TempDir()
+			control := &Control{
+				Version:    ControlVersion,
+				ImportID:   "checkpoint-" + string(phase),
+				Phase:      phase,
+				TargetPath: target,
+			}
+			require.NoError(t, WriteJSONAtomic(ControlPath(target), control))
+
+			result, err := FinishPending(target, time.Now())
+			require.NoError(t, err)
+			require.True(t, result.Activated)
+			persisted, err := LoadControl(target)
+			require.NoError(t, err)
+			require.Equal(t, phase, persisted.Phase)
+		})
+	}
+}
+
 func TestAbandonBlockedImportArchivesStageAndAllowsRetry(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")
@@ -463,10 +578,11 @@ func TestInspectLDKOfflineDoesNotStartNode(t *testing.T) {
 
 func testStageOptions(home string, now time.Time) StageOptions {
 	return StageOptions{
-		Now:             func() time.Time { return now },
-		StabilityWait:   0,
-		OpenFileChecker: func(string) ([]int, error) { return nil, nil },
-		HomeDirectory:   home,
+		Now:              func() time.Time { return now },
+		StabilityWait:    0,
+		OpenFileChecker:  func(string) ([]int, error) { return nil, nil },
+		LocalPathChecker: func(string) (bool, error) { return true, nil },
+		HomeDirectory:    home,
 	}
 }
 

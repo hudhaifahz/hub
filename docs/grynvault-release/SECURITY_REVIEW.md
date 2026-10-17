@@ -40,6 +40,9 @@ The migration security boundary now includes:
 
 - a stable local-only wallet comparison fingerprint and fail-closed matching
   copy detection across known Alby and Grynvault locations;
+- macOS filesystem-locality enforcement for both source and target, rejecting
+  network-mounted folders before staging while allowing locally attached
+  volumes and custom paths;
 - two quiescence snapshots plus post-copy source hashing and process checks;
 - byte-verified, permission-restricted source recovery and staging trees;
 - deterministic resume when interruption occurs before or after target moves;
@@ -56,6 +59,14 @@ The migration security boundary now includes:
   action before permitting a new import; and
 - synthetic responsive fixtures that are visibly labeled and contain no real
   wallet data.
+
+Direct regression coverage now includes permission-denied source data,
+unrelated known wallet copies, validation-sidecar nonmutation, non-local source
+and target rejection, authoritative copy-progress events, interrupted
+activation recovery, control-only blocked quarantine, and correct-password
+identity mismatch. These complement the existing state-machine, regtest, and
+network-dark acceptance coverage; they do not replace owner-supervised
+acceptance on the final packaged candidate.
 
 The real disposable acceptance path created two 500,000-sat regtest channels
 and both incoming and outgoing history, exercised standard and custom source

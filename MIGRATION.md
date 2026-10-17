@@ -29,7 +29,9 @@ to a Grynvault website or stored in migration evidence.
 
 On macOS, Grynvault automatically checks the normal Alby Hub container. Select
 **Choose another Alby data folder** when Alby uses a custom `WORK_DIR` or lives
-on an external volume.
+on a locally attached external volume. Both source and destination must be on
+filesystems macOS identifies as local; the importer rejects network-mounted
+folders before it stages any data.
 
 The picker accepts any of these levels and resolves the actual wallet folder:
 
@@ -55,6 +57,12 @@ set, and known competing Alby/Grynvault locations. It checks that the source is
 not open, takes two stability snapshots, creates a recovery snapshot, copies
 only durable wallet state and static channel backups, and compares every copied
 file by SHA-256.
+
+While this work runs, the desktop screen reports only completed backend
+checkpoints: source validated, source stable, recovery snapshot verified,
+staged copy verified, and ready to restart. After relaunch, the persisted
+quarantine state replaces transient copy progress so a restart cannot silently
+fall through to ordinary wallet startup.
 
 Migration stops without changing the wallet if another known folder contains
 the same identity, if source authority is ambiguous, if either application is

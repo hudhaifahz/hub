@@ -153,6 +153,11 @@ type StageResult struct {
 	Summary         SourceSummary `json:"summary"`
 }
 
+type Progress struct {
+	Step   string `json:"step"`
+	Detail string `json:"detail"`
+}
+
 type Status struct {
 	Active           bool                 `json:"active"`
 	Phase            Phase                `json:"phase,omitempty"`

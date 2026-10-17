@@ -17,10 +17,12 @@ import (
 )
 
 type StageOptions struct {
-	Now             func() time.Time
-	StabilityWait   time.Duration
-	OpenFileChecker func(string) ([]int, error)
-	HomeDirectory   string
+	Now              func() time.Time
+	StabilityWait    time.Duration
+	OpenFileChecker  func(string) ([]int, error)
+	LocalPathChecker func(string) (bool, error)
+	HomeDirectory    string
+	Progress         func(Progress)
 	// AfterFirstHash is a deterministic test seam for simulating a source
 	// mutation between the two quiescence snapshots. Production callers leave
 	// it nil.
@@ -30,10 +32,17 @@ type StageOptions struct {
 func DefaultStageOptions() StageOptions {
 	home, _ := os.UserHomeDir()
 	return StageOptions{
-		Now:             time.Now,
-		StabilityWait:   time.Second,
-		OpenFileChecker: OpenWalletProcessIDs,
-		HomeDirectory:   home,
+		Now:              time.Now,
+		StabilityWait:    time.Second,
+		OpenFileChecker:  OpenWalletProcessIDs,
+		LocalPathChecker: IsLocalPath,
+		HomeDirectory:    home,
+	}
+}
+
+func reportProgress(options StageOptions, step, detail string) {
+	if options.Progress != nil {
+		options.Progress(Progress{Step: step, Detail: detail})
 	}
 }
 
@@ -43,6 +52,9 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	}
 	if options.OpenFileChecker == nil {
 		options.OpenFileChecker = OpenWalletProcessIDs
+	}
+	if options.LocalPathChecker == nil {
+		options.LocalPathChecker = IsLocalPath
 	}
 	sourceWorkdir, err := ResolveWorkdir(sourceSelection)
 	if err != nil {
@@ -54,6 +66,15 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	}
 	if PathsOverlap(sourceWorkdir, targetWorkdir) {
 		return nil, errors.New("source and target wallet folders must be separate")
+	}
+	for label, path := range map[string]string{"source": sourceWorkdir, "target": targetWorkdir} {
+		local, localErr := options.LocalPathChecker(path)
+		if localErr != nil {
+			return nil, fmt.Errorf("verify %s wallet folder is on a local filesystem: %w", label, localErr)
+		}
+		if !local {
+			return nil, fmt.Errorf("%s wallet folder must be on a local filesystem; network-mounted folders are not supported", label)
+		}
 	}
 	if IsBackupLikePath(sourceWorkdir) {
 		return nil, errors.New("the selected folder looks like a backup or staged restore; use the disaster-recovery flow instead")
@@ -68,6 +89,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	if err != nil {
 		return nil, err
 	}
+	reportProgress(options, "source_validated", "Wallet data and embedded databases validated")
 	if existingTarget, targetErr := InspectSource(targetWorkdir); targetErr == nil {
 		if existingTarget.WalletFingerprint == summary.WalletFingerprint {
 			return nil, errors.New("the same wallet is already configured in Grynvault Rebalance; no data was changed")
@@ -116,6 +138,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	if err = CompareHashes(firstHashes, secondHashes); err != nil {
 		return nil, fmt.Errorf("Alby Hub data changed during the stability check; quit the source completely and try again: %w", err)
 	}
+	reportProgress(options, "source_quiescent", "Alby Hub is stopped and wallet files are stable")
 
 	importID, err := NewImportID()
 	if err != nil {
@@ -151,6 +174,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	if err = CompareHashes(firstHashes, backupHashes); err != nil {
 		return nil, fmt.Errorf("source changed while creating recovery snapshot: %w", err)
 	}
+	reportProgress(options, "recovery_verified", "Recovery snapshot created and hash-verified")
 
 	stageDir := StagePath(targetWorkdir, importID)
 	if err = os.Mkdir(stageDir, 0700); err != nil {
@@ -181,6 +205,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 	if err = CompareHashes(backupHashes, validatedHashes); err != nil {
 		return nil, fmt.Errorf("verify validated wallet copy: %w", err)
 	}
+	reportProgress(options, "staged_verified", "Staged wallet copy validated without changing wallet data")
 	finalSourceHashes, err := HashWalletData(sourceWorkdir)
 	if err != nil {
 		return nil, fmt.Errorf("final source verification: %w", err)
@@ -259,6 +284,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 
 	keepBackup = true
 	keepStage = true
+	reportProgress(options, "ready_to_restart", "Verified copies are ready; restarting into offline verification")
 	summary.Counts = counts
 	summary.NWCIntegrity = nwcIntegrity
 	summary.LDKIntegrity = ldkIntegrity

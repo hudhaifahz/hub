@@ -16,6 +16,7 @@ import { Input } from "src/components/ui/input";
 import { Label } from "src/components/ui/label";
 import { handleRequestError } from "src/utils/handleRequestError";
 import { isHttpMode } from "src/utils/isHttpMode";
+import { onMigrationProgress } from "src/utils/migrationProgress";
 import { request } from "src/utils/request";
 
 type Counts = {
@@ -282,6 +283,7 @@ export function ImportExistingAlby() {
   const [unlockPassword, setUnlockPassword] = React.useState("");
   const [nodeConfirmation, setNodeConfirmation] = React.useState("");
   const [sourceConfirmed, setSourceConfirmed] = React.useState(false);
+  const [migrationProgress, setMigrationProgress] = React.useState("");
 
   const loadInitialState = React.useCallback(async () => {
     if (!desktop || fixture) {
@@ -312,9 +314,16 @@ export function ImportExistingAlby() {
     void loadInitialState();
   }, [loadInitialState]);
 
+  React.useEffect(
+    () =>
+      onMigrationProgress((progress) => setMigrationProgress(progress.detail)),
+    []
+  );
+
   async function chooseSource() {
     try {
       setLoading(true);
+      setMigrationProgress("");
       const response = await request<SelectionResponse>(
         "/api/import-existing-alby/select",
         { method: "POST" }
@@ -336,6 +345,7 @@ export function ImportExistingAlby() {
     }
     try {
       setLoading(true);
+      setMigrationProgress("Starting the read-only wallet safety checks…");
       const response = await request<StageResult>(
         "/api/import-existing-alby/stage",
         {
@@ -981,6 +991,17 @@ export function ImportExistingAlby() {
             >
               Create recovery copy and migrate
             </LoadingButton>
+            {loading && migrationProgress && (
+              <div
+                aria-live="polite"
+                className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground"
+              >
+                <p className="font-medium text-foreground">
+                  Preparing your verified migration
+                </p>
+                <p className="mt-1">{migrationProgress}</p>
+              </div>
+            )}
           </>
         )}
 

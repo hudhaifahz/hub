@@ -395,3 +395,12 @@ component and pinned in `MIGRATION.md`. The current checks and their exact scope
 are recorded in `SECURITY_REVIEW.md`. The next boundary remains the documented
 owner-supervised non-paying acceptance; tagging, signing, publication, and any
 Lightning value action remain closed.
+
+The follow-up matrix audit added explicit macOS local-filesystem enforcement,
+truthful desktop checkpoint events, and direct regressions for permission
+failures, unrelated wallet copies, validation-created sidecars, interrupted
+activation, control-only blocked startup, and wallet-identity mismatch. Custom
+paths on locally attached volumes remain supported; network-mounted source or
+target folders now fail before staging. The transient copy indicator is
+replaced after relaunch by the persisted control/quarantine phase, preserving
+the fail-closed restart behavior.

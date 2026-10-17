@@ -53,6 +53,78 @@ func TestGuidedMigrationContinuityComparison(t *testing.T) {
 
 func TestNewServiceQuarantinePreventsAutoUnlockAndNetworkInitialization(t *testing.T) {
 	logger.Init("4")
+	workdir, password := prepareMigrationServiceWorkdir(t)
+
+	require.NoError(t, guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), &guidedmigration.Quarantine{
+		Version:    guidedmigration.QuarantineVersion,
+		ImportID:   "test-quarantine",
+		Phase:      guidedmigration.PhaseVerificationNeeded,
+		TargetPath: workdir,
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	svc, err := NewService(ctx)
+	require.NoError(t, err)
+	require.True(t, svc.IsGuidedMigrationQuarantined())
+	require.Nil(t, svc.GetLNClient())
+	require.Empty(t, svc.GetRelayStatuses())
+	require.ErrorIs(t, svc.StartApp(password), ErrMigrationQuarantined)
+	_, err = svc.VerifyGuidedMigration("wrong-password")
+	require.ErrorIs(t, err, ErrInvalidPassword)
+	_, err = svc.VerifyGuidedMigration(password)
+	require.ErrorContains(t, err, "identity no longer matches")
+	require.Nil(t, svc.GetLNClient())
+	cancel()
+	svc.Shutdown()
+}
+
+func TestNewServiceRecoversInterruptedActivationIntoOfflineFailure(t *testing.T) {
+	workdir, _ := prepareMigrationServiceWorkdir(t)
+	require.NoError(t, guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), &guidedmigration.Quarantine{
+		Version:    guidedmigration.QuarantineVersion,
+		ImportID:   "interrupted-activation",
+		Phase:      guidedmigration.PhaseActivating,
+		TargetPath: workdir,
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	svc, err := NewService(ctx)
+	require.NoError(t, err)
+	require.True(t, svc.IsGuidedMigrationQuarantined())
+	require.Nil(t, svc.GetLNClient())
+	require.Equal(t, guidedmigration.PhaseActivationFailed, svc.migrationQuarantine.Phase)
+	require.Contains(t, svc.migrationQuarantine.LastError, "interrupted")
+	persisted, err := guidedmigration.LoadQuarantine(workdir)
+	require.NoError(t, err)
+	require.Equal(t, guidedmigration.PhaseActivationFailed, persisted.Phase)
+	cancel()
+	svc.Shutdown()
+}
+
+func TestNewServiceKeepsControlOnlyBlockedImportOffline(t *testing.T) {
+	workdir, _ := prepareMigrationServiceWorkdir(t)
+	require.NoError(t, guidedmigration.WriteJSONAtomic(guidedmigration.ControlPath(workdir), &guidedmigration.Control{
+		Version:       guidedmigration.ControlVersion,
+		ImportID:      "blocked-control-only",
+		Phase:         guidedmigration.PhaseBlocked,
+		TargetPath:    workdir,
+		BlockedReason: "source wallet changed after staging",
+	}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	svc, err := NewService(ctx)
+	require.NoError(t, err)
+	require.True(t, svc.IsGuidedMigrationQuarantined())
+	require.Nil(t, svc.GetLNClient())
+	require.Equal(t, guidedmigration.PhaseBlocked, svc.migrationQuarantine.Phase)
+	require.Equal(t, "source wallet changed after staging", svc.migrationQuarantine.LastError)
+	require.ErrorIs(t, svc.StartApp("local-test-password"), ErrMigrationQuarantined)
+	cancel()
+	svc.Shutdown()
+}
+
+func prepareMigrationServiceWorkdir(t *testing.T) (string, string) {
+	t.Helper()
 	workdir := t.TempDir()
 	password := "local-test-password"
 	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
@@ -66,29 +138,11 @@ func TestNewServiceQuarantinePreventsAutoUnlockAndNetworkInitialization(t *testi
 	require.NoError(t, cfg.SetUpdate("NodeLastStartTime", time.Now().UTC().Format(time.RFC3339), ""))
 	require.NoError(t, hubdb.Stop(database))
 
-	require.NoError(t, guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), &guidedmigration.Quarantine{
-		Version:    guidedmigration.QuarantineVersion,
-		ImportID:   "test-quarantine",
-		Phase:      guidedmigration.PhaseVerificationNeeded,
-		TargetPath: workdir,
-	}))
 	t.Setenv("WORK_DIR", workdir)
 	t.Setenv("DATABASE_URI", "nwc.db")
 	t.Setenv("LOG_TO_FILE", "false")
 	t.Setenv("NETWORK", "regtest")
 	t.Setenv("LDK_NETWORK", "regtest")
 	t.Setenv("AUTO_UNLOCK_PASSWORD", password)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	svc, err := NewService(ctx)
-	require.NoError(t, err)
-	require.True(t, svc.IsGuidedMigrationQuarantined())
-	require.Nil(t, svc.GetLNClient())
-	require.Empty(t, svc.GetRelayStatuses())
-	require.ErrorIs(t, svc.StartApp(password), ErrMigrationQuarantined)
-	_, err = svc.VerifyGuidedMigration("wrong-password")
-	require.ErrorIs(t, err, ErrInvalidPassword)
-	require.Nil(t, svc.GetLNClient())
-	cancel()
-	svc.Shutdown()
+	return workdir, password
 }

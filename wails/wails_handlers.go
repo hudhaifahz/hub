@@ -1164,7 +1164,11 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 
 		targetWorkdir := app.svc.GetConfig().GetEnv().Workdir
-		result, err := guidedmigration.Stage(request.SourcePath, targetWorkdir, guidedmigration.DefaultStageOptions())
+		stageOptions := guidedmigration.DefaultStageOptions()
+		stageOptions.Progress = func(progress guidedmigration.Progress) {
+			runtime.EventsEmit(ctx, "grynvault:migration-progress", progress)
+		}
+		result, err := guidedmigration.Stage(request.SourcePath, targetWorkdir, stageOptions)
 		if err != nil {
 			logger.Logger.WithError(err).Error("Failed to stage existing Alby Hub import")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
