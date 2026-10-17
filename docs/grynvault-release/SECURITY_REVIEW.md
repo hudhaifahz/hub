@@ -1,6 +1,6 @@
 # Pre-release security review
 
-Date: 2026-10-16
+Date: 2026-10-17
 
 Status: internal pre-release review; not an independent third-party audit and
 not a public-release approval.
@@ -59,6 +59,13 @@ The migration security boundary now includes:
   action before permitting a new import; and
 - synthetic responsive fixtures that are visibly labeled and contain no real
   wallet data.
+
+The fork also suppresses upstream Alby release banners and release-note widgets.
+An upstream version is dependency/provenance input, not a safe binary update for
+an installed Grynvault wallet. Users may be directed to a replacement only
+after the compatible Grynvault source, artifact, signed manifest, and migration
+path pass their own release gates. This candidate adds no automatic updater or
+unsigned remote update feed.
 
 Direct regression coverage now includes permission-denied source data,
 unrelated known wallet copies, validation-sidecar nonmutation, non-local source
@@ -210,3 +217,27 @@ gate did not pass. The remediation permits only a demonstrably pristine target
 and retains fail-closed handling for corrupt, partial, configured, or active
 wallet state. A new exact-commit owner acceptance is required after the full
 matrix and review pass.
+
+The second owner-supervised attempt at commit
+`ffe237cd90d8bdcdf8038a1d66c154faac9ac487` passed source/destination hashing,
+pristine-target handling, startup quarantine, and the complete offline
+continuity inspection. An intentional process-level network denial then caused
+activation to fail at LDK connection startup, while the copied wallet stayed
+quarantined and no Lightning action was created. A subsequent click exposed a
+recoverability defect: `activation_failed` retained valid verification evidence
+but was not accepted as a retryable activation state, so the backend emitted a
+misleading verification-required error. The successor treats only a failed
+activation with preserved verification as retryable, repeats all final
+continuity and process-exclusion checks, clears the password field after a
+failed attempt, and renders the stored connection failure and offline state.
+This change does not weaken quarantine or permit ordinary startup. A new exact
+commit and owner-supervised acceptance are required.
+
+The successor diff passed the full Go suite with Wails tags, focused race
+coverage, `go vet`, both frontend build modes, formatting, source-boundary
+assertions, production dependency audit, a current Gitleaks scan, and a current
+govulncheck scan with zero reachable vulnerabilities. CodeRabbit reviewed all
+eight changed files and reported zero findings. The synthetic
+`activation_failed` screen was inspected at desktop and 390-pixel mobile widths
+with no horizontal overflow; it displays the preserved verification, exact
+connection error, offline status, recovery controls, and guarded retry action.

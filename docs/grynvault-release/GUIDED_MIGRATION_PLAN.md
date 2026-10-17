@@ -262,6 +262,11 @@ Requirements across all supported window sizes:
 
 - Update `MIGRATION.md`, release notes, security review, usage guide, manifest,
   portal download copy, and repository README.
+- Treat Grynvault as a tested fork with its own compatibility boundary. Do not
+  show raw upstream Alby releases as actionable updates. Announce and link an
+  update only after the upstream release has been rebased into Grynvault, the
+  complete safety/release matrix has passed, and the Grynvault artifact and
+  signed manifest have been published.
 - Publish only synthetic screenshots and redacted fixture evidence.
 - Explain the difference between live migration and disaster recovery.
 - Document custom `WORK_DIR` selection for macOS and future platforms.
@@ -371,6 +376,35 @@ while a corrupt database, partial setup identity, LDK storage, or prior wallet
 activity remains fail-closed. It also excludes the already-classified target
 from the competing-copy scan. Regression coverage must pass before a new exact
 commit is proposed for owner-supervised acceptance.
+
+## 2026-10-17 owner acceptance attempt
+
+The owner approved a new non-paying offline acceptance at exact commit
+`ffe237cd90d8bdcdf8038a1d66c154faac9ac487`. Fresh application and wallet-data
+copies matched their source manifests byte-for-byte. The real guided UI accepted
+the demonstrably pristine target, discovered the isolated source, created the
+recovery evidence, and entered startup-level network quarantine. With external
+networking denied, offline verification passed for wallet identity, stored
+channels, balances, history, NWC apps and permissions, database integrity,
+backup state, and embedded source/LDK hashes. Independent socket inspection saw
+only the local ownership listeners before activation.
+
+The activation control then correctly reached LDK startup and failed because
+the acceptance sandbox denied every external connection. No invoice, probe,
+HTLC, payment, swap, rebalance, or channel operation was created. The imported
+copy remained quarantined and the isolated source manifest remained unchanged.
+The untouched canonical application was restarted and reconnected.
+
+The attempt also exposed a retry-state defect: after that expected network
+failure, the UI retained the verified continuity summary and activation form,
+but a retry was rejected with the misleading message to complete verification.
+The persisted quarantine record already contained the successful verification;
+its phase had advanced to `activation_failed`. The successor must preserve this
+verification, clearly show the activation failure and offline state, clear the
+password field, and permit a retry only after repeating the password,
+continuity, node-identity, and source-process checks. The exact-commit owner gate
+therefore remains unchecked and requires a successor commit plus a fresh owner
+approval.
 
 ## Stop conditions
 

@@ -31,6 +31,26 @@ func TestActivatedMigrationDoesNotBlockOrdinaryStartGuard(t *testing.T) {
 	require.False(t, svc.isMigrationQuarantined())
 }
 
+func TestGuidedMigrationActivationRetryRequiresPreservedVerification(t *testing.T) {
+	verification := &guidedmigration.VerificationSummary{NodeID: "node-a"}
+	require.True(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
+		Phase:        guidedmigration.PhaseVerified,
+		Verification: verification,
+	}))
+	require.True(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
+		Phase:        guidedmigration.PhaseActivationFailed,
+		Verification: verification,
+	}))
+	require.False(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
+		Phase: guidedmigration.PhaseActivationFailed,
+	}))
+	require.False(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
+		Phase:        guidedmigration.PhaseVerificationNeeded,
+		Verification: verification,
+	}))
+	require.False(t, guidedMigrationReadyForActivation(nil))
+}
+
 func TestGuidedMigrationContinuityComparison(t *testing.T) {
 	expected := &guidedmigration.VerificationSummary{
 		NodeID:             "node-a",

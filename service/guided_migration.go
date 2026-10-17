@@ -73,7 +73,7 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation s
 	defer svc.migrationMu.Unlock()
 
 	record := svc.migrationQuarantine
-	if record == nil || record.Phase != guidedmigration.PhaseVerified || record.Verification == nil {
+	if !guidedMigrationReadyForActivation(record) {
 		return errors.New("complete migration verification before activation")
 	}
 	if nodeIDConfirmation == "" || nodeIDConfirmation != record.Verification.NodeID {
@@ -137,6 +137,13 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation s
 	record.Phase = guidedmigration.PhaseActivated
 	svc.migrationQuarantine = nil
 	return nil
+}
+
+func guidedMigrationReadyForActivation(record *guidedmigration.Quarantine) bool {
+	if record == nil || record.Verification == nil {
+		return false
+	}
+	return record.Phase == guidedmigration.PhaseVerified || record.Phase == guidedmigration.PhaseActivationFailed
 }
 
 func (svc *service) buildGuidedMigrationVerification(record *guidedmigration.Quarantine, unlockPassword string) (*guidedmigration.VerificationSummary, error) {

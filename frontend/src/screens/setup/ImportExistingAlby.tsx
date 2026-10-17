@@ -229,6 +229,17 @@ function getSyntheticFixture(): MigrationFixture | undefined {
         },
         verified: syntheticVerification,
       };
+    case "activation-failed":
+      return {
+        status: {
+          ...commonStatus,
+          phase: "activation_failed",
+          blockingReason:
+            "NodeError: ConnectionFailed: Network connection closed.",
+          verification: syntheticVerification,
+        },
+        verified: syntheticVerification,
+      };
     case "complete":
       return {
         status: {
@@ -409,6 +420,18 @@ export function ImportExistingAlby() {
       setNodeConfirmation("");
       setActivated(true);
     } catch (error) {
+      setUnlockPassword("");
+      try {
+        const migrationStatus = await request<MigrationStatus>(
+          "/api/import-existing-alby/status"
+        );
+        if (migrationStatus?.active) {
+          setStatus(migrationStatus);
+          setVerified(migrationStatus.verification);
+        }
+      } catch {
+        // Keep the original activation error as the actionable message.
+      }
       handleRequestError("Could not activate the imported wallet", error);
     } finally {
       setLoading(false);
@@ -576,6 +599,7 @@ export function ImportExistingAlby() {
 
   if (status?.active) {
     const blocked = status.phase === "blocked";
+    const activationFailed = status.phase === "activation_failed";
     return (
       <Container>
         <title>Verify migration · Grynvault Rebalance</title>
@@ -646,6 +670,22 @@ export function ImportExistingAlby() {
               <p className="text-xs text-muted-foreground">
                 This preserves the source, failed staged copy, and evidence in
                 the recovery folder before allowing a fresh guided import.
+              </p>
+            </div>
+          )}
+
+          {activationFailed && (
+            <div className="grid gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+              <p className="font-medium">Lightning did not connect</p>
+              <p className="break-words text-muted-foreground">
+                {status.blockingReason ||
+                  "The activation attempt stopped before Lightning connected."}
+              </p>
+              <p className="text-muted-foreground">
+                The copied wallet remains offline and its successful
+                verification is preserved. Restore network access, then retry
+                below; Grynvault will repeat the password, wallet-continuity,
+                and source-process checks before it starts Lightning.
               </p>
             </div>
           )}
@@ -863,7 +903,9 @@ export function ImportExistingAlby() {
                     nodeConfirmation.trim() !== verified.nodeId
                   }
                 >
-                  Activate this wallet and connect Lightning
+                  {activationFailed
+                    ? "Retry activation and connect Lightning"
+                    : "Activate this wallet and connect Lightning"}
                 </LoadingButton>
               </form>
             </>
