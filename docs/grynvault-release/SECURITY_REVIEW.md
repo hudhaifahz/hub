@@ -258,3 +258,9 @@ rejects verification older than five minutes, and requires a new offline
 verification after any failed activation. These changes require a fresh exact-
 commit owner acceptance; this review still does not authorize tagging, signing,
 publishing, installation, or value movement.
+
+That acceptance rerun stopped before staging after exposing an asynchronous
+source-selection race: automatic discovery could complete after a manual folder
+choice and overwrite the reviewed path. The successor now makes the start of
+manual selection authoritative and ignores any later discovery response. This
+must be rechecked in the exact-commit owner acceptance.

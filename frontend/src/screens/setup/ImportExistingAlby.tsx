@@ -281,6 +281,7 @@ function EvidenceRow({
 export function ImportExistingAlby() {
   const fixture = React.useMemo(() => getSyntheticFixture(), []);
   const desktop = fixture !== undefined || !isHttpMode();
+  const manualSourceSelectionStarted = React.useRef(false);
   const [loading, setLoading] = React.useState(false);
   const [status, setStatus] = React.useState<MigrationStatus | undefined>(
     fixture?.status
@@ -320,7 +321,7 @@ export function ImportExistingAlby() {
         "/api/import-existing-alby/discover",
         { method: "POST" }
       );
-      if (discovered) {
+      if (discovered && !manualSourceSelectionStarted.current) {
         setSource(discovered);
       }
     } catch (error) {
@@ -339,6 +340,9 @@ export function ImportExistingAlby() {
   );
 
   async function chooseSource() {
+    // A slow automatic discovery response must never replace a folder the
+    // owner has started choosing explicitly.
+    manualSourceSelectionStarted.current = true;
     try {
       setLoading(true);
       setMigrationProgress("");

@@ -439,6 +439,13 @@ acknowledgement, enforce a short verification lifetime in the backend, and
 require re-verification after every failed activation. The exact-commit owner
 gate remains unchecked pending a new build and complete rerun.
 
+The successor acceptance also stopped before staging when a source-selection
+race became visible. A delayed automatic-discovery response replaced the folder
+the owner had already chosen manually with an older isolated test-wallet path.
+The UI must treat the start of manual selection as authoritative and ignore any
+later automatic-discovery result, so the reviewed source path cannot change
+underneath the confirmation checkbox.
+
 ## Stop conditions
 
 Stop and preserve evidence if any of the following occurs:
