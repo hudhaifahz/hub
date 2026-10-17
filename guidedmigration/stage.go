@@ -95,6 +95,14 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 			return nil, errors.New("the same wallet is already configured in Grynvault Rebalance; no data was changed")
 		}
 		return nil, errors.New("a different configured Grynvault wallet already exists; guided import will not replace it")
+	} else {
+		pristine, pristineErr := IsPristineTarget(targetWorkdir)
+		if pristineErr != nil {
+			return nil, fmt.Errorf("existing Grynvault target could not be proven pristine: %w", pristineErr)
+		}
+		if !pristine {
+			return nil, errors.New("existing Grynvault target contains wallet state but is not a complete valid wallet; guided import will not replace it")
+		}
 	}
 	if _, restoreErr := os.Stat(filepath.Join(targetWorkdir, "restore")); restoreErr == nil {
 		return nil, errors.New("Grynvault has a pending restore; finish or remove it before starting a guided import")

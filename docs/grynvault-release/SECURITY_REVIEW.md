@@ -199,3 +199,14 @@ quarantine that prevents an imported node from contacting peers before local
 identity and continuity acceptance. Public documentation must keep the incident
 sanitized and must not include a real node public key, channel ID, transaction
 ID, wallet path, balance, or credential.
+
+The first owner-supervised attempt at commit
+`e2ead0a0497a5e2b94d0fe5ff0da47593f8680c7` found a separate availability bug:
+the destination database created during a normal first launch was re-scanned as
+an arbitrary competing wallet and blocked every real guided import before
+staging. The stop was safe—external networking was denied, the source remained
+byte-identical, and no migration control or staged wallet existed—but the owner
+gate did not pass. The remediation permits only a demonstrably pristine target
+and retains fail-closed handling for corrupt, partial, configured, or active
+wallet state. A new exact-commit owner acceptance is required after the full
+matrix and review pass.

@@ -60,6 +60,10 @@ wails generate module -tags "wails" -nocolour
   yarn lint:js
   yarn tsc:compile
   yarn format
+  # Platform preparation intentionally swaps tracked adapters. Restore the
+  # repository's HTTP baseline before evaluating source cleanliness; the Wails
+  # build below prepares and embeds the desktop adapters again.
+  yarn prepare:http
 )
 
 if [[ -n "$(git status --porcelain=v1)" ]]; then
@@ -80,6 +84,14 @@ wails build \
   -o "Grynvault Rebalance" \
   -tags "wails" \
   -ldflags "-X 'github.com/getAlby/hub/version.Tag=${release_tag}' -X 'github.com/getAlby/hub/version.SourceCommit=${source_commit}' -X 'github.com/getAlby/hub/version.LDKLibrarySHA256=${ldk_library_sha256}' -extldflags '-Wl,-headerpad_max_install_names -framework UniformTypeIdentifiers'"
+
+# Wails' frontend build leaves the desktop adapters in the tracked source
+# locations. Restore the committed HTTP baseline before the final clean-tree
+# assertion without changing the already embedded application assets.
+(
+  cd frontend
+  yarn prepare:http
+)
 
 if [[ -n "$(git status --porcelain=v1 --untracked-files=no)" ]]; then
   echo "release build changed tracked files in the tagged checkout" >&2

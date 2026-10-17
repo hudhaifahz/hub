@@ -240,9 +240,12 @@ func KnownCandidatePaths(home, target, selected string) []string {
 		filepath.Join(home, "Library", "Application Support", "albyhub"),
 		filepath.Join(home, ".local", "share", "albyhub"),
 		filepath.Join(home, "Library", "Containers", "com.grynvault.rebalance", "Data", "Library", "Application Support", "grynvault-rebalance"),
-		target,
 		selected,
 	}
+	// The destination is classified separately by IsPristineTarget before this
+	// competing-copy scan. A fresh Grynvault launch has already created nwc.db,
+	// so treating the destination as an arbitrary candidate makes every real
+	// first-run migration fail as an "unverifiable competing wallet".
 	seen := make(map[string]struct{})
 	result := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -254,6 +257,9 @@ func KnownCandidatePaths(home, target, selected string) []string {
 			continue
 		}
 		absolute = filepath.Clean(absolute)
+		if samePath(absolute, target) {
+			continue
+		}
 		if _, ok := seen[absolute]; ok {
 			continue
 		}
@@ -262,6 +268,66 @@ func KnownCandidatePaths(home, target, selected string) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// IsPristineTarget distinguishes the database created by a brand-new
+// Grynvault process from partial or previously configured wallet state. It is
+// intentionally conservative: any LDK storage, setup identity, app permission,
+// or transaction history blocks replacement.
+func IsPristineTarget(workdir string) (bool, error) {
+	ldkPath := filepath.Join(workdir, "ldk")
+	if _, err := os.Lstat(ldkPath); err == nil {
+		return false, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("inspect target LDK storage: %w", err)
+	}
+
+	nwcPath := filepath.Join(workdir, "nwc.db")
+	info, err := os.Lstat(nwcPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect target database: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return false, errors.New("target database is not a regular file")
+	}
+	if _, err = ValidateSQLite(nwcPath); err != nil {
+		return false, fmt.Errorf("validate target database: %w", err)
+	}
+
+	dsn := (&url.URL{Scheme: "file", Path: nwcPath, RawQuery: "mode=ro"}).String()
+	database, err := sql.Open(sqlite_wrapper.Sqlite3WrapperDriverName, dsn)
+	if err != nil {
+		return false, err
+	}
+	defer database.Close()
+
+	var setupMarkers int64
+	if err = database.QueryRow(`SELECT count(*) FROM user_configs
+		WHERE key IN ('UnlockPasswordCheck', 'LNBackendType', 'Mnemonic', 'NodeLastStartTime', 'JWTSecret')`).Scan(&setupMarkers); err != nil {
+		return false, fmt.Errorf("inspect target setup state: %w", err)
+	}
+	if setupMarkers != 0 {
+		return false, nil
+	}
+
+	var activityCount int64
+	query := `SELECT
+		(SELECT count(*) FROM apps) +
+		(SELECT count(*) FROM app_permissions) +
+		(SELECT count(*) FROM transactions) +
+		(SELECT count(*) FROM swaps) +
+		(SELECT count(*) FROM forwards) +
+		(SELECT count(*) FROM request_events) +
+		(SELECT count(*) FROM response_events) +
+		(SELECT count(*) FROM local_rebalance_quotes) +
+		(SELECT count(*) FROM rebalance_quotes)`
+	if err = database.QueryRow(query).Scan(&activityCount); err != nil {
+		return false, fmt.Errorf("inspect target wallet activity: %w", err)
+	}
+	return activityCount == 0, nil
 }
 
 func FindConflictingCopy(summary *SourceSummary, candidates []string) (string, error) {

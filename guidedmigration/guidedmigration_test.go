@@ -345,6 +345,61 @@ func TestStageRejectsOverlappingAndExistingWalletTargets(t *testing.T) {
 	require.ErrorContains(t, err, "different configured Grynvault wallet")
 }
 
+func TestStageAllowsFreshServiceDatabaseTarget(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	target := filepath.Join(root, "Library", "Containers", "com.grynvault.rebalance", "Data", "Library", "Application Support", "grynvault-rebalance")
+	require.NoError(t, createWalletFixture(source, "encrypted-wallet-a"))
+	require.NoError(t, createFreshTargetFixture(target))
+
+	result, err := Stage(source, target, testStageOptions(root, time.Now()))
+	require.NoError(t, err)
+	require.True(t, result.RestartRequired)
+	require.FileExists(t, ControlPath(target))
+}
+
+func TestStageRejectsPartialOrCorruptTargetState(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	require.NoError(t, createWalletFixture(source, "encrypted-wallet-a"))
+
+	t.Run("setup marker without LDK storage", func(t *testing.T) {
+		target := filepath.Join(root, "partial-target")
+		require.NoError(t, createFreshTargetFixture(target))
+		require.NoError(t, updateFixture(target, "INSERT INTO user_configs(key, value) VALUES ('Mnemonic', 'encrypted')"))
+		_, err := Stage(source, target, testStageOptions(root, time.Now()))
+		require.ErrorContains(t, err, "contains wallet state")
+		require.NoFileExists(t, ControlPath(target))
+	})
+
+	t.Run("wallet activity without setup marker", func(t *testing.T) {
+		target := filepath.Join(root, "active-target")
+		require.NoError(t, createFreshTargetFixture(target))
+		require.NoError(t, updateFixture(target, "INSERT INTO apps(id) VALUES (1)"))
+		_, err := Stage(source, target, testStageOptions(root, time.Now()))
+		require.ErrorContains(t, err, "contains wallet state")
+		require.NoFileExists(t, ControlPath(target))
+	})
+
+	t.Run("partial LDK directory", func(t *testing.T) {
+		target := filepath.Join(root, "ldk-target")
+		require.NoError(t, createFreshTargetFixture(target))
+		require.NoError(t, os.MkdirAll(filepath.Join(target, "ldk"), 0700))
+		_, err := Stage(source, target, testStageOptions(root, time.Now()))
+		require.ErrorContains(t, err, "contains wallet state")
+		require.NoFileExists(t, ControlPath(target))
+	})
+
+	t.Run("corrupt startup database", func(t *testing.T) {
+		target := filepath.Join(root, "corrupt-target")
+		require.NoError(t, os.MkdirAll(target, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(target, "nwc.db"), []byte("not sqlite"), 0600))
+		_, err := Stage(source, target, testStageOptions(root, time.Now()))
+		require.ErrorContains(t, err, "could not be proven pristine")
+		require.NoFileExists(t, ControlPath(target))
+	})
+}
+
 func TestStageRejectsPendingImportRestoreAndBackupSource(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")
@@ -627,6 +682,35 @@ func createWalletFixture(workdir, encryptedMnemonic string) error {
 		return err
 	}
 	return createSQLiteFixture(filepath.Join(workdir, "ldk", "storage", "ldk_node_data.sqlite"))
+}
+
+func createFreshTargetFixture(workdir string) error {
+	if err := os.MkdirAll(workdir, 0700); err != nil {
+		return err
+	}
+	database, err := sql.Open(sqlite_wrapper.Sqlite3WrapperDriverName, filepath.Join(workdir, "nwc.db"))
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+	for _, statement := range []string{
+		"CREATE TABLE user_configs (key TEXT PRIMARY KEY, value TEXT)",
+		"CREATE TABLE apps (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE app_permissions (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE transactions (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE swaps (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE forwards (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE request_events (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE response_events (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE local_rebalance_quotes (id INTEGER PRIMARY KEY)",
+		"CREATE TABLE rebalance_quotes (id INTEGER PRIMARY KEY)",
+		"INSERT INTO user_configs(key, value) VALUES ('Relay', 'wss://relay.example')",
+	} {
+		if _, err = database.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func createSQLiteFixture(path string) error {

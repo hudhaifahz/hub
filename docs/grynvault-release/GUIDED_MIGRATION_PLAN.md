@@ -345,6 +345,33 @@ Checked boxes below are supported by the working-tree evidence recorded on
 - [ ] Public URLs and fresh downloads are read back and verified.
 - [ ] Upstream PR and promotional posts receive separate approval.
 
+## 2026-10-16 owner acceptance attempt
+
+The owner approved a non-paying offline acceptance at exact commit
+`e2ead0a0497a5e2b94d0fe5ff0da47593f8680c7`. The universal candidate embedded
+that commit and the reviewed LDK digest. The live application was stopped
+cleanly, two source manifests matched, and a permission-restricted isolated
+source copy matched the stopped source byte-for-byte. The candidate ran with
+external networking denied; independent socket inspection observed only the
+two loopback ownership locks.
+
+The real guided UI discovered and validated the isolated embedded-LDK wallet,
+then failed closed before staging. Grynvault's normal first-run startup had
+created a valid but unconfigured `nwc.db` in the destination. The competing-copy
+scanner treated that destination as an unverifiable wallet, even though it was
+the pristine target the importer was supposed to replace. No migration control,
+recovery copy, staged wallet, invoice, probe, HTLC, payment, swap, rebalance, or
+channel operation was created. The isolated source remained byte-identical and
+the untouched canonical application was restarted and reconnected.
+
+The owner gate therefore remains unchecked for that commit. The follow-up fix
+classifies the target separately: a fresh service database with no setup
+identity, LDK storage, app permissions, or transaction history is permitted,
+while a corrupt database, partial setup identity, LDK storage, or prior wallet
+activity remains fail-closed. It also excludes the already-classified target
+from the competing-copy scan. Regression coverage must pass before a new exact
+commit is proposed for owner-supervised acceptance.
+
 ## Stop conditions
 
 Stop and preserve evidence if any of the following occurs:
