@@ -298,16 +298,21 @@ func LoadControl(workdir string) (*Control, error) {
 func StatusFor(workdir string) (*Status, error) {
 	record, err := LoadQuarantine(workdir)
 	if err == nil {
+		activationConfirmation := ""
+		if record.Phase == PhaseVerified && record.Verification != nil {
+			activationConfirmation = ActivationConfirmation(record.Verification.Network, record.WalletFingerprint)
+		}
 		return &Status{
-			Active:           record.Phase != PhaseActivated,
-			Phase:            record.Phase,
-			SourcePath:       record.SourcePath,
-			TargetPath:       record.TargetPath,
-			BackupLocation:   record.BackupLocation,
-			FingerprintHint:  FingerprintHint(record.WalletFingerprint),
-			BlockingReason:   record.LastError,
-			Verification:     record.Verification,
-			LightningOffline: record.Phase != PhaseActivated,
+			Active:                 record.Phase != PhaseActivated,
+			Phase:                  record.Phase,
+			SourcePath:             record.SourcePath,
+			TargetPath:             record.TargetPath,
+			BackupLocation:         record.BackupLocation,
+			FingerprintHint:        FingerprintHint(record.WalletFingerprint),
+			ActivationConfirmation: activationConfirmation,
+			BlockingReason:         record.LastError,
+			Verification:           record.Verification,
+			LightningOffline:       record.Phase != PhaseActivated,
 		}, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {

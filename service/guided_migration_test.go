@@ -32,12 +32,15 @@ func TestActivatedMigrationDoesNotBlockOrdinaryStartGuard(t *testing.T) {
 }
 
 func TestGuidedMigrationActivationRetryRequiresPreservedVerification(t *testing.T) {
-	verification := &guidedmigration.VerificationSummary{NodeID: "node-a"}
+	verification := &guidedmigration.VerificationSummary{
+		NodeID:     "node-a",
+		VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}
 	require.True(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
 		Phase:        guidedmigration.PhaseVerified,
 		Verification: verification,
 	}))
-	require.True(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
+	require.False(t, guidedMigrationReadyForActivation(&guidedmigration.Quarantine{
 		Phase:        guidedmigration.PhaseActivationFailed,
 		Verification: verification,
 	}))
@@ -49,6 +52,45 @@ func TestGuidedMigrationActivationRetryRequiresPreservedVerification(t *testing.
 		Verification: verification,
 	}))
 	require.False(t, guidedMigrationReadyForActivation(nil))
+}
+
+func TestGuidedMigrationActivationRequiresFreshPostAttemptVerification(t *testing.T) {
+	now := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	record := &guidedmigration.Quarantine{
+		Phase: guidedmigration.PhaseVerified,
+		Verification: &guidedmigration.VerificationSummary{
+			VerifiedAt: now.Add(-time.Minute).Format(time.RFC3339Nano),
+		},
+	}
+	require.True(t, guidedMigrationVerificationIsFresh(record, now))
+
+	record.Verification.VerifiedAt = now.Add(-guidedMigrationVerificationTTL - time.Second).Format(time.RFC3339Nano)
+	require.False(t, guidedMigrationVerificationIsFresh(record, now))
+
+	record.Verification.VerifiedAt = now.Add(-time.Minute).Format(time.RFC3339Nano)
+	record.ActivationAttemptedAt = now.Add(-30 * time.Second).Format(time.RFC3339Nano)
+	require.False(t, guidedMigrationVerificationIsFresh(record, now))
+
+	record.Verification.VerifiedAt = now.Add(-10 * time.Second).Format(time.RFC3339Nano)
+	record.ActivationAttemptedAt = now.Add(-30 * time.Second).Format(time.RFC3339Nano)
+	require.True(t, guidedMigrationVerificationIsFresh(record, now))
+}
+
+func TestGuidedMigrationActivationRejectsMissingBoundConfirmationBeforeUnlock(t *testing.T) {
+	record := &guidedmigration.Quarantine{
+		Phase:             guidedmigration.PhaseVerified,
+		WalletFingerprint: "aabbccddeeff001122",
+		Verification: &guidedmigration.VerificationSummary{
+			NodeID:     "node-a",
+			Network:    "bitcoin",
+			VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		},
+	}
+	svc := &service{migrationQuarantine: record}
+
+	err := svc.ActivateGuidedMigration("never-read", "node-a", "")
+	require.ErrorContains(t, err, "activation confirmation does not match")
+	require.Equal(t, guidedmigration.PhaseVerified, record.Phase)
 }
 
 func TestGuidedMigrationContinuityComparison(t *testing.T) {

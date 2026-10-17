@@ -162,6 +162,35 @@ func TestStageAndFinishPendingPreserveSourceAndActivateQuarantine(t *testing.T) 
 	require.NoError(t, CompareHashes(sourceHashes, targetHashes))
 }
 
+func TestActivationConfirmationBindsNetworkAndWallet(t *testing.T) {
+	require.Equal(t, "CONNECT BITCOIN aabbccddeeff", ActivationConfirmation(" bitcoin ", "aabbccddeeff001122"))
+	require.NotEqual(t, ActivationConfirmation("bitcoin", "aabbccddeeff001122"), ActivationConfirmation("regtest", "aabbccddeeff001122"))
+	require.NotEqual(t, ActivationConfirmation("bitcoin", "aabbccddeeff001122"), ActivationConfirmation("bitcoin", "112233445566778899"))
+}
+
+func TestStatusExposesActivationConfirmationOnlyAfterVerification(t *testing.T) {
+	workdir := t.TempDir()
+	record := &Quarantine{
+		Version:           QuarantineVersion,
+		Phase:             PhaseVerified,
+		WalletFingerprint: "aabbccddeeff001122",
+		Verification: &VerificationSummary{
+			Network: "bitcoin",
+		},
+	}
+	require.NoError(t, WriteJSONAtomic(QuarantinePath(workdir), record))
+
+	status, err := StatusFor(workdir)
+	require.NoError(t, err)
+	require.Equal(t, "CONNECT BITCOIN aabbccddeeff", status.ActivationConfirmation)
+
+	record.Phase = PhaseActivationFailed
+	require.NoError(t, WriteJSONAtomic(QuarantinePath(workdir), record))
+	status, err = StatusFor(workdir)
+	require.NoError(t, err)
+	require.Empty(t, status.ActivationConfirmation)
+}
+
 func TestFinishPendingBlocksWhenSourceChanges(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")

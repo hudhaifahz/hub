@@ -1,6 +1,10 @@
 package guidedmigration
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 const (
 	EvidenceVersion   = 2
@@ -159,17 +163,26 @@ type Progress struct {
 }
 
 type Status struct {
-	Active           bool                 `json:"active"`
-	Phase            Phase                `json:"phase,omitempty"`
-	SourcePath       string               `json:"sourcePath,omitempty"`
-	TargetPath       string               `json:"targetPath,omitempty"`
-	BackupLocation   string               `json:"backupLocation,omitempty"`
-	FingerprintHint  string               `json:"fingerprintHint,omitempty"`
-	BlockingReason   string               `json:"blockingReason,omitempty"`
-	Verification     *VerificationSummary `json:"verification,omitempty"`
-	LightningOffline bool                 `json:"lightningOffline"`
+	Active                 bool                 `json:"active"`
+	Phase                  Phase                `json:"phase,omitempty"`
+	SourcePath             string               `json:"sourcePath,omitempty"`
+	TargetPath             string               `json:"targetPath,omitempty"`
+	BackupLocation         string               `json:"backupLocation,omitempty"`
+	FingerprintHint        string               `json:"fingerprintHint,omitempty"`
+	ActivationConfirmation string               `json:"activationConfirmation,omitempty"`
+	BlockingReason         string               `json:"blockingReason,omitempty"`
+	Verification           *VerificationSummary `json:"verification,omitempty"`
+	LightningOffline       bool                 `json:"lightningOffline"`
 }
 
 func timestamp(now time.Time) string {
 	return now.UTC().Format(time.RFC3339Nano)
+}
+
+func ActivationConfirmation(network, walletFingerprint string) string {
+	return fmt.Sprintf(
+		"CONNECT %s %s",
+		strings.ToUpper(strings.TrimSpace(network)),
+		FingerprintHint(walletFingerprint),
+	)
 }

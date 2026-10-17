@@ -241,3 +241,20 @@ eight changed files and reported zero findings. The synthetic
 `activation_failed` screen was inspected at desktop and 390-pixel mobile widths
 with no horizontal overflow; it displays the preserved verification, exact
 connection error, offline status, recovery controls, and guarded retry action.
+
+The next owner-supervised attempt at exact commit
+`31d2c3b807be5d8a8fa69f6caec8a80bca7a480b` passed the copy, hash,
+integrity, quarantine, and offline continuity checks. The owner then selected
+the activation control unintentionally during review. The external network
+sandbox prevented LDK from starting or reaching peers, and the canonical wallet
+remained byte-identical and later reconnected normally. No Lightning operation
+succeeded, but the workflow did not provide enough human-error resistance.
+
+The successor therefore clears the verification password, hides activation
+behind a separate review action, requires password re-entry, the full node ID,
+an exact network-and-wallet-bound phrase, an acknowledgement checkbox, and a
+final native confirmation. The backend independently validates the phrase,
+rejects verification older than five minutes, and requires a new offline
+verification after any failed activation. These changes require a fresh exact-
+commit owner acceptance; this review still does not authorize tagging, signing,
+publishing, installation, or value movement.

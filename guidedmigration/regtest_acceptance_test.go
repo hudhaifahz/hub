@@ -390,7 +390,11 @@ func runMigrationAcceptance(
 	require.GreaterOrEqual(t, verification.StoredPaymentCount, 2)
 	require.True(t, verification.SourceBytesStillMatch)
 	require.True(t, verification.DestinationBytesStillMatch)
-	require.NoError(t, svc.ActivateGuidedMigration(syntheticPassword, verification.NodeID))
+	require.NoError(t, svc.ActivateGuidedMigration(
+		syntheticPassword,
+		verification.NodeID,
+		guidedmigration.ActivationConfirmation(verification.Network, stage.Summary.WalletFingerprint),
+	))
 	require.False(t, svc.IsGuidedMigrationQuarantined())
 	require.NotNil(t, svc.GetLNClient())
 	require.NoFileExists(t, guidedmigration.QuarantinePath(target))

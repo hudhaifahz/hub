@@ -190,8 +190,15 @@ While quarantined, the app must:
   start networking.
 
 The activation confirmation must state the exact source path, node fingerprint,
-channel count, and that the source Alby Hub must remain stopped. Activation is
-one local owner action and is recorded without recording credentials.
+channel count, network, and that the source Alby Hub must remain stopped.
+Offline verification and network activation are separate screens/actions. The
+verification password is cleared before activation review. Activation requires
+the password again, the complete verified node ID, an exact typed phrase bound
+to the verified network and wallet fingerprint, an acknowledgement checkbox,
+and a final native confirmation. The backend accepts only a verification less
+than five minutes old; a failed activation consumes that verification and
+requires another offline verification before retry. Activation is recorded
+without recording credentials.
 
 Only successful activation clears the quarantine marker. A failed or cancelled
 verification remains offline and recoverable.
@@ -405,6 +412,32 @@ password field, and permit a retry only after repeating the password,
 continuity, node-identity, and source-process checks. The exact-commit owner gate
 therefore remains unchecked and requires a successor commit plus a fresh owner
 approval.
+
+## 2026-10-17 activation-friction acceptance finding
+
+The owner approved another non-paying offline acceptance at exact commit
+`31d2c3b807be5d8a8fa69f6caec8a80bca7a480b`. The empty-workdir check,
+duplicate-wallet block, isolated source selection, recovery snapshot, staged
+copy, restart quarantine, and offline wallet continuity verification all
+passed. The copied wallet confirmed the expected identity, two stored channels,
+history, NWC apps and permissions, backup state, and embedded release hashes.
+
+During the owner review, the activation action was selected unintentionally.
+The process-level network sandbox denied every external connection, LDK startup
+failed with `ConnectionFailed: Network connection closed`, and the disposable
+copy remained in `activation_failed`. No invoice, probe, HTLC, payment, swap,
+rebalance, or channel operation succeeded. The canonical wallet and isolated
+source still matched their pre-test durable-file manifests; the disposable
+process was stopped and the untouched installed wallet restarted and
+reconnected.
+
+The containment worked, but the human-safety gate did not. A full node-ID field
+and password were insufficient protection in the surrounding workflow. The
+successor must separate offline verification from activation, clear the prior
+password, require an exact typed network-and-wallet confirmation plus explicit
+acknowledgement, enforce a short verification lifetime in the backend, and
+require re-verification after every failed activation. The exact-commit owner
+gate remains unchecked pending a new build and complete rerun.
 
 ## Stop conditions
 

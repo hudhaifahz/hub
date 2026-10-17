@@ -21,8 +21,10 @@ type MigrationGuard interface {
 
 type MigrationVerifier interface {
 	VerifyGuidedMigration(unlockPassword string) (*guidedmigration.VerificationSummary, error)
-	ActivateGuidedMigration(unlockPassword, nodeIDConfirmation string) error
+	ActivateGuidedMigration(unlockPassword, nodeIDConfirmation, activationConfirmation string) error
 }
+
+const guidedMigrationVerificationTTL = 5 * time.Minute
 
 func (svc *service) isMigrationQuarantined() bool {
 	svc.migrationMu.Lock()
@@ -68,13 +70,30 @@ func (svc *service) VerifyGuidedMigration(unlockPassword string) (*guidedmigrati
 	return summary, nil
 }
 
-func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation string) error {
+func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation, activationConfirmation string) error {
 	svc.migrationMu.Lock()
 	defer svc.migrationMu.Unlock()
 
 	record := svc.migrationQuarantine
 	if !guidedMigrationReadyForActivation(record) {
 		return errors.New("complete migration verification before activation")
+	}
+	now := time.Now()
+	if !guidedMigrationVerificationIsFresh(record, now) {
+		record.Phase = guidedmigration.PhaseVerificationNeeded
+		record.LastError = "offline migration verification expired; verify the wallet again before activation"
+		record.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
+		if err := guidedmigration.WriteJSONAtomic(
+			guidedmigration.QuarantinePath(svc.cfg.GetEnv().Workdir),
+			record,
+		); err != nil {
+			return fmt.Errorf("persist expired migration verification: %w", err)
+		}
+		return errors.New(record.LastError)
+	}
+	expectedConfirmation := guidedmigration.ActivationConfirmation(record.Verification.Network, record.WalletFingerprint)
+	if activationConfirmation == "" || activationConfirmation != expectedConfirmation {
+		return errors.New("activation confirmation does not match the verified wallet and network")
 	}
 	if nodeIDConfirmation == "" || nodeIDConfirmation != record.Verification.NodeID {
 		return errors.New("node identity confirmation does not match the verified wallet")
@@ -96,7 +115,7 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation s
 
 	workdir := svc.cfg.GetEnv().Workdir
 	record.Phase = guidedmigration.PhaseActivating
-	record.ActivationAttemptedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	record.ActivationAttemptedAt = now.UTC().Format(time.RFC3339Nano)
 	record.UpdatedAt = record.ActivationAttemptedAt
 	if err = guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), record); err != nil {
 		return err
@@ -143,7 +162,22 @@ func guidedMigrationReadyForActivation(record *guidedmigration.Quarantine) bool 
 	if record == nil || record.Verification == nil {
 		return false
 	}
-	return record.Phase == guidedmigration.PhaseVerified || record.Phase == guidedmigration.PhaseActivationFailed
+	return record.Phase == guidedmigration.PhaseVerified
+}
+
+func guidedMigrationVerificationIsFresh(record *guidedmigration.Quarantine, now time.Time) bool {
+	if !guidedMigrationReadyForActivation(record) {
+		return false
+	}
+	verifiedAt, err := time.Parse(time.RFC3339Nano, record.Verification.VerifiedAt)
+	if err != nil || verifiedAt.After(now.Add(30*time.Second)) || now.Sub(verifiedAt) > guidedMigrationVerificationTTL {
+		return false
+	}
+	if record.ActivationAttemptedAt == "" {
+		return true
+	}
+	attemptedAt, err := time.Parse(time.RFC3339Nano, record.ActivationAttemptedAt)
+	return err == nil && verifiedAt.After(attemptedAt)
 }
 
 func (svc *service) buildGuidedMigrationVerification(record *guidedmigration.Quarantine, unlockPassword string) (*guidedmigration.VerificationSummary, error) {

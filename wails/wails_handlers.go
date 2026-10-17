@@ -1213,7 +1213,11 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		if !ok {
 			return WailsRequestRouterResponse{Body: nil, Error: "guided migration activation is unavailable"}
 		}
-		if err := verifier.ActivateGuidedMigration(request.UnlockPassword, request.NodeIDConfirmation); err != nil {
+		if err := verifier.ActivateGuidedMigration(
+			request.UnlockPassword,
+			request.NodeIDConfirmation,
+			request.ActivationConfirmation,
+		); err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}

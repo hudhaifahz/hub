@@ -16,6 +16,7 @@ type guidedImportVerifyRequest struct {
 }
 
 type guidedImportActivateRequest struct {
-	UnlockPassword     string `json:"unlockPassword"`
-	NodeIDConfirmation string `json:"nodeIdConfirmation"`
+	UnlockPassword         string `json:"unlockPassword"`
+	NodeIDConfirmation     string `json:"nodeIdConfirmation"`
+	ActivationConfirmation string `json:"activationConfirmation"`
 }

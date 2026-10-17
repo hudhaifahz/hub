@@ -86,6 +86,7 @@ type MigrationStatus = {
   targetPath?: string;
   backupLocation?: string;
   fingerprintHint?: string;
+  activationConfirmation?: string;
   blockingReason?: string;
   verification?: VerificationSummary;
   lightningOffline: boolean;
@@ -225,6 +226,7 @@ function getSyntheticFixture(): MigrationFixture | undefined {
         status: {
           ...commonStatus,
           phase: "verified",
+          activationConfirmation: "CONNECT REGTEST a73c421f29b8",
           verification: syntheticVerification,
         },
         verified: syntheticVerification,
@@ -293,6 +295,11 @@ export function ImportExistingAlby() {
   const [activated, setActivated] = React.useState(fixture?.activated ?? false);
   const [unlockPassword, setUnlockPassword] = React.useState("");
   const [nodeConfirmation, setNodeConfirmation] = React.useState("");
+  const [activationConfirmation, setActivationConfirmation] =
+    React.useState("");
+  const [activationAcknowledged, setActivationAcknowledged] =
+    React.useState(false);
+  const [activationReviewOpen, setActivationReviewOpen] = React.useState(false);
   const [sourceConfirmed, setSourceConfirmed] = React.useState(false);
   const [migrationProgress, setMigrationProgress] = React.useState("");
 
@@ -389,12 +396,27 @@ export function ImportExistingAlby() {
       );
       if (response) {
         setVerified(response);
+        let migrationStatus: MigrationStatus | undefined;
+        try {
+          migrationStatus = await request<MigrationStatus>(
+            "/api/import-existing-alby/status"
+          );
+        } catch {
+          // Verification is already durable. A reload recovers the
+          // server-derived activation phrase without repeating the check.
+        }
         setStatus((current) =>
-          current
-            ? { ...current, phase: "verified", verification: response }
+          migrationStatus?.active
+            ? migrationStatus
             : current
+              ? { ...current, phase: "verified", verification: response }
+              : current
         );
+        setUnlockPassword("");
         setNodeConfirmation("");
+        setActivationConfirmation("");
+        setActivationAcknowledged(false);
+        setActivationReviewOpen(false);
       }
     } catch (error) {
       setUnlockPassword("");
@@ -406,6 +428,13 @@ export function ImportExistingAlby() {
 
   async function activateImport(event: React.FormEvent) {
     event.preventDefault();
+    if (
+      !window.confirm(
+        "Start Lightning networking for this copied wallet now? This leaves offline verification and connects the verified node to its Bitcoin network."
+      )
+    ) {
+      return;
+    }
     try {
       setLoading(true);
       await request("/api/import-existing-alby/activate", {
@@ -414,13 +443,21 @@ export function ImportExistingAlby() {
         body: JSON.stringify({
           unlockPassword,
           nodeIdConfirmation: nodeConfirmation.trim(),
+          activationConfirmation: activationConfirmation.trim(),
         }),
       });
       setUnlockPassword("");
       setNodeConfirmation("");
+      setActivationConfirmation("");
+      setActivationAcknowledged(false);
+      setActivationReviewOpen(false);
       setActivated(true);
     } catch (error) {
       setUnlockPassword("");
+      setNodeConfirmation("");
+      setActivationConfirmation("");
+      setActivationAcknowledged(false);
+      setActivationReviewOpen(false);
       try {
         const migrationStatus = await request<MigrationStatus>(
           "/api/import-existing-alby/status"
@@ -600,6 +637,13 @@ export function ImportExistingAlby() {
   if (status?.active) {
     const blocked = status.phase === "blocked";
     const activationFailed = status.phase === "activation_failed";
+    const requiresOfflineVerification =
+      !verified || status.phase === "verification_needed" || activationFailed;
+    const activationConfirmationText = status.activationConfirmation || "";
+    const activationNetworkLabel =
+      verified?.network === "bitcoin"
+        ? "Bitcoin mainnet"
+        : verified?.network || "the selected Bitcoin network";
     return (
       <Container>
         <title>Verify migration · Grynvault Rebalance</title>
@@ -683,9 +727,9 @@ export function ImportExistingAlby() {
               </p>
               <p className="text-muted-foreground">
                 The copied wallet remains offline and its successful
-                verification is preserved. Restore network access, then retry
-                below; Grynvault will repeat the password, wallet-continuity,
-                and source-process checks before it starts Lightning.
+                verification evidence is preserved. Restore network access, then
+                verify again below. A failed activation cannot be retried from
+                the old confirmation.
               </p>
             </div>
           )}
@@ -714,7 +758,7 @@ export function ImportExistingAlby() {
             original Alby Hub yourself only after Grynvault has fully closed.
           </p>
 
-          {!blocked && !verified && (
+          {!blocked && requiresOfflineVerification && (
             <form className="grid gap-4" onSubmit={verifyImport}>
               <div className="grid gap-1.5">
                 <Label htmlFor="migration-password">
@@ -736,7 +780,9 @@ export function ImportExistingAlby() {
                 loading={loading}
                 disabled={!unlockPassword}
               >
-                Verify wallet offline
+                {activationFailed
+                  ? "Re-verify wallet offline"
+                  : "Verify wallet offline"}
               </LoadingButton>
             </form>
           )}
@@ -866,48 +912,154 @@ export function ImportExistingAlby() {
                 </div>
               )}
 
-              <form className="grid gap-4" onSubmit={activateImport}>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="activation-password">
-                    Existing unlock password
-                  </Label>
-                  <PasswordInput
-                    id="activation-password"
-                    value={unlockPassword}
-                    onChange={setUnlockPassword}
-                  />
+              {status.phase === "verified" && !activationReviewOpen && (
+                <div className="grid gap-3 rounded-lg border p-4">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheckIcon className="mt-0.5 size-5 shrink-0 text-primary" />
+                    <div>
+                      <h2 className="font-semibold">
+                        Offline verification is complete
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        The copied wallet remains offline. Activation is a
+                        separate step and is not required to preserve this
+                        verified result.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!activationConfirmationText}
+                    onClick={() => {
+                      setUnlockPassword("");
+                      setNodeConfirmation("");
+                      setActivationConfirmation("");
+                      setActivationAcknowledged(false);
+                      setActivationReviewOpen(true);
+                    }}
+                  >
+                    Review network activation
+                  </Button>
+                  {!activationConfirmationText && (
+                    <p className="text-xs text-muted-foreground">
+                      Reload Grynvault to recover the server-validated
+                      activation phrase.
+                    </p>
+                  )}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="node-confirmation">
-                    Confirm the complete node ID
-                  </Label>
-                  <Input
-                    id="node-confirmation"
-                    value={nodeConfirmation}
-                    onChange={(event) =>
-                      setNodeConfirmation(event.target.value)
-                    }
-                    className="font-mono text-xs"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <p className="break-all text-xs text-muted-foreground">
-                    Type or locally copy: {verified.nodeId}
-                  </p>
-                </div>
-                <LoadingButton
-                  type="submit"
-                  loading={loading}
-                  disabled={
-                    !unlockPassword ||
-                    nodeConfirmation.trim() !== verified.nodeId
-                  }
+              )}
+
+              {status.phase === "verified" && activationReviewOpen && (
+                <form
+                  className="grid gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4"
+                  onSubmit={activateImport}
                 >
-                  {activationFailed
-                    ? "Retry activation and connect Lightning"
-                    : "Activate this wallet and connect Lightning"}
-                </LoadingButton>
-              </form>
+                  <div className="grid gap-1">
+                    <h2 className="font-semibold text-destructive">
+                      Connect this copied wallet to {activationNetworkLabel}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      This starts Lightning networking for the verified node.
+                      Keep the source Alby Hub fully stopped. Verification
+                      expires after five minutes, and any failed attempt
+                      requires another offline verification.
+                    </p>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="activation-password">
+                      Re-enter the existing unlock password
+                    </Label>
+                    <PasswordInput
+                      id="activation-password"
+                      value={unlockPassword}
+                      onChange={setUnlockPassword}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="node-confirmation">
+                      Confirm the complete node ID
+                    </Label>
+                    <Input
+                      id="node-confirmation"
+                      value={nodeConfirmation}
+                      onChange={(event) =>
+                        setNodeConfirmation(event.target.value)
+                      }
+                      className="font-mono text-xs"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p className="break-all text-xs text-muted-foreground">
+                      Type or locally copy: {verified.nodeId}
+                    </p>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="activation-confirmation">
+                      Type the network activation phrase
+                    </Label>
+                    <Input
+                      id="activation-confirmation"
+                      value={activationConfirmation}
+                      onChange={(event) =>
+                        setActivationConfirmation(event.target.value)
+                      }
+                      className="font-mono text-xs"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p className="break-all text-xs text-muted-foreground">
+                      Type exactly: {activationConfirmationText}
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="activation-acknowledgement"
+                      checked={activationAcknowledged}
+                      onCheckedChange={(checked) =>
+                        setActivationAcknowledged(checked === true)
+                      }
+                    />
+                    <Label
+                      htmlFor="activation-acknowledgement"
+                      className="text-sm font-normal leading-5"
+                    >
+                      I understand this leaves offline verification and starts
+                      the copied production wallet on {activationNetworkLabel}.
+                    </Label>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setUnlockPassword("");
+                        setNodeConfirmation("");
+                        setActivationConfirmation("");
+                        setActivationAcknowledged(false);
+                        setActivationReviewOpen(false);
+                      }}
+                    >
+                      Keep wallet offline
+                    </Button>
+                    <LoadingButton
+                      type="submit"
+                      variant="destructive"
+                      loading={loading}
+                      disabled={
+                        !activationAcknowledged ||
+                        !unlockPassword ||
+                        nodeConfirmation.trim() !== verified.nodeId ||
+                        activationConfirmation.trim() !==
+                          activationConfirmationText
+                      }
+                    >
+                      Connect verified wallet now
+                    </LoadingButton>
+                  </div>
+                </form>
+              )}
             </>
           )}
         </div>
