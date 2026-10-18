@@ -1,6 +1,7 @@
 package wails
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -26,4 +27,19 @@ func userHomeOutsideSandbox(home string) string {
 		return home
 	}
 	return filepath.Dir(libraryDirectory)
+}
+
+func legacyAlbyWorkdirFromSelection(selection string) (string, error) {
+	selection = filepath.Clean(selection)
+	info, err := os.Stat(selection)
+	if err != nil {
+		return "", fmt.Errorf("selected Alby Hub path could not be inspected: %w", err)
+	}
+	if info.IsDir() {
+		return selection, nil
+	}
+	if filepath.Base(selection) != "albyhub.db" {
+		return "", fmt.Errorf("select the albyhub.db file inside the Alby Hub data folder")
+	}
+	return filepath.Dir(selection), nil
 }

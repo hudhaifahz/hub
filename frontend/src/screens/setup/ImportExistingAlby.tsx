@@ -1127,6 +1127,11 @@ export function ImportExistingAlby() {
               ? "Choose another Alby data folder"
               : "Choose folder"}
           </LoadingButton>
+          <p className="text-xs text-muted-foreground">
+            On macOS, choose the <span className="font-mono">albyhub.db</span>{" "}
+            file inside the data folder. Grynvault will use its containing
+            folder and run the same read-only validation.
+          </p>
         </div>
 
         {source?.ready && source.counts && (

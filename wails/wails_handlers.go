@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -1134,16 +1135,33 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		if _, statErr := os.Stat(defaultDirectory); statErr != nil {
 			defaultDirectory, _ = os.UserHomeDir()
 		}
-		selectedDirectory, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
-			Title:            "Select your existing Alby Hub data folder",
-			DefaultDirectory: defaultDirectory,
-		})
-		if err != nil {
-			logger.Logger.WithError(err).Error("Failed to open Alby Hub data folder picker")
+		selectedPath := ""
+		var pickerErr error
+		if goruntime.GOOS == "darwin" {
+			// Wails v2 directory panels can render every folder as navigable-only
+			// on current macOS releases, leaving the Open button disabled. A wallet
+			// database is an unambiguous, non-secret marker for the data directory.
+			selectedPath, pickerErr = runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
+				Title:            "Select albyhub.db inside your existing Alby Hub data folder",
+				DefaultDirectory: defaultDirectory,
+				DefaultFilename:  "albyhub.db",
+			})
+		} else {
+			selectedPath, pickerErr = runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+				Title:            "Select your existing Alby Hub data folder",
+				DefaultDirectory: defaultDirectory,
+			})
+		}
+		if pickerErr != nil {
+			logger.Logger.WithError(pickerErr).Error("Failed to open Alby Hub data folder picker")
 			return WailsRequestRouterResponse{Body: nil, Error: "failed to open the Alby Hub folder picker"}
 		}
-		if selectedDirectory == "" {
+		if selectedPath == "" {
 			return WailsRequestRouterResponse{Body: guidedImportSelectionResponse{Cancelled: true}, Error: ""}
+		}
+		selectedDirectory, err := legacyAlbyWorkdirFromSelection(selectedPath)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		summary, err := guidedmigration.InspectSource(selectedDirectory)
 		if err != nil {
