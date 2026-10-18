@@ -1,6 +1,6 @@
 # Exact-channel upstream contribution package
 
-Status: **PREPARED — NO PULL REQUEST CREATED**
+Status: **LDK NODE DRAFT PR OPEN — DEPENDENT PRS NOT CREATED**
 
 Prepared: 2026-10-18
 
@@ -33,8 +33,7 @@ that audit immediately before creating each PR.
 
 ## Existing public state
 
-This correction did not publish or rewrite anything. The public state that
-predated it is:
+The current public state is:
 
 - the immutable annotated tag `grynvault-rebalance-v0.1.0-rc.6`, resolving to
   exact source commit `408c74f9b06664b156df298e6fd6841a3a4db2b7`;
@@ -44,9 +43,10 @@ predated it is:
 - the three maintained `codex/exact-channel-rebalance-v1243` branches listed
   above at their public-fork heads, plus older superseded development branches
   retained on the forks;
-- no pull request in any contributor fork and no pull request submitted from
-  these branches to `getAlby/ldk-node`, `getAlby/ldk-node-go`, or
-  `getAlby/hub`.
+- draft PR [getAlby/ldk-node#115](https://github.com/getAlby/ldk-node/pull/115)
+  from exact head `ed72fe992174965bc917d1dc6c6bee1dc7368057` into
+  `getAlby/ldk-node:main`;
+- no pull request submitted to `getAlby/ldk-node-go` or `getAlby/hub`.
 
 The Nostr and Stacker News text remains draft-only under
 `ANNOUNCEMENT_DRAFTS.md`.
@@ -85,6 +85,13 @@ provenance, target-native binding tests, full CI, or maintainer review.
 
 ### 1. LDK Node
 
+Status: **OPEN AS DRAFT** —
+[getAlby/ldk-node#115](https://github.com/getAlby/ldk-node/pull/115)
+
+GitHub reports the PR as mergeable. The five upstream workflows are currently
+in `action_required` with no jobs created, consistent with GitHub requiring an
+upstream maintainer to approve first-time-contributor workflow execution.
+
 Proposed title:
 
 ```text
@@ -120,7 +127,7 @@ Add a fail-closed circular-payment flow that can quote an exact local first and 
 This is the first PR in a three-part stack: ldk-node, generated ldk-node-go bindings, then Alby Hub integration.
 ```
 
-Before submission:
+Before marking ready for review:
 
 - refresh against `getAlby/ldk-node:main` immediately before submission and
   stop if the zero-behind/clean-merge audit changes;
@@ -249,7 +256,8 @@ reconciliation.
 
 ## Final owner gate
 
-Creating any of these pull requests is a public action. Before creation, show
-the owner the refreshed base and head SHAs, final diff stats, dependency links,
-test evidence, exact PR title/body, and whether the PR is draft or ready for
-review. Opening one PR does not authorize either dependent PR.
+Creating either dependent pull request or marking PR #115 ready for review is a
+separate public action. Before either action, show the owner the refreshed base
+and head SHAs, final diff stats, dependency links, test evidence, exact PR
+title/body, and intended review state. Opening PR #115 does not authorize either
+dependent PR.
