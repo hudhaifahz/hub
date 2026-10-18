@@ -531,12 +531,14 @@ The first successor attempt added a second `sandbox-exec` layer, but package
 acceptance proved that macOS will not layer that profile with the application's
 signed App Sandbox in either order. It failed closed before database open.
 
-The corrected successor uses an acceptance-only ad-hoc App Sandbox seal that
-omits outbound-network permission. Before desktop locks, database access, and
-service initialization, it requires a permission-restricted authority sidecar
-bound to the canonical disposable path, sets the exact work directory
-internally, and requires an external test dial to fail with `EPERM` or
+The corrected successor preserves the exact packaged executable in an
+acceptance-only copy, applies a certificate-free seal with no application
+entitlements, and launches that copy directly under the reviewed process
+profile. Before desktop locks, database access, and service initialization, it
+requires a permission-restricted authority sidecar bound to the canonical
+disposable path, sets the exact work directory internally, and requires both
+an external test dial and a non-loopback bind to fail with `EPERM` or
 `EACCES`. Missing flags, partial flags, duplicate flags, a symlink target,
-permissive filesystem modes, a stale or mismatched authority file, or
-unproven outbound denial all fail before a wallet database can open. Migration
-restarts inherit and re-check the same boundary.
+permissive filesystem modes, a stale or mismatched authority file, or either
+unproven denial fails before a wallet database can open. Migration restarts
+inherit and re-check the same boundary.

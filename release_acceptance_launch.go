@@ -164,5 +164,14 @@ func verifyReleaseAcceptanceNetworkDenied() error {
 		return fmt.Errorf("release-acceptance external-network denial is not proven: %w", err)
 	}
 
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if listener != nil {
+		_ = listener.Close()
+		return errors.New("release-acceptance boundary allowed a non-loopback bind")
+	}
+	if !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.EACCES) {
+		return fmt.Errorf("release-acceptance non-loopback bind denial is not proven: %w", err)
+	}
+
 	return nil
 }

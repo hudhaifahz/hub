@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,6 +241,17 @@ func TestReleaseAcceptanceSandboxHelper(t *testing.T) {
 	if err := prepareReleaseAcceptanceLaunch([]string{os.Args[0]}); err != nil {
 		t.Fatalf("prepare sandboxed acceptance launch: %v", err)
 	}
+
+	for _, address := range desktopLockAddresses {
+		loopback, err := net.Listen("tcp", address)
+		if err != nil {
+			t.Fatalf("acceptance sandbox blocked loopback ownership listener %s: %v", address, err)
+		}
+		if err = loopback.Close(); err != nil {
+			t.Fatalf("close loopback ownership listener %s: %v", address, err)
+		}
+	}
+
 }
 
 func TestReleaseAcceptanceNetworkSandboxIntegration(t *testing.T) {
@@ -249,10 +261,8 @@ func TestReleaseAcceptanceNetworkSandboxIntegration(t *testing.T) {
 	workdir := createReleaseAcceptanceTarget(t)
 	command := exec.Command(
 		"/usr/bin/sandbox-exec",
-		"-p",
-		`(version 1)
-(allow default)
-(deny network-outbound (remote ip "*:*"))`,
+		"-f",
+		"build/darwin/release-acceptance.sb",
 		os.Args[0],
 		"-test.run=^TestReleaseAcceptanceSandboxHelper$",
 	)

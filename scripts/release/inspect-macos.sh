@@ -128,29 +128,36 @@ fi
 if [[ -n "$signing_mode" ]]; then
   codesign --verify --strict --verbose=2 "$ldk_path"
   codesign --verify --deep --strict --verbose=2 "$app_path"
-  codesign -d --entitlements - --xml "$app_path" >"$entitlements_path" 2>/dev/null
-  plutil -lint "$entitlements_path" >/dev/null
-  for entitlement in \
-    com.apple.security.app-sandbox \
-    com.apple.security.network.server \
-    com.apple.security.files.downloads.read-write \
-    com.apple.security.files.user-selected.read-write; do
-    entitlement_key_path="${entitlement//./\\.}"
-    if [[ "$(plutil -extract "$entitlement_key_path" raw -o - "$entitlements_path" 2>/dev/null || true)" != "true" ]]; then
-      echo "required entitlement is missing or false: $entitlement" >&2
-      exit 1
-    fi
-  done
-
-  network_client_enabled="$(plutil -extract 'com\.apple\.security\.network\.client' raw -o - "$entitlements_path" 2>/dev/null || true)"
   if [[ "$signing_mode" == "--require-acceptance-adhoc" ]]; then
-    if [[ "$network_client_enabled" == "true" ]]; then
-      echo "acceptance candidate unexpectedly permits outbound networking" >&2
-      exit 1
+    codesign -d --entitlements - --xml "$app_path" >"$entitlements_path" 2>/dev/null || true
+    if [[ -s "$entitlements_path" ]]; then
+      plutil -lint "$entitlements_path" >/dev/null
+      for entitlement in \
+        com.apple.security.app-sandbox \
+        com.apple.security.network.client \
+        com.apple.security.network.server; do
+        entitlement_key_path="${entitlement//./\\.}"
+        if [[ "$(plutil -extract "$entitlement_key_path" raw -o - "$entitlements_path" 2>/dev/null || true)" == "true" ]]; then
+          echo "acceptance process wrapper unexpectedly retains entitlement: $entitlement" >&2
+          exit 1
+        fi
+      done
     fi
-  elif [[ "$network_client_enabled" != "true" ]]; then
-    echo "required entitlement is missing or false: com.apple.security.network.client" >&2
-    exit 1
+  else
+    codesign -d --entitlements - --xml "$app_path" >"$entitlements_path" 2>/dev/null
+    plutil -lint "$entitlements_path" >/dev/null
+    for entitlement in \
+      com.apple.security.app-sandbox \
+      com.apple.security.network.client \
+      com.apple.security.network.server \
+      com.apple.security.files.downloads.read-write \
+      com.apple.security.files.user-selected.read-write; do
+      entitlement_key_path="${entitlement//./\\.}"
+      if [[ "$(plutil -extract "$entitlement_key_path" raw -o - "$entitlements_path" 2>/dev/null || true)" != "true" ]]; then
+        echo "required entitlement is missing or false: $entitlement" >&2
+        exit 1
+      fi
+    done
   fi
   signing_details="$(codesign -dv --verbose=4 "$app_path" 2>&1)"
   ldk_signing_details="$(codesign -dv --verbose=4 "$ldk_path" 2>&1)"
@@ -207,6 +214,6 @@ if [[ "$signing_mode" == "--require-adhoc" || "$signing_mode" == "--require-acce
   echo "signing identity: ad-hoc only (no publisher identity, notarization, or Gatekeeper trust)"
 fi
 if [[ "$signing_mode" == "--require-acceptance-adhoc" ]]; then
-  echo "acceptance network client entitlement: absent"
+  echo "acceptance process-wrapper entitlements: absent"
 fi
 echo "bundle inspection passed"

@@ -28,9 +28,12 @@ require_literal '//go:build wails && !bindings' main_wails.go
 require_literal 'prepareReleaseAcceptanceLaunch(os.Args)' main_wails.go
 require_literal 'verifyReleaseAcceptanceNetworkDenied()' release_acceptance_launch.go
 require_literal 'verifyReleaseAcceptanceBoundaryPlatform()' release_acceptance_launch_darwin.go
-require_literal '<key>com.apple.security.app-sandbox</key>' build/darwin/entitlements.acceptance.plist
-require_literal '<key>com.apple.security.network.server</key>' build/darwin/entitlements.acceptance.plist
+require_literal '(deny network-outbound (remote ip))' build/darwin/release-acceptance.sb
+require_literal '(require-not (local tcp "*:21420"))' build/darwin/release-acceptance.sb
+require_literal '(require-not (local tcp "*:21421"))' build/darwin/release-acceptance.sb
+require_literal 'codesign --force --sign - "$app_path"' scripts/release/build-macos-acceptance.sh
 require_literal '--require-acceptance-adhoc' scripts/release/build-macos-acceptance.sh
+require_literal '/usr/bin/nohup /usr/bin/sandbox-exec' scripts/release/launch-macos-acceptance.sh
 require_literal '--grynvault-release-acceptance-network-dark' scripts/release/launch-macos-acceptance.sh
 require_literal '127.0.0.1:21421' desktop_locks.go
 require_literal '127.0.0.1:21420' desktop_locks.go
@@ -45,8 +48,8 @@ if grep -nE 'com\.getalby\.' build/darwin/Info.plist build/darwin/Info.dev.plist
   echo "official Alby bundle identity remains in Grynvault identity files" >&2
   exit 1
 fi
-if grep -Fq 'com.apple.security.network.client' build/darwin/entitlements.acceptance.plist; then
-  echo "acceptance entitlements permit outbound networking" >&2
+if grep -Fq -- '--entitlements' scripts/release/build-macos-acceptance.sh; then
+  echo "acceptance process wrapper unexpectedly retains app entitlements" >&2
   exit 1
 fi
 if grep -R -n -F -- 'https://getalby.com/update/hub' frontend/src; then
