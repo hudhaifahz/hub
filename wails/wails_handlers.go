@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
-	goruntime "runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -1122,6 +1122,33 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 		summary.DefaultLocation = true
 		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/inspect":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+
+		request := &guidedImportSourceRequest{}
+		if err = json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid guided import source request"}
+		}
+		selectedPath := strings.TrimSpace(request.SourcePath)
+		if selectedPath == "" {
+			return WailsRequestRouterResponse{Body: nil, Error: "enter the Alby Hub data folder path"}
+		}
+		selectedDirectory, err := legacyAlbyWorkdirFromSelection(selectedPath)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		summary, err := guidedmigration.InspectSource(selectedDirectory)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		summary.DefaultLocation = filepath.Clean(summary.SourcePath) == filepath.Clean(canonicalLegacyAlbyWorkdir())
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
 	case "POST /api/import-existing-alby/select":
 		info, err := app.api.GetInfo(ctx)
 		if err != nil {
@@ -1135,23 +1162,10 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		if _, statErr := os.Stat(defaultDirectory); statErr != nil {
 			defaultDirectory, _ = os.UserHomeDir()
 		}
-		selectedPath := ""
-		var pickerErr error
-		if goruntime.GOOS == "darwin" {
-			// Wails v2 directory panels can render every folder as navigable-only
-			// on current macOS releases, leaving the Open button disabled. A wallet
-			// database is an unambiguous, non-secret marker for the data directory.
-			selectedPath, pickerErr = runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
-				Title:            "Select albyhub.db inside your existing Alby Hub data folder",
-				DefaultDirectory: defaultDirectory,
-				DefaultFilename:  "albyhub.db",
-			})
-		} else {
-			selectedPath, pickerErr = runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
-				Title:            "Select your existing Alby Hub data folder",
-				DefaultDirectory: defaultDirectory,
-			})
-		}
+		selectedPath, pickerErr := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+			Title:            "Select your existing Alby Hub data folder",
+			DefaultDirectory: defaultDirectory,
+		})
 		if pickerErr != nil {
 			logger.Logger.WithError(pickerErr).Error("Failed to open Alby Hub data folder picker")
 			return WailsRequestRouterResponse{Body: nil, Error: "failed to open the Alby Hub folder picker"}

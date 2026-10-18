@@ -24,6 +24,7 @@ func TestGuidedMigrationRouteAllowlist(t *testing.T) {
 		{"POST", "/api/start"},
 		{"POST", "/api/setup"},
 		{"POST", "/api/payments"},
+		{"POST", "/api/import-existing-alby/inspect"},
 		{"POST", "/api/import-existing-alby/stage"},
 		{"GET", "/api/health"},
 		{"DELETE", "/api/apps/1"},

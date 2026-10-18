@@ -289,6 +289,9 @@ export function ImportExistingAlby() {
   const [source, setSource] = React.useState<SourceSummary | undefined>(
     fixture?.source
   );
+  const [sourcePathInput, setSourcePathInput] = React.useState(
+    fixture?.source?.sourcePath ?? ""
+  );
   const [stageResult, setStageResult] = React.useState<StageResult>();
   const [verified, setVerified] = React.useState<
     VerificationSummary | undefined
@@ -303,6 +306,10 @@ export function ImportExistingAlby() {
   const [activationReviewOpen, setActivationReviewOpen] = React.useState(false);
   const [sourceConfirmed, setSourceConfirmed] = React.useState(false);
   const [migrationProgress, setMigrationProgress] = React.useState("");
+  const isMacOS = React.useMemo(
+    () => navigator.userAgent.includes("Macintosh"),
+    []
+  );
 
   const loadInitialState = React.useCallback(async () => {
     if (!desktop || fixture) {
@@ -322,12 +329,12 @@ export function ImportExistingAlby() {
         { method: "POST" }
       );
       if (discovered) {
-        // Check again when React applies the update. Discovery may have
-        // resolved just before the owner opened the picker while its state
-        // update was still queued.
-        setSource((current) =>
-          manualSourceSelectionStarted.current ? current : discovered
-        );
+        // Discovery may resolve just before the owner starts entering a custom
+        // path. Never replace a path the owner has begun choosing explicitly.
+        if (!manualSourceSelectionStarted.current) {
+          setSource(discovered);
+          setSourcePathInput(discovered.sourcePath);
+        }
       }
     } catch (error) {
       handleRequestError("Could not inspect Alby Hub", error);
@@ -357,10 +364,37 @@ export function ImportExistingAlby() {
       );
       if (response && !response.cancelled && response.summary) {
         setSource(response.summary);
+        setSourcePathInput(response.summary.sourcePath);
         setSourceConfirmed(false);
       }
     } catch (error) {
       handleRequestError("Could not inspect the selected folder", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function inspectSourcePath(event: React.FormEvent) {
+    event.preventDefault();
+    manualSourceSelectionStarted.current = true;
+    try {
+      setLoading(true);
+      setMigrationProgress("");
+      const inspected = await request<SourceSummary>(
+        "/api/import-existing-alby/inspect",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourcePath: sourcePathInput }),
+        }
+      );
+      if (inspected) {
+        setSource(inspected);
+        setSourcePathInput(inspected.sourcePath);
+        setSourceConfirmed(false);
+      }
+    } catch (error) {
+      handleRequestError("Could not inspect the entered location", error);
     } finally {
       setLoading(false);
     }
@@ -1117,21 +1151,51 @@ export function ImportExistingAlby() {
               )}
             </div>
           </div>
-          <LoadingButton
-            type="button"
-            variant="secondary"
-            loading={loading}
-            onClick={chooseSource}
-          >
-            {source?.ready
-              ? "Choose another Alby data folder"
-              : "Choose folder"}
-          </LoadingButton>
-          <p className="text-xs text-muted-foreground">
-            On macOS, choose the <span className="font-mono">albyhub.db</span>{" "}
-            file inside the data folder. Grynvault will use its containing
-            folder and run the same read-only validation.
-          </p>
+          {isMacOS ? (
+            <form className="grid gap-2" onSubmit={inspectSourcePath}>
+              <Label htmlFor="alby-source-path">
+                Alby Hub data folder location
+              </Label>
+              <Input
+                id="alby-source-path"
+                value={sourcePathInput}
+                onChange={(event) => {
+                  manualSourceSelectionStarted.current = true;
+                  setSourcePathInput(event.target.value);
+                  setSource(undefined);
+                  setSourceConfirmed(false);
+                }}
+                placeholder="Paste the Alby Hub data folder path"
+                className="font-mono text-xs"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className="text-xs text-muted-foreground">
+                In Finder, select the folder and press Option-Command-C to copy
+                its pathname. You may also paste the path to its albyhub.db
+                file. Nothing is copied during this check.
+              </p>
+              <LoadingButton
+                type="submit"
+                variant="secondary"
+                loading={loading}
+                disabled={!sourcePathInput.trim()}
+              >
+                Check this location
+              </LoadingButton>
+            </form>
+          ) : (
+            <LoadingButton
+              type="button"
+              variant="secondary"
+              loading={loading}
+              onClick={chooseSource}
+            >
+              {source?.ready
+                ? "Choose another Alby data folder"
+                : "Choose folder"}
+            </LoadingButton>
+          )}
         </div>
 
         {source?.ready && source.counts && (

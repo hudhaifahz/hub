@@ -22,7 +22,8 @@ The normal journey is:
 
 1. Grynvault finds the standard Alby Hub data directory automatically.
 2. If it is elsewhere, the person chooses the Alby Hub application-data folder
-   or exact `WORK_DIR` using the native folder picker.
+   or exact `WORK_DIR`. macOS accepts a locally copied Finder pathname so the
+   flow does not depend on a native picker that may disable confirmation.
 3. Grynvault identifies and validates the wallet, checks for competing copies,
    and presents a plain-language summary before copying anything.
 4. Grynvault creates a recovery snapshot, stages a byte-verified copy, and
@@ -70,8 +71,9 @@ The importer must:
 - check the standard macOS Alby Hub container location;
 - recognize selection of an app container, `Data` directory, Application
   Support directory, `albyhub` directory, or exact custom `WORK_DIR`;
-- provide **Choose another Alby data folder** for arbitrary paths, including
-  external volumes and paths containing spaces;
+- provide an in-app macOS path check and a native folder picker on supported
+  platforms for arbitrary paths, including external volumes and paths
+  containing spaces;
 - remember no sensitive path remotely and never upload directory metadata;
 - avoid recursive whole-disk searches;
 - inspect known Grynvault and Alby locations for competing copies of the same
@@ -276,7 +278,8 @@ Requirements across all supported window sizes:
   signed manifest have been published.
 - Publish only synthetic screenshots and redacted fixture evidence.
 - Explain the difference between live migration and disaster recovery.
-- Document custom `WORK_DIR` selection for macOS and future platforms.
+- Document custom `WORK_DIR` selection, including Finder pathname copy on
+  macOS and native folder selection on supported platforms.
 
 ## Verification matrix
 
@@ -469,8 +472,8 @@ network-quarantined, deliberately activate it, and see the expected node and
 channels—with recovery evidence available and the former source prevented from
 running concurrently.
 
-Copy success, a green unit test, a working folder picker, a build, or an empty
-fresh-wallet launch is not completion.
+Copy success, a green unit test, a working source-location control, a build, or
+an empty fresh-wallet launch is not completion.
 
 ## 2026-10-16 implementation evidence
 

@@ -11,6 +11,10 @@ type guidedImportStageRequest struct {
 	SourcePath string `json:"sourcePath"`
 }
 
+type guidedImportSourceRequest struct {
+	SourcePath string `json:"sourcePath"`
+}
+
 type guidedImportVerifyRequest struct {
 	UnlockPassword string `json:"unlockPassword"`
 }

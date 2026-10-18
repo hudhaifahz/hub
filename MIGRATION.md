@@ -33,9 +33,11 @@ on a locally attached external volume. Both source and destination must be on
 filesystems macOS identifies as local; the importer rejects network-mounted
 folders before it stages any data.
 
-The macOS picker asks for the `albyhub.db` marker file inside a custom data
-folder. Grynvault resolves its containing folder and applies the same read-only
-source checks; it never treats the selected database alone as a wallet backup.
+For a custom macOS location, copy the data folder pathname in Finder with
+Option-Command-C and paste it into Grynvault. The `albyhub.db` file path is also
+accepted. Grynvault resolves the containing folder and applies the same
+read-only source checks; it never treats the selected database alone as a
+wallet backup.
 
 On Windows and Linux, the directory picker accepts any of these levels and
 resolves the actual wallet folder:
@@ -47,7 +49,8 @@ resolves the actual wallet folder:
 - the exact `WORK_DIR` containing `nwc.db` and
   `ldk/storage/ldk_node_data.sqlite`.
 
-On macOS, open the exact `WORK_DIR` and select its `albyhub.db` file.
+On macOS, paste any of those directory levels or the exact `WORK_DIR`'s
+`albyhub.db` path.
 
 Paths with spaces and Unicode are supported. Grynvault does not recursively
 search the computer and does not upload the selected path.
