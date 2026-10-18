@@ -5,10 +5,12 @@ Status: **PREPARED — NO PULL REQUEST CREATED**
 Prepared: 2026-10-18
 
 This is a three-repository contribution and must be reviewed in dependency
-order. The prepared `codex/exact-channel-rebalance-v1243` branches already
+order. The maintained `codex/exact-channel-rebalance-v1243` branches already
 exist on the contributor forks from prior work and are based directly on the
-current upstream tips. No branch was rewritten or pushed while correcting this
-package.
+current upstream tips. A four-line generated-header whitespace cleanup is
+committed locally in `ldk-node-go` at `c9aa670f446dcce7713802c7d4c1bd8539ba6a78`
+but has not been pushed. No public branch was rewritten or pushed while
+correcting this package.
 
 Grynvault branding, guided migration, release packaging, PGP workflow, updater
 policy, and companion service are deliberately excluded from the upstream
@@ -16,11 +18,11 @@ feature contribution.
 
 ## Current branch audit
 
-| Order | Repository            | Base branch | Prepared head                                                  | Upstream at audit | Divergence                                | Merge audit |
-| ----- | --------------------- | ----------- | -------------------------------------------------------------- | ----------------- | ----------------------------------------- | ----------- |
-| 1     | `getAlby/ldk-node`    | `main`      | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `ed72fe9`  | `553a2105`        | 0 upstream-only / 25 feature-only commits | clean       |
-| 2     | `getAlby/ldk-node-go` | `master`    | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `3228bdb`  | `25822674`        | 0 upstream-only / 2 feature-only commits  | clean       |
-| 3     | `getAlby/hub`         | `master`    | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `cd6bc1e3` | `5d5e696d`        | 0 upstream-only / 26 feature-only commits | clean       |
+| Order | Repository            | Base branch | Prepared local head | Public fork head | Upstream at audit | Divergence                                | Merge audit |
+| ----- | --------------------- | ----------- | ------------------- | ---------------- | ----------------- | ----------------------------------------- | ----------- |
+| 1     | `getAlby/ldk-node`    | `main`      | `ed72fe9`           | `ed72fe9`        | `553a2105`        | 0 upstream-only / 25 feature-only commits | clean       |
+| 2     | `getAlby/ldk-node-go` | `master`    | `c9aa670`           | `3228bdb`        | `25822674`        | 0 upstream-only / 3 local-only commits    | clean       |
+| 3     | `getAlby/hub`         | `master`    | `cd6bc1e3`          | `cd6bc1e3`       | `5d5e696d`        | 0 upstream-only / 26 feature-only commits | clean       |
 
 An earlier preparation pass incorrectly audited the superseded
 `feat/exact-channel-rebalance` branches. Those older branches are behind and do
@@ -40,7 +42,8 @@ predated it is:
   source archive, SBOM, SHA-256 material, release public key, and detached PGP
   signature;
 - the three maintained `codex/exact-channel-rebalance-v1243` branches listed
-  above, plus older superseded development branches retained on the forks;
+  above at their public-fork heads, plus older superseded development branches
+  retained on the forks;
 - no pull request in any contributor fork and no pull request submitted from
   these branches to `getAlby/ldk-node`, `getAlby/ldk-node-go`, or
   `getAlby/hub`.
@@ -52,16 +55,28 @@ The Nostr and Stacker News text remains draft-only under
 
 These checks ran against the maintained v1.24.3 contribution heads:
 
-- LDK Node: `cargo fmt --check` passed and `cargo test --lib` passed all 47
-  tests.
+- LDK Node: `cargo fmt --all -- --check` passed. The repository's actual CI
+  warning-denied development and release builds passed both with default
+  features and with UniFFI enabled using the repository's documented 0.7
+  deprecation exception. The default library suite passed all 47 tests and the
+  all-features library suite passed all 57 tests. The local full integration
+  command reached the 35 bitcoind-backed tests but could not run them because
+  the CI-provisioned `BITCOIND_EXE` was not installed locally; all failed at
+  the common environment precondition before test logic.
 - LDK Node Go: `go test ./...` passed; the repository currently contains no Go
-  test files. The committed macOS library is a universal x86-64/arm64 Mach-O.
-  Target-library binding smoke tests remain a release and PR requirement.
-- Hub: focused `api`, `lnclient/ldk`, `wails`, and database-migration tests
+  test files. The committed macOS library is a universal x86-64/arm64 Mach-O,
+  and the required circular-payment symbols are exported. The local whitespace
+  cleanup at `c9aa670` makes `git diff --check` pass. Target-native Linux and
+  Windows library generation and binding smoke tests remain PR requirements.
+- Hub: the full `GOWORK=off go test ./...` suite passed. Race-enabled tests for
+  the changed API, database, HTTP, LDK-client, migration, and Wails packages
   passed. Frontend ESLint, TypeScript, Prettier, and the Wails production build
-  passed. The build retained the inherited oversized-chunk and `lottie-web`
-  direct-`eval` warnings. Local Go linking also reported the known Bark native
-  objects' macOS 15.4 deployment target while the ad-hoc test link used 15.0.
+  passed. Full `go vet ./...` reaches an inherited Phoenixd date-layout warning
+  at `lnclient/phoenixd/phoenixd.go:208`; the exact line is unchanged from
+  upstream `master`. The build retained the inherited oversized-chunk and
+  `lottie-web` direct-`eval` warnings. Local Go linking also reported the known
+  Bark native objects' macOS 15.4 deployment target while the ad-hoc test link
+  used 15.0.
 
 These results establish a clean local baseline. They do not replace dependency
 provenance, target-native binding tests, full CI, or maintainer review.
@@ -98,7 +113,7 @@ Add a fail-closed circular-payment flow that can quote an exact local first and 
 - persistence and restart recovery tests;
 - duplicate/concurrent submission tests;
 - terminal reconciliation tests for both circular legs;
-- formatting, clippy, and the repository's full supported test suite.
+- formatting, warning-denied default/UniFFI builds, and the repository's full supported test suite.
 
 ## Dependency order
 
@@ -111,8 +126,9 @@ Before submission:
   stop if the zero-behind/clean-merge audit changes;
 - split or squash the 25-commit development history into maintainer-sized
   commits if requested;
-- run `cargo fmt --check`, clippy with warnings denied, focused payment tests,
-  the full library suite, and repository integration tests available in CI;
+- run the repository's exact warning-denied default/UniFFI build and release
+  checks, formatting, focused payment tests, the full library suite, and its
+  bitcoind/electrs integration jobs in CI;
 - regenerate UniFFI definitions only after the Rust API is final.
 
 ### 2. LDK Node Go bindings
@@ -149,6 +165,8 @@ Before submission:
   commit, including Linux x86-64 and Windows x86-64—not only macOS;
 - verify clean generated diffs, Go compilation, binding smoke tests, exported
   symbols, architecture, and hashes;
+- with explicit owner approval, push the local `c9aa670` whitespace cleanup (or
+  include the equivalent regeneration result) before opening the bindings PR;
 - replace the placeholder dependency line with the accepted Rust PR and exact
   commit.
 
@@ -206,6 +224,9 @@ Before submission:
 - preserve the already integrated chronological migration ordering without
   renumbering or modifying any accepted upstream migration;
 - replace the forked module pin with the accepted upstream binding revision;
+- until then, refresh the temporary fork pin from public `3228bdb` to the exact
+  reviewed bindings head after that head is pushed and target-native artifacts
+  are regenerated;
 - separate unrelated dependency-security bumps if upstream already contains
   them;
 - run Go tests, race tests, PostgreSQL migration tests, `go vet`, frontend lint,
