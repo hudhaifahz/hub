@@ -65,3 +65,31 @@ func TestLegacyAlbyWorkdirFromSelectionRejectsMissingPath(t *testing.T) {
 	_, err := legacyAlbyWorkdirFromSelection(filepath.Join(t.TempDir(), "albyhub.db"))
 	require.ErrorContains(t, err, "selected Alby Hub path could not be inspected")
 }
+
+func TestReleaseAcceptanceStageHomeDirectory(t *testing.T) {
+	targetWorkdir := filepath.Join(t.TempDir(), "acceptance-workdir")
+	t.Setenv(releaseAcceptanceActiveEnvironment, "1")
+	t.Setenv(releaseAcceptanceWorkdirEnvironment, targetWorkdir)
+
+	require.Equal(
+		t,
+		filepath.Join(filepath.Dir(targetWorkdir), "acceptance-home"),
+		releaseAcceptanceStageHomeDirectory(targetWorkdir),
+	)
+}
+
+func TestReleaseAcceptanceStageHomeDirectoryRequiresExactBoundTarget(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(releaseAcceptanceActiveEnvironment, "1")
+	t.Setenv(releaseAcceptanceWorkdirEnvironment, filepath.Join(root, "bound"))
+
+	require.Empty(t, releaseAcceptanceStageHomeDirectory(filepath.Join(root, "different")))
+}
+
+func TestReleaseAcceptanceStageHomeDirectoryRequiresValidatedMode(t *testing.T) {
+	targetWorkdir := filepath.Join(t.TempDir(), "acceptance-workdir")
+	t.Setenv(releaseAcceptanceActiveEnvironment, "")
+	t.Setenv(releaseAcceptanceWorkdirEnvironment, targetWorkdir)
+
+	require.Empty(t, releaseAcceptanceStageHomeDirectory(targetWorkdir))
+}

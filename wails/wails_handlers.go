@@ -1197,6 +1197,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 
 		targetWorkdir := app.svc.GetConfig().GetEnv().Workdir
 		stageOptions := guidedmigration.DefaultStageOptions()
+		if acceptanceHome := releaseAcceptanceStageHomeDirectory(targetWorkdir); acceptanceHome != "" {
+			// The process-level acceptance launch has already validated and bound
+			// this exact target under the network-dark sandbox. Scan only its
+			// synthetic home so preserved live copies cannot become test inputs.
+			stageOptions.HomeDirectory = acceptanceHome
+		}
 		stageOptions.Progress = func(progress guidedmigration.Progress) {
 			runtime.EventsEmit(ctx, "grynvault:migration-progress", progress)
 		}

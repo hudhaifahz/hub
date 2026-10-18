@@ -286,6 +286,12 @@ Requirements across all supported window sizes:
 No production-channel copy may be placed online during development or release
 acceptance.
 
+The owner-acceptance process is bound to an exact disposable `WORK_DIR`, runs
+under the network-dark macOS profile, and uses a synthetic acceptance home for
+known-copy discovery. This keeps preserved live Alby/Grynvault locations out of
+the copied-data exercise without weakening competing-copy detection in normal
+installs.
+
 ### Automated tests
 
 - default macOS container discovery;
