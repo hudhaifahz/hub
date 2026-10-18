@@ -5,6 +5,6 @@ package main
 
 import "errors"
 
-func execReleaseAcceptanceSandboxPlatform(_ []string) error {
-	return errors.New("release-acceptance network sandbox is only supported on macOS")
+func verifyReleaseAcceptanceBoundaryPlatform() error {
+	return errors.New("release-acceptance network boundary is only supported on macOS")
 }

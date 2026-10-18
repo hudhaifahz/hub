@@ -21,16 +21,16 @@ require_literal 'export MACOSX_DEPLOYMENT_TARGET=15.4' scripts/release/build-mac
 require_literal 'acceptance build requires a clean checkout' scripts/release/build-macos-acceptance.sh
 require_literal 'version.SourceCommit=${source_commit}' scripts/release/build-macos-acceptance.sh
 require_literal './scripts/release/inspect-macos.sh' scripts/release/build-macos-acceptance.sh
-require_literal '--require-adhoc' scripts/release/build-macos-acceptance.sh
 require_literal 'must not be uploaded or published' scripts/release/build-macos-acceptance.sh
 require_literal '<string>com.grynvault.rebalance.dev</string>' build/darwin/Info.dev.plist
 require_literal 'const defaultWorkdirName = "grynvault-rebalance"' service/workdir.go
 require_literal '//go:build wails && !bindings' main_wails.go
 require_literal 'prepareReleaseAcceptanceLaunch(os.Args)' main_wails.go
-require_literal '(deny network-outbound)' release_acceptance_launch.go
-require_literal '(deny network-bind)' release_acceptance_launch.go
 require_literal 'verifyReleaseAcceptanceNetworkDenied()' release_acceptance_launch.go
-require_literal '/usr/bin/sandbox-exec' release_acceptance_launch_darwin.go
+require_literal 'verifyReleaseAcceptanceBoundaryPlatform()' release_acceptance_launch_darwin.go
+require_literal '<key>com.apple.security.app-sandbox</key>' build/darwin/entitlements.acceptance.plist
+require_literal '<key>com.apple.security.network.server</key>' build/darwin/entitlements.acceptance.plist
+require_literal '--require-acceptance-adhoc' scripts/release/build-macos-acceptance.sh
 require_literal '--grynvault-release-acceptance-network-dark' scripts/release/launch-macos-acceptance.sh
 require_literal '127.0.0.1:21421' desktop_locks.go
 require_literal '127.0.0.1:21420' desktop_locks.go
@@ -43,6 +43,10 @@ require_literal 'experimental, independently maintained fork' frontend/src/compo
 
 if grep -nE 'com\.getalby\.' build/darwin/Info.plist build/darwin/Info.dev.plist wails.json; then
   echo "official Alby bundle identity remains in Grynvault identity files" >&2
+  exit 1
+fi
+if grep -Fq 'com.apple.security.network.client' build/darwin/entitlements.acceptance.plist; then
+  echo "acceptance entitlements permit outbound networking" >&2
   exit 1
 fi
 if grep -R -n -F -- 'https://getalby.com/update/hub' frontend/src; then

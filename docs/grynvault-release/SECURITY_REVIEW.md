@@ -275,12 +275,20 @@ fresh pre-run backup, matched its original complete file manifest, and passed
 both SQLite integrity checks. RC.5 package acceptance therefore failed and
 publication remains blocked.
 
-The successor's release-only launcher runs before wallet locks, database open,
-or service initialization. It validates a mode-restricted sidecar bound to the
-canonical disposable path, rejects symlink targets and incomplete or duplicate
-flags, sets the exact work directory internally, self-reexecutes the packaged
-binary under macOS `sandbox-exec`, and proves outbound denial by requiring a
-reserved-address dial to fail with `EPERM` or `EACCES`. Guided-migration
-replacement processes inherit the sandbox marker and path, revalidate the
-sidecar, and repeat the denial proof before service construction. Normal
-desktop launches do not enter this acceptance-only path.
+The first successor attempt proved that macOS rejects a second
+`sandbox-exec` profile when the signed App Sandbox is also active, regardless
+of ordering. That attempt failed closed before database open.
+
+The corrected successor's release-only launcher runs before wallet locks,
+database open, or service initialization. It validates a mode-restricted
+sidecar bound to the canonical disposable path, rejects symlink targets and
+incomplete or duplicate flags, sets the exact work directory internally, and
+proves outbound denial by requiring a reserved-address dial to fail with
+`EPERM` or `EACCES`. The internal acceptance bundle is ad-hoc sealed with the
+normal App Sandbox and file/server permissions but without the
+outbound-network entitlement. The server entitlement remains necessary only
+for the two hard-coded loopback ownership locks; process inspection must prove
+that no non-loopback socket exists. Guided-migration replacement processes
+inherit the acceptance marker and path, revalidate the sidecar, and repeat the
+denial proof before service construction. Normal desktop launches and public
+release bundles do not enter this acceptance-only path.

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "usage: $0 <app-path> <expected-tag> <expected-source-commit> [--require-adhoc|--require-developer-id]" >&2
+  echo "usage: $0 <app-path> <expected-tag> <expected-source-commit> [--require-adhoc|--require-acceptance-adhoc|--require-developer-id]" >&2
   exit 64
 fi
 
@@ -25,7 +25,7 @@ if [[ ! "$expected_source_commit" =~ ^[a-f0-9]{40}$ ]]; then
   echo "expected source commit must be a 40-character lowercase Git object ID" >&2
   exit 1
 fi
-if [[ -n "$signing_mode" && "$signing_mode" != "--require-adhoc" && "$signing_mode" != "--require-developer-id" ]]; then
+if [[ -n "$signing_mode" && "$signing_mode" != "--require-adhoc" && "$signing_mode" != "--require-acceptance-adhoc" && "$signing_mode" != "--require-developer-id" ]]; then
   echo "unsupported signing mode: $signing_mode" >&2
   exit 64
 fi
@@ -132,7 +132,6 @@ if [[ -n "$signing_mode" ]]; then
   plutil -lint "$entitlements_path" >/dev/null
   for entitlement in \
     com.apple.security.app-sandbox \
-    com.apple.security.network.client \
     com.apple.security.network.server \
     com.apple.security.files.downloads.read-write \
     com.apple.security.files.user-selected.read-write; do
@@ -142,9 +141,20 @@ if [[ -n "$signing_mode" ]]; then
       exit 1
     fi
   done
+
+  network_client_enabled="$(plutil -extract 'com\.apple\.security\.network\.client' raw -o - "$entitlements_path" 2>/dev/null || true)"
+  if [[ "$signing_mode" == "--require-acceptance-adhoc" ]]; then
+    if [[ "$network_client_enabled" == "true" ]]; then
+      echo "acceptance candidate unexpectedly permits outbound networking" >&2
+      exit 1
+    fi
+  elif [[ "$network_client_enabled" != "true" ]]; then
+    echo "required entitlement is missing or false: com.apple.security.network.client" >&2
+    exit 1
+  fi
   signing_details="$(codesign -dv --verbose=4 "$app_path" 2>&1)"
   ldk_signing_details="$(codesign -dv --verbose=4 "$ldk_path" 2>&1)"
-  if [[ "$signing_mode" == "--require-adhoc" ]]; then
+  if [[ "$signing_mode" == "--require-adhoc" || "$signing_mode" == "--require-acceptance-adhoc" ]]; then
     for details in "$signing_details" "$ldk_signing_details"; do
       if ! grep -Fq 'Signature=adhoc' <<<"$details"; then
         echo "unsigned experimental candidate is not ad-hoc signed" >&2
@@ -193,7 +203,10 @@ else
 fi
 echo "embedded tag: $expected_tag"
 echo "embedded source commit: $expected_source_commit"
-if [[ "$signing_mode" == "--require-adhoc" ]]; then
+if [[ "$signing_mode" == "--require-adhoc" || "$signing_mode" == "--require-acceptance-adhoc" ]]; then
   echo "signing identity: ad-hoc only (no publisher identity, notarization, or Gatekeeper trust)"
+fi
+if [[ "$signing_mode" == "--require-acceptance-adhoc" ]]; then
+  echo "acceptance network client entitlement: absent"
 fi
 echo "bundle inspection passed"

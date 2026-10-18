@@ -109,12 +109,12 @@ chmod +x "$executable_path"
 # internal candidate can be integrity-checked without claiming a publisher
 # identity or Apple notarization.
 codesign --force --sign - "$frameworks_path/libldk_node.dylib"
-codesign --force --sign - --entitlements build/darwin/entitlements.plist "$app_path"
+codesign --force --sign - --entitlements build/darwin/entitlements.acceptance.plist "$app_path"
 ./scripts/release/inspect-macos.sh \
   "$app_path" \
   "$version_label" \
   "$source_commit" \
-  --require-adhoc
+  --require-acceptance-adhoc
 
 echo "ad-hoc sealed, untagged acceptance candidate: ${app_path}"
 echo "source commit: ${source_commit}"

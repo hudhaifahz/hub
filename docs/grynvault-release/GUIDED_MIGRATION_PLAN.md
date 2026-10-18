@@ -527,11 +527,16 @@ RC.5 therefore remains unpublished. Its source-level owner acceptance still
 describes the importer behavior at that commit, but it is not package-level
 acceptance evidence.
 
-The successor adds a release-only macOS launch boundary before desktop locks,
-database access, and service initialization. It requires a permission-restricted
-authority sidecar bound to the canonical disposable path, sets the exact work
-directory internally, self-reexecutes under the network sandbox, and requires
-an external test dial to fail with `EPERM` or `EACCES`. Missing flags, partial
-flags, duplicate flags, a symlink target, permissive filesystem modes, a stale
-or mismatched authority file, or an unproven sandbox all fail before a wallet
-database can open. Migration restarts inherit and re-check the same boundary.
+The first successor attempt added a second `sandbox-exec` layer, but package
+acceptance proved that macOS will not layer that profile with the application's
+signed App Sandbox in either order. It failed closed before database open.
+
+The corrected successor uses an acceptance-only ad-hoc App Sandbox seal that
+omits outbound-network permission. Before desktop locks, database access, and
+service initialization, it requires a permission-restricted authority sidecar
+bound to the canonical disposable path, sets the exact work directory
+internally, and requires an external test dial to fail with `EPERM` or
+`EACCES`. Missing flags, partial flags, duplicate flags, a symlink target,
+permissive filesystem modes, a stale or mismatched authority file, or
+unproven outbound denial all fail before a wallet database can open. Migration
+restarts inherit and re-check the same boundary.

@@ -19,21 +19,12 @@ const (
 	releaseAcceptanceWorkdirArg       = "--grynvault-release-acceptance-work-dir="
 	releaseAcceptanceNetworkDarkArg   = "--grynvault-release-acceptance-network-dark"
 	releaseAcceptanceWorkdirEnv       = "GRYNVAULT_RELEASE_ACCEPTANCE_WORK_DIR"
-	releaseAcceptanceSandboxedEnv     = "GRYNVAULT_RELEASE_ACCEPTANCE_SANDBOXED"
+	releaseAcceptanceActiveEnv        = "GRYNVAULT_RELEASE_ACCEPTANCE_ACTIVE"
 	releaseAcceptanceAuthoritySuffix  = ".grynvault-release-acceptance"
 	releaseAcceptanceAuthorityVersion = "grynvault-release-acceptance-v1"
 )
 
-const releaseAcceptanceSandboxProfile = `(version 1)
-(allow default)
-(deny network-outbound)
-(allow network-outbound (remote ip "localhost:*"))
-(deny network-bind)
-(allow network-bind (local ip "localhost:21420"))
-(allow network-bind (local ip "localhost:21421"))
-`
-
-var execReleaseAcceptanceSandbox = execReleaseAcceptanceSandboxPlatform
+var verifyReleaseAcceptanceBoundary = verifyReleaseAcceptanceBoundaryPlatform
 
 func prepareReleaseAcceptanceLaunch(args []string) error {
 	workdir, requested, err := parseReleaseAcceptanceArgs(args)
@@ -41,11 +32,11 @@ func prepareReleaseAcceptanceLaunch(args []string) error {
 		return err
 	}
 
-	sandboxed := os.Getenv(releaseAcceptanceSandboxedEnv) == "1"
-	if !requested && !sandboxed {
+	active := os.Getenv(releaseAcceptanceActiveEnv) == "1"
+	if !requested && !active {
 		return nil
 	}
-	if sandboxed && workdir == "" {
+	if active && workdir == "" {
 		workdir = os.Getenv(releaseAcceptanceWorkdirEnv)
 	}
 	if workdir == "" {
@@ -60,10 +51,7 @@ func prepareReleaseAcceptanceLaunch(args []string) error {
 		return err
 	}
 
-	if !sandboxed {
-		return execReleaseAcceptanceSandbox(args)
-	}
-	return verifyReleaseAcceptanceNetworkDenied()
+	return verifyReleaseAcceptanceBoundary()
 }
 
 func parseReleaseAcceptanceArgs(args []string) (string, bool, error) {
@@ -150,12 +138,12 @@ func validateReleaseAcceptanceWorkdir(workdir string) (string, error) {
 
 func setReleaseAcceptanceEnvironment(workdir string) error {
 	values := map[string]string{
-		"WORK_DIR":                    workdir,
-		"LOG_TO_FILE":                 "false",
-		"SEND_EVENTS_TO_ALBY":         "false",
-		"AUTO_LINK_ALBY_ACCOUNT":      "false",
-		releaseAcceptanceWorkdirEnv:   workdir,
-		releaseAcceptanceSandboxedEnv: "1",
+		"WORK_DIR":                  workdir,
+		"LOG_TO_FILE":               "false",
+		"SEND_EVENTS_TO_ALBY":       "false",
+		"AUTO_LINK_ALBY_ACCOUNT":    "false",
+		releaseAcceptanceWorkdirEnv: workdir,
+		releaseAcceptanceActiveEnv:  "1",
 	}
 	for key, value := range values {
 		if err := os.Setenv(key, value); err != nil {
@@ -176,13 +164,5 @@ func verifyReleaseAcceptanceNetworkDenied() error {
 		return fmt.Errorf("release-acceptance external-network denial is not proven: %w", err)
 	}
 
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
-	if listener != nil {
-		_ = listener.Close()
-		return errors.New("release-acceptance sandbox allowed a non-loopback bind")
-	}
-	if !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.EACCES) {
-		return fmt.Errorf("release-acceptance non-loopback bind denial is not proven: %w", err)
-	}
 	return nil
 }

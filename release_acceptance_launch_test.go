@@ -197,24 +197,21 @@ func TestValidateReleaseAcceptanceWorkdirRejectsUnsafeTargets(t *testing.T) {
 	}
 }
 
-func TestPrepareReleaseAcceptanceLaunchReexecsBeforeService(t *testing.T) {
+func TestPrepareReleaseAcceptanceLaunchVerifiesBoundaryBeforeService(t *testing.T) {
 	workdir := createReleaseAcceptanceTarget(t)
-	t.Setenv(releaseAcceptanceSandboxedEnv, "")
+	t.Setenv(releaseAcceptanceActiveEnv, "")
 	t.Setenv(releaseAcceptanceWorkdirEnv, "")
 	t.Setenv("WORK_DIR", "")
 	t.Setenv("LOG_TO_FILE", "")
 	t.Setenv("SEND_EVENTS_TO_ALBY", "")
 	t.Setenv("AUTO_LINK_ALBY_ACCOUNT", "")
 
-	expected := errors.New("reexec requested")
-	originalExec := execReleaseAcceptanceSandbox
-	execReleaseAcceptanceSandbox = func(args []string) error {
-		if len(args) != 3 {
-			t.Fatalf("unexpected reexec args: %v", args)
-		}
+	expected := errors.New("boundary checked")
+	originalVerify := verifyReleaseAcceptanceBoundary
+	verifyReleaseAcceptanceBoundary = func() error {
 		return expected
 	}
-	t.Cleanup(func() { execReleaseAcceptanceSandbox = originalExec })
+	t.Cleanup(func() { verifyReleaseAcceptanceBoundary = originalVerify })
 
 	err := prepareReleaseAcceptanceLaunch([]string{
 		"grynvault",
@@ -222,7 +219,7 @@ func TestPrepareReleaseAcceptanceLaunchReexecsBeforeService(t *testing.T) {
 		releaseAcceptanceNetworkDarkArg,
 	})
 	if !errors.Is(err, expected) {
-		t.Fatalf("expected reexec result, got %v", err)
+		t.Fatalf("expected boundary result, got %v", err)
 	}
 	resolved, err := filepath.EvalSymlinks(workdir)
 	if err != nil {
@@ -231,8 +228,8 @@ func TestPrepareReleaseAcceptanceLaunchReexecsBeforeService(t *testing.T) {
 	if os.Getenv("WORK_DIR") != resolved {
 		t.Fatalf("WORK_DIR not bound to acceptance target")
 	}
-	if os.Getenv(releaseAcceptanceSandboxedEnv) != "1" {
-		t.Fatalf("sandbox marker not set before reexec")
+	if os.Getenv(releaseAcceptanceActiveEnv) != "1" {
+		t.Fatalf("acceptance marker not set before boundary verification")
 	}
 }
 
@@ -253,13 +250,15 @@ func TestReleaseAcceptanceNetworkSandboxIntegration(t *testing.T) {
 	command := exec.Command(
 		"/usr/bin/sandbox-exec",
 		"-p",
-		releaseAcceptanceSandboxProfile,
+		`(version 1)
+(allow default)
+(deny network-outbound (remote ip "*:*"))`,
 		os.Args[0],
 		"-test.run=^TestReleaseAcceptanceSandboxHelper$",
 	)
 	command.Env = append(os.Environ(),
 		"GRYNVAULT_RELEASE_ACCEPTANCE_TEST_HELPER=1",
-		releaseAcceptanceSandboxedEnv+"=1",
+		releaseAcceptanceActiveEnv+"=1",
 		releaseAcceptanceWorkdirEnv+"="+workdir,
 	)
 	if output, err := command.CombinedOutput(); err != nil {

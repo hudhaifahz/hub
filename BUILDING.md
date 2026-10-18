@@ -85,12 +85,13 @@ scripts/release/launch-macos-acceptance.sh \
 
 This is a release-acceptance mechanism, not an alternate production launcher.
 It requires a mode-`0600` authority sidecar bound to the canonical disposable
-path, sets the work directory before service initialization, re-executes the
-packaged binary inside macOS's network sandbox, and refuses startup unless an
-external dial fails with an operating-system permission error. The sandbox
-allows the two loopback ownership locks but denies non-loopback binds and
-outbound connections. Guided-migration replacement processes inherit the
-sandbox and re-check denial before reopening any database.
+path, sets the work directory before service initialization, and refuses
+startup unless an external dial fails with an operating-system permission
+error. The acceptance builder seals its exact binary with the normal macOS App
+Sandbox but omits the outbound-network entitlement. It retains server
+permission only because the app's two hard-coded loopback ownership locks must
+open. Guided-migration replacement processes inherit the bound target and
+re-check outbound denial before reopening any database.
 
 Never create the authority sidecar for the canonical wallet directory. Stop
 acceptance if the process opens any canonical wallet file, lacks the two
@@ -105,8 +106,9 @@ scripts/release/build-macos-acceptance.sh <full-40-character-commit>
 This produces an untagged internal candidate with the full source commit
 embedded in the application. Its certificate-free ad-hoc seal provides local
 bundle-integrity checking only; it supplies no publisher identity or Apple
-notarization. The candidate is deliberately separate from the immutable-tag
-release builder and must never be uploaded or published.
+notarization. Its acceptance-only entitlement seal also removes outbound
+network permission, so this candidate is deliberately separate from the
+immutable-tag release builder and must never be uploaded or published.
 
 ## Release build
 
