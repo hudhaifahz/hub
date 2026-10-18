@@ -1,7 +1,13 @@
 (version 1)
 (allow default)
-(deny network-outbound (remote ip))
+(deny network-outbound
+  (require-not
+    (require-any
+      (remote ip "localhost:*")
+      (require-not (remote ip)))))
 (deny network-bind
-  (require-all
-    (require-not (local tcp "*:21420"))
-    (require-not (local tcp "*:21421"))))
+  (require-not
+    (require-any
+      (local tcp "*:21420")
+      (local tcp "*:21421")
+      (require-not (local ip)))))

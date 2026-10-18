@@ -28,9 +28,11 @@ require_literal '//go:build wails && !bindings' main_wails.go
 require_literal 'prepareReleaseAcceptanceLaunch(os.Args)' main_wails.go
 require_literal 'verifyReleaseAcceptanceNetworkDenied()' release_acceptance_launch.go
 require_literal 'verifyReleaseAcceptanceBoundaryPlatform()' release_acceptance_launch_darwin.go
-require_literal '(deny network-outbound (remote ip))' build/darwin/release-acceptance.sb
-require_literal '(require-not (local tcp "*:21420"))' build/darwin/release-acceptance.sb
-require_literal '(require-not (local tcp "*:21421"))' build/darwin/release-acceptance.sb
+require_literal '(remote ip "localhost:*")' build/darwin/release-acceptance.sb
+require_literal '(require-not (remote ip))' build/darwin/release-acceptance.sb
+require_literal '(local tcp "*:21420")' build/darwin/release-acceptance.sb
+require_literal '(local tcp "*:21421")' build/darwin/release-acceptance.sb
+require_literal '(require-not (local ip))' build/darwin/release-acceptance.sb
 require_literal 'codesign --force --sign - "$app_path"' scripts/release/build-macos-acceptance.sh
 require_literal '--require-acceptance-adhoc' scripts/release/build-macos-acceptance.sh
 require_literal '/usr/bin/nohup /usr/bin/sandbox-exec' scripts/release/launch-macos-acceptance.sh

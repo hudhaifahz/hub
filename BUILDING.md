@@ -91,9 +91,10 @@ error and a non-loopback bind is also denied. The acceptance builder preserves
 the exact executable and applies a certificate-free seal with no application
 entitlements. The guarded launcher then starts that internal copy directly
 under the reviewed process profile, which permits macOS IPC and only the two
-fixed loopback ownership ports while denying all IP connections and every other
-bind. Guided-migration replacement processes inherit the profile and bound
-target and re-check both denials before reopening any database.
+fixed loopback ownership ports while denying all non-loopback IP connections
+and every other bind. Guided-migration replacement processes inherit the
+profile and bound target and re-check both denials before reopening any
+database.
 
 Never create the authority sidecar for the canonical wallet directory. Stop
 acceptance if the process opens any canonical wallet file, lacks the two

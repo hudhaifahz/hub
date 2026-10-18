@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseReleaseAcceptanceArgs(t *testing.T) {
@@ -247,11 +248,60 @@ func TestReleaseAcceptanceSandboxHelper(t *testing.T) {
 		if err != nil {
 			t.Fatalf("acceptance sandbox blocked loopback ownership listener %s: %v", address, err)
 		}
+		accepted := make(chan error, 1)
+		go func() {
+			connection, acceptErr := loopback.Accept()
+			if connection != nil {
+				_ = connection.Close()
+			}
+			accepted <- acceptErr
+		}()
+		connection, err := net.DialTimeout("tcp", address, time.Second)
+		if err != nil {
+			_ = loopback.Close()
+			t.Fatalf("acceptance sandbox blocked loopback ownership connection %s: %v", address, err)
+		}
+		_ = connection.Close()
+		if err = <-accepted; err != nil {
+			_ = loopback.Close()
+			t.Fatalf("accept loopback ownership connection %s: %v", address, err)
+		}
 		if err = loopback.Close(); err != nil {
 			t.Fatalf("close loopback ownership listener %s: %v", address, err)
 		}
 	}
 
+	localIPCDir, err := os.MkdirTemp("/tmp", "gvr-acceptance-ipc-")
+	if err != nil {
+		t.Fatalf("create short local IPC directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(localIPCDir) })
+	unixSocketPath := filepath.Join(localIPCDir, "acceptance.sock")
+	localIPC, err := net.Listen("unix", unixSocketPath)
+	if err != nil {
+		t.Fatalf("acceptance sandbox blocked local IPC: %v", err)
+	}
+	accepted := make(chan error, 1)
+	go func() {
+		connection, acceptErr := localIPC.Accept()
+		if connection != nil {
+			_ = connection.Close()
+		}
+		accepted <- acceptErr
+	}()
+	connection, err := net.DialTimeout("unix", unixSocketPath, time.Second)
+	if err != nil {
+		_ = localIPC.Close()
+		t.Fatalf("acceptance sandbox blocked local IPC connection: %v", err)
+	}
+	_ = connection.Close()
+	if err = <-accepted; err != nil {
+		_ = localIPC.Close()
+		t.Fatalf("accept local IPC connection: %v", err)
+	}
+	if err = localIPC.Close(); err != nil {
+		t.Fatalf("close local IPC listener: %v", err)
+	}
 }
 
 func TestReleaseAcceptanceNetworkSandboxIntegration(t *testing.T) {
