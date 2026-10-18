@@ -21,6 +21,12 @@ require_literal 'export MACOSX_DEPLOYMENT_TARGET=15.4' scripts/release/build-mac
 require_literal '<string>com.grynvault.rebalance.dev</string>' build/darwin/Info.dev.plist
 require_literal 'const defaultWorkdirName = "grynvault-rebalance"' service/workdir.go
 require_literal '//go:build wails && !bindings' main_wails.go
+require_literal 'prepareReleaseAcceptanceLaunch(os.Args)' main_wails.go
+require_literal '(deny network-outbound)' release_acceptance_launch.go
+require_literal '(deny network-bind)' release_acceptance_launch.go
+require_literal 'verifyReleaseAcceptanceNetworkDenied()' release_acceptance_launch.go
+require_literal '/usr/bin/sandbox-exec' release_acceptance_launch_darwin.go
+require_literal '--grynvault-release-acceptance-network-dark' scripts/release/launch-macos-acceptance.sh
 require_literal '127.0.0.1:21421' desktop_locks.go
 require_literal '127.0.0.1:21420' desktop_locks.go
 require_literal '//go:build wails && bindings' main_wails_bindings.go

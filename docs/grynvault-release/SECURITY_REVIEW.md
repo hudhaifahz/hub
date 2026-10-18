@@ -264,3 +264,23 @@ source-selection race: automatic discovery could complete after a manual folder
 choice and overwrite the reviewed path. The successor now makes the start of
 manual selection authoritative and ignores any later discovery response. This
 must be rechecked in the exact-commit owner acceptance.
+
+The later PGP-verified RC.5 package rerun exposed a separate acceptance-launch
+failure: macOS LaunchServices did not retain the shell-selected disposable
+`WORK_DIR` or the launcher process's network sandbox. The installed app opened
+the canonical wallet and briefly started its normal LDK runtime. The operator
+stopped it before entering migration or activation; no acceptance action
+created a Lightning operation. The canonical wallet was restored from the
+fresh pre-run backup, matched its original complete file manifest, and passed
+both SQLite integrity checks. RC.5 package acceptance therefore failed and
+publication remains blocked.
+
+The successor's release-only launcher runs before wallet locks, database open,
+or service initialization. It validates a mode-restricted sidecar bound to the
+canonical disposable path, rejects symlink targets and incomplete or duplicate
+flags, sets the exact work directory internally, self-reexecutes the packaged
+binary under macOS `sandbox-exec`, and proves outbound denial by requiring a
+reserved-address dial to fail with `EPERM` or `EACCES`. Guided-migration
+replacement processes inherit the sandbox marker and path, revalidate the
+sidecar, and repeat the denial proof before service construction. Normal
+desktop launches do not enter this acceptance-only path.

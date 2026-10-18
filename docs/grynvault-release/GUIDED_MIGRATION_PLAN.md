@@ -505,3 +505,33 @@ paths on locally attached volumes remain supported; network-mounted source or
 target folders now fail before staging. The transient copy indicator is
 replaced after relaunch by the persisted control/quarantine phase, preserving
 the fail-closed restart behavior.
+
+## 2026-10-17 RC.5 packaged-application acceptance finding
+
+The PGP-verified RC.5 disk image and installed application matched the signed
+manifest and embedded the accepted source commit. Fresh stopped-application
+and canonical-wallet backups matched complete file manifests.
+
+The package-level acceptance then exposed a harness boundary not present in
+the earlier internal-bundle run. Starting the installed app through macOS
+LaunchServices discarded the shell-provided disposable `WORK_DIR`, and the
+process-level sandbox applied to the launcher did not transfer to the app. The
+canonical wallet opened and its ordinary LDK runtime briefly came online. The
+process was stopped, both unintended-start copies were preserved locally, and
+the canonical wallet was restored byte-for-byte from the fresh backup with
+both SQLite integrity checks passing. No acceptance action requested an
+invoice, probe, HTLC, payment, swap, rebalance, or channel operation. The
+copied-data migration and activation steps were not entered.
+
+RC.5 therefore remains unpublished. Its source-level owner acceptance still
+describes the importer behavior at that commit, but it is not package-level
+acceptance evidence.
+
+The successor adds a release-only macOS launch boundary before desktop locks,
+database access, and service initialization. It requires a permission-restricted
+authority sidecar bound to the canonical disposable path, sets the exact work
+directory internally, self-reexecutes under the network sandbox, and requires
+an external test dial to fail with `EPERM` or `EACCES`. Missing flags, partial
+flags, duplicate flags, a symlink target, permissive filesystem modes, a stale
+or mismatched authority file, or an unproven sandbox all fail before a wallet
+database can open. Migration restarts inherit and re-check the same boundary.

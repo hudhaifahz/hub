@@ -7,6 +7,7 @@ import (
 	"context"
 	"embed"
 	"net"
+	"os"
 
 	"github.com/getAlby/hub/logger"
 	"github.com/getAlby/hub/service"
@@ -21,6 +22,11 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	if err := prepareReleaseAcceptanceLaunch(os.Args); err != nil {
+		log.WithError(err).Error("Refusing unsafe release-acceptance launch")
+		return
+	}
+
 	// Hold Grynvault's lock and Alby Hub's desktop lock for the complete app
 	// lifetime. This prevents both apps from starting the same copied Lightning
 	// node at once after an import.

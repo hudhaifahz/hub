@@ -71,6 +71,31 @@ Any deployment-target linker warning is a release failure. The build and
 bundle metadata must remain aligned at macOS 15.4 unless every native
 dependency is rebuilt and re-tested for an older supported target.
 
+### Packaged macOS acceptance isolation
+
+The packaged desktop app must be exercised against a disposable target without
+opening the canonical wallet. First stop Alby Hub and Grynvault Rebalance
+normally, create fresh hash-verified backups, and then use the guarded launcher:
+
+```bash
+scripts/release/launch-macos-acceptance.sh \
+  "/Applications/Grynvault Rebalance.app" \
+  "/absolute/path/grynvault-rebalance-acceptance/<run>/empty-workdir"
+```
+
+This is a release-acceptance mechanism, not an alternate production launcher.
+It requires a mode-`0600` authority sidecar bound to the canonical disposable
+path, sets the work directory before service initialization, re-executes the
+packaged binary inside macOS's network sandbox, and refuses startup unless an
+external dial fails with an operating-system permission error. The sandbox
+allows the two loopback ownership locks but denies non-loopback binds and
+outbound connections. Guided-migration replacement processes inherit the
+sandbox and re-check denial before reopening any database.
+
+Never create the authority sidecar for the canonical wallet directory. Stop
+acceptance if the process opens any canonical wallet file, lacks the two
+loopback locks, or exposes a non-loopback socket.
+
 ## Release build
 
 The release script refuses a dirty or untagged checkout and injects an immutable
