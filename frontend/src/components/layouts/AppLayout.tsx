@@ -38,17 +38,16 @@ function AppLayoutInner() {
         )}
       >
         <SidebarProvider className="flex flex-col">
-          <GrynvaultForkNotice />
           {showBanner && <Banner onDismiss={dismissBanner} />}
           <div className="flex flex-1">
             <AppSidebar />
             <SidebarInset className="min-w-0">
-              <div
+              <GrynvaultForkNotice
                 className={cn(
-                  "flex flex-1 flex-col gap-4 p-4",
                   showBanner && "mt-14 md:mt-9" // Banner height is 36px with 1 line (>=md width) and 56px with 2 lines (<md width)
                 )}
-              >
+              />
+              <div className="flex flex-1 flex-col gap-4 p-4">
                 <Outlet />
               </div>
             </SidebarInset>
