@@ -5,9 +5,10 @@ Status: **PREPARED — NO PULL REQUEST CREATED**
 Prepared: 2026-10-18
 
 This is a three-repository contribution and must be reviewed in dependency
-order. The prepared branches already exist on the contributor fork from prior
-work, but they are behind current upstream and are not ready to submit as-is.
-No branch was rewritten or pushed while preparing this package.
+order. The prepared `codex/exact-channel-rebalance-v1243` branches already
+exist on the contributor forks from prior work and are based directly on the
+current upstream tips. No branch was rewritten or pushed while correcting this
+package.
 
 Grynvault branding, guided migration, release packaging, PGP workflow, updater
 policy, and companion service are deliberately excluded from the upstream
@@ -15,36 +16,55 @@ feature contribution.
 
 ## Current branch audit
 
-| Order | Repository            | Base branch | Prepared head                                           | Upstream at audit | Divergence                                 | Current merge conflict                                                     |
-| ----- | --------------------- | ----------- | ------------------------------------------------------- | ----------------- | ------------------------------------------ | -------------------------------------------------------------------------- |
-| 1     | `getAlby/ldk-node`    | `main`      | `hudhaifahz:feat/exact-channel-rebalance` at `2dc742a`  | `553a2105`        | 45 upstream-only / 24 feature-only commits | `src/event.rs`                                                             |
-| 2     | `getAlby/ldk-node-go` | `master`    | `hudhaifahz:feat/exact-channel-rebalance` at `a381cac`  | `25822674`        | 3 upstream-only / 10 feature-only commits  | generated `ldk_node/universal-macos/libldk_node.dylib`                     |
-| 3     | `getAlby/hub`         | `master`    | `hudhaifahz:feat/exact-channel-rebalance` at `1fb6c8cd` | `5d5e696d`        | 14 upstream-only / 22 feature-only commits | `db/migrations/migrate.go`, `go.mod`, `go.sum`, `lnclient/ldk/ldk_test.go` |
+| Order | Repository            | Base branch | Prepared head                                                  | Upstream at audit | Divergence                                | Merge audit |
+| ----- | --------------------- | ----------- | -------------------------------------------------------------- | ----------------- | ----------------------------------------- | ----------- |
+| 1     | `getAlby/ldk-node`    | `main`      | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `ed72fe9`  | `553a2105`        | 0 upstream-only / 25 feature-only commits | clean       |
+| 2     | `getAlby/ldk-node-go` | `master`    | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `3228bdb`  | `25822674`        | 0 upstream-only / 2 feature-only commits  | clean       |
+| 3     | `getAlby/hub`         | `master`    | `hudhaifahz:codex/exact-channel-rebalance-v1243` at `cd6bc1e3` | `5d5e696d`        | 0 upstream-only / 26 feature-only commits | clean       |
 
-The conflict audit used Git's three-way merge machinery without checking out a
-merge or changing a branch. The counts and conflicts must be refreshed
-immediately before any rebase or PR.
+An earlier preparation pass incorrectly audited the superseded
+`feat/exact-channel-rebalance` branches. Those older branches are behind and do
+conflict; they are not the maintained v1.24.3 contribution line. The corrected
+audit verifies that each v1.24.3 branch has the current upstream tip as its
+merge base and that Git's three-way merge machinery reports no conflict. Repeat
+that audit immediately before creating each PR.
+
+## Existing public state
+
+This correction did not publish or rewrite anything. The public state that
+predated it is:
+
+- the immutable annotated tag `grynvault-rebalance-v0.1.0-rc.6`, resolving to
+  exact source commit `408c74f9b06664b156df298e6fd6841a3a4db2b7`;
+- the GitHub prerelease and its eight RC.6 assets, including the macOS DMG,
+  source archive, SBOM, SHA-256 material, release public key, and detached PGP
+  signature;
+- the three maintained `codex/exact-channel-rebalance-v1243` branches listed
+  above, plus older superseded development branches retained on the forks;
+- no pull request in any contributor fork and no pull request submitted from
+  these branches to `getAlby/ldk-node`, `getAlby/ldk-node-go`, or
+  `getAlby/hub`.
+
+The Nostr and Stacker News text remains draft-only under
+`ANNOUNCEMENT_DRAFTS.md`.
 
 ## Current feature-branch baseline
 
-These checks ran against the existing feature heads before rebasing them onto
-current upstream:
+These checks ran against the maintained v1.24.3 contribution heads:
 
-- LDK Node: `cargo test --lib` passed all 41 tests. `cargo fmt --check` did not
-  pass; it reports formatting drift in `src/lib.rs` and `src/liquidity.rs`.
-  Formatting must be corrected on the refreshed contribution branch without
-  mixing unrelated source changes.
+- LDK Node: `cargo fmt --check` passed and `cargo test --lib` passed all 47
+  tests.
 - LDK Node Go: `go test ./...` passed; the repository currently contains no Go
-  test files, so target-library binding smoke tests remain a release and PR
-  requirement.
+  test files. The committed macOS library is a universal x86-64/arm64 Mach-O.
+  Target-library binding smoke tests remain a release and PR requirement.
 - Hub: focused `api`, `lnclient/ldk`, `wails`, and database-migration tests
   passed. Frontend ESLint, TypeScript, Prettier, and the Wails production build
   passed. The build retained the inherited oversized-chunk and `lottie-web`
   direct-`eval` warnings. Local Go linking also reported the known Bark native
   objects' macOS 15.4 deployment target while the ad-hoc test link used 15.0.
 
-These results establish a baseline only. They do not clear the rebase
-conflicts, dependency provenance, full CI, or maintainer-review gates.
+These results establish a clean local baseline. They do not replace dependency
+provenance, target-native binding tests, full CI, or maintainer review.
 
 ## Submission order and gates
 
@@ -87,10 +107,9 @@ This is the first PR in a three-part stack: ldk-node, generated ldk-node-go bind
 
 Before submission:
 
-- rebase onto fresh `getAlby/ldk-node:main` in a disposable local branch;
-- resolve `src/event.rs` semantically, preserving current upstream event
-  behavior and exhaustive matching;
-- split or squash the 24-commit development history into maintainer-sized
+- refresh against `getAlby/ldk-node:main` immediately before submission and
+  stop if the zero-behind/clean-merge audit changes;
+- split or squash the 25-commit development history into maintainer-sized
   commits if requested;
 - run `cargo fmt --check`, clippy with warnings denied, focused payment tests,
   the full library suite, and repository integration tests available in CI;
@@ -126,7 +145,6 @@ Depends on: <accepted ldk-node PR/commit>
 
 Before submission:
 
-- do not merge the conflicting macOS binary;
 - regenerate every committed binding and native library from the accepted Rust
   commit, including Linux x86-64 and Windows x86-64—not only macOS;
 - verify clean generated diffs, Go compilation, binding smoke tests, exported
@@ -182,14 +200,14 @@ This cannot create liquidity or guarantee a public route. It is implemented only
 
 Before submission:
 
-- rebase onto fresh `getAlby/hub:master` after both dependency PRs are accepted
-  or maintainers explicitly agree to a stacked review;
-- resolve migration ordering without renumbering or modifying any accepted
-  upstream migration;
+- refresh against `getAlby/hub:master` after both dependency PRs are accepted
+  or maintainers explicitly agree to a stacked review, stopping if the current
+  zero-behind/clean-merge audit changes;
+- preserve the already integrated chronological migration ordering without
+  renumbering or modifying any accepted upstream migration;
 - replace the forked module pin with the accepted upstream binding revision;
 - separate unrelated dependency-security bumps if upstream already contains
   them;
-- resolve the LDK test conflict against current upstream behavior;
 - run Go tests, race tests, PostgreSQL migration tests, `go vet`, frontend lint,
   TypeScript, formatting, HTTP/Wails builds, and all-platform desktop CI;
 - give maintainers screenshots that contain synthetic identifiers only.
