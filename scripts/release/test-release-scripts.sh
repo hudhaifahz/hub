@@ -76,4 +76,20 @@ assert_rejects_branch_ref ./scripts/release/write-candidate-index.sh \
   "$test_directory/branch-candidate-index.txt" \
   "$test_artifact"
 
+if ./scripts/release/build-macos-acceptance.sh "$(git rev-parse --short HEAD)" >"$test_directory/short-commit.log" 2>&1; then
+  echo "acceptance builder accepted an abbreviated commit" >&2
+  exit 1
+fi
+grep -Fq 'full 40-character lowercase commit' "$test_directory/short-commit.log"
+
+mismatched_commit="0000000000000000000000000000000000000000"
+if [[ "$(git rev-parse HEAD)" == "$mismatched_commit" ]]; then
+  mismatched_commit="1111111111111111111111111111111111111111"
+fi
+if ./scripts/release/build-macos-acceptance.sh "$mismatched_commit" >"$test_directory/mismatched-commit.log" 2>&1; then
+  echo "acceptance builder accepted a commit other than HEAD" >&2
+  exit 1
+fi
+grep -Fq 'acceptance build commit does not match HEAD' "$test_directory/mismatched-commit.log"
+
 echo "release script tests passed under /bin/bash"

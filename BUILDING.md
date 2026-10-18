@@ -96,6 +96,18 @@ Never create the authority sidecar for the canonical wallet directory. Stop
 acceptance if the process opens any canonical wallet file, lacks the two
 loopback locks, or exposes a non-loopback socket.
 
+Build the pre-tag acceptance application from a clean exact commit:
+
+```bash
+scripts/release/build-macos-acceptance.sh <full-40-character-commit>
+```
+
+This produces an untagged internal candidate with the full source commit
+embedded in the application. Its certificate-free ad-hoc seal provides local
+bundle-integrity checking only; it supplies no publisher identity or Apple
+notarization. The candidate is deliberately separate from the immutable-tag
+release builder and must never be uploaded or published.
+
 ## Release build
 
 The release script refuses a dirty or untagged checkout and injects an immutable

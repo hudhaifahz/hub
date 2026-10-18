@@ -18,6 +18,11 @@ require_literal '"outputfilename": "Grynvault Rebalance"' wails.json
 require_literal '<string>com.grynvault.rebalance</string>' build/darwin/Info.plist
 require_literal '<string>15.4.0</string>' build/darwin/Info.plist
 require_literal 'export MACOSX_DEPLOYMENT_TARGET=15.4' scripts/release/build-macos.sh
+require_literal 'acceptance build requires a clean checkout' scripts/release/build-macos-acceptance.sh
+require_literal 'version.SourceCommit=${source_commit}' scripts/release/build-macos-acceptance.sh
+require_literal './scripts/release/inspect-macos.sh' scripts/release/build-macos-acceptance.sh
+require_literal '--require-adhoc' scripts/release/build-macos-acceptance.sh
+require_literal 'must not be uploaded or published' scripts/release/build-macos-acceptance.sh
 require_literal '<string>com.grynvault.rebalance.dev</string>' build/darwin/Info.dev.plist
 require_literal 'const defaultWorkdirName = "grynvault-rebalance"' service/workdir.go
 require_literal '//go:build wails && !bindings' main_wails.go
