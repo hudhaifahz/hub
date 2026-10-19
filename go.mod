@@ -24,6 +24,7 @@ require (
 	gitlab.com/ark-bitcoin/bark-ffi-bindings/golang v0.25.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/oauth2 v0.37.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/macaroon.v2 v2.1.0
@@ -225,7 +226,6 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
@@ -271,7 +271,7 @@ replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-d
 
 // Exact-channel circular-payment APIs are not yet available in upstream
 // ldk-node-go v0.7.1. This temporary dependency-order pin is reviewed at
-// hudhaifahz/ldk-node-go commit 3228bdbb7973a2743aee5e9f699e79afd217617b.
+// hudhaifahz/ldk-node-go commit 7233136553b771738a304dfc8a52fa0d6842117b.
 // Upstream path: hudhaifahz:codex/exact-channel-rebalance-v1243 -> getAlby:master,
 // after the corresponding ldk-node contribution is accepted.
-replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261016052643-3228bdbb7973
+replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261019200328-7233136553b7

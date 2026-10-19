@@ -16,11 +16,11 @@ they receive their own complete acceptance evidence.
 - reviewed exact-channel Hub head:
   `cd6bc1e399ba256adb113bbaf44d659c5b22a170`
 - LDK Node feature head:
-  `ed72fe992174965bc917d1dc6c6bee1dc7368057`
+  `70965f2e58936c0893c48ee0cc1788b84164a4e2`
 - LDK Node Go binding head:
-  `3228bdbb7973a2743aee5e9f699e79afd217617b`
+  `7233136553b771738a304dfc8a52fa0d6842117b`
 - universal LDK library SHA-256:
-  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`
+  `be8ee3aa741b9ef7f017dda80e90e523b4fd7ae6cc7b4d18a7c2314495c7ef9a`
 - Go toolchain: `go1.27.2`, selected by `go.mod`
 - Node.js: `22.x`
 - Yarn: `1.22.22`

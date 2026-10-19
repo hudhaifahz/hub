@@ -8,8 +8,8 @@ immutable tag, owner-controlled PGP signing, and fresh-download verification.
 | Component   | Upstream base                              | Reviewed feature head                      |
 | ----------- | ------------------------------------------ | ------------------------------------------ |
 | Alby Hub    | `5d5e696dfe7d430a365d48939c394376e078a56b` | `cd6bc1e399ba256adb113bbaf44d659c5b22a170` |
-| LDK Node    | `553a2105b38da88fc5d0900007d30e9bd9669900` | `ed72fe992174965bc917d1dc6c6bee1dc7368057` |
-| LDK Node Go | `25822674b495b8b0f7a8882f6b19a64b70d02396` | `3228bdbb7973a2743aee5e9f699e79afd217617b` |
+| LDK Node    | `553a2105b38da88fc5d0900007d30e9bd9669900` | `70965f2e58936c0893c48ee0cc1788b84164a4e2` |
+| LDK Node Go | `25822674b495b8b0f7a8882f6b19a64b70d02396` | `7233136553b771738a304dfc8a52fa0d6842117b` |
 
 The final Grynvault packaging commit is intentionally not guessed here. It is
 inserted into the release manifest from the exact immutable tag.
@@ -20,7 +20,7 @@ inserted into the release manifest from the exact immutable tag.
 - architectures: `x86_64 arm64`
 - byte size: `43,212,288`
 - SHA-256:
-  `879ea591a5f9636425ce56097ca0473df3fc05e62ef94135428a78a45087adcf`
+  `be8ee3aa741b9ef7f017dda80e90e523b4fd7ae6cc7b4d18a7c2314495c7ef9a`
 - install name: `@rpath/libldk_node.dylib`
 
 ## Product identity
