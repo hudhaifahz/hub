@@ -11,6 +11,7 @@ Baseline under review:
 - reviewed head: `ed72fe992174965bc917d1dc6c6bee1dc7368057`;
 - primary review-fix head: `bfdf1c000d1e07a3d99d298c9426200f997c32f3`;
 - duplicate-race follow-up head: `8784ee0ff4da1abb76b5a1c9ba1aaa242139bc79`;
+- claim-preimage follow-up head: `70965f2e58936c0893c48ee0cc1788b84164a4e2`;
 - local checkout: `/Users/kode/Development/rebalance-upstream-v1243/ldk-node`.
 
 This plan records the CodeRabbit findings raised after the PR became ready for
@@ -197,6 +198,27 @@ is positive evidence of an in-flight LDK payment, not a terminal failure. Only
 non-duplicate send failures should convert the newly created record to failed,
 and diagnostic persistence failures must not replace the original send error.
 
+### 9. Claim preimage and live payment-hash binding
+
+Risk: the exact-channel claim gate verified that the stored payment contained a
+preimage, but presence alone did not prove that the preimage belonged to the
+live claimable payment. Corrupt or inconsistent persisted metadata could reach
+`claim_funds` with the wrong preimage.
+
+Fix and proof:
+
+- require the persisted payment hash to equal the live claimable event hash;
+- recompute SHA-256 over the stored preimage and require the result to equal the
+  live claimable event hash before claiming funds;
+- fail the HTLC backward and preserve a structured diagnostic when either
+  identity check fails;
+- regression-test the valid claim, missing-preimage, corrupt-preimage, and
+  mismatched stored/live-hash cases.
+
+Future-release watch: cryptographic material must be validated against the live
+protocol identifier immediately before releasing funds. Stored metadata
+presence is not sufficient evidence of identity.
+
 ## RC.6 continuity rule
 
 RC.6 is not treated as an unpublished throwaway encoding. It was installed and
@@ -259,6 +281,24 @@ against real wallet data, even if the upstream PR has not merged.
   upstream workflows reported `action_required`, meaning maintainer approval is
   still required before those jobs can run; none reported a test failure.
 
+## Follow-up acceptance evidence — 2026-10-19
+
+- Commit `70965f2e58936c0893c48ee0cc1788b84164a4e2` binds the persisted hash and
+  SHA-256 of the stored preimage to the live claimable payment hash before
+  `claim_funds` can run.
+- Focused missing, corrupt, mismatched, and valid preimage/hash cases passed.
+- Rust default library suite: 53 passed, 0 failed.
+- Rust all-feature library suite: 63 passed, 0 failed.
+- Warning-denied default library check and UniFFI development/release builds
+  passed; local CodeRabbit review reported zero findings.
+- Fresh universal macOS native bindings were consumed by the exact pinned Hub
+  copy. Focused and complete Go tests, HTTP/Wails backend builds, and both
+  frontend production builds passed.
+- An isolated empty-work-directory startup returned HTTP 200 with setup
+  incomplete, node stopped, and wallet locked, then shut down cleanly.
+- GitHub readback shows PR #115 at head `70965f2`, open, ready for review,
+  mergeable, and conflict-free. No live wallet or Lightning operation was used.
+
 ## Known non-regression warnings
 
 - UniFFI-generated Rust code warns about deprecated
@@ -271,6 +311,14 @@ against real wallet data, even if the upstream PR has not merged.
   `eval`, an oversized output chunk, old Browserslist data, and a browser-
   externalized `crypto` import. This payment-safety patch does not alter those
   dependencies or frontend code.
+- CodeRabbit's generic docstring-coverage notice reports 47.92% because it also
+  counts private helpers and tests. Every new public Rust API is documented,
+  the crate's default `deny(missing_docs)` gate passes, and `cargo doc
+  --no-deps` completes. We do not add low-value comments to private/test code
+  solely to satisfy that heuristic.
+- Warning-denied rustdoc is currently blocked only by an existing bare URL in
+  `src/lib.rs` that is unchanged from upstream and outside this payment-safety
+  patch.
 
 ## Submission gate
 
