@@ -1,6 +1,6 @@
 # LDK-node review regression plan
 
-Status: **SUBMITTED — LOCAL REGRESSION GATE PASSED; UPSTREAM CHECKS PENDING**
+Status: **SUBMITTED — LOCAL REGRESSION GATE PASSED; MAINTAINER CI APPROVAL PENDING**
 
 Prepared: 2026-10-18
 
@@ -298,6 +298,14 @@ against real wallet data, even if the upstream PR has not merged.
   incomplete, node stopped, and wallet locked, then shut down cleanly.
 - GitHub readback shows PR #115 at head `70965f2`, open, ready for review,
   mergeable, and conflict-free. No live wallet or Lightning operation was used.
+- CodeRabbit's remote check reports success and all five inline review threads
+  are resolved.
+- The public PR description was updated and read back with the current safety
+  properties, 53/63 Rust test counts, downstream Hub evidence, and
+  preimage/hash claim validation.
+- Five upstream workflows remain `action_required`; an Alby maintainer must
+  authorize those fork-originated CI runs. This is not a test failure and no
+  contributor-side retry can replace maintainer authorization.
 
 ## Known non-regression warnings
 
