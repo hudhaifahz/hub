@@ -9,7 +9,8 @@ Baseline under review:
 - upstream PR: `getAlby/ldk-node#115`;
 - branch: `hudhaifahz:codex/exact-channel-rebalance-v1243`;
 - reviewed head: `ed72fe992174965bc917d1dc6c6bee1dc7368057`;
-- review-fix head: `bfdf1c000d1e07a3d99d298c9426200f997c32f3`;
+- primary review-fix head: `bfdf1c000d1e07a3d99d298c9426200f997c32f3`;
+- duplicate-race follow-up head: `8784ee0ff4da1abb76b5a1c9ba1aaa242139bc79`;
 - local checkout: `/Users/kode/Development/rebalance-upstream-v1243/ldk-node`.
 
 This plan records the CodeRabbit findings raised after the PR became ready for
@@ -182,13 +183,19 @@ Fix and proof:
 - preflight every `RecentPaymentDetails` state before inserting the record;
 - reject an ID already tracked as awaiting invoice, pending, fulfilled, or
   abandoned;
-- if submission fails after insertion for any reason, mark that newly inserted
-  record failed;
+- if submission returns `DuplicatePayment`, preserve the record as pending
+  because LDK defines that result as an already-live in-flight payment and a
+  concurrent sender can race the read-only preflight;
+- for other submission failures, mark the newly inserted record failed;
+- if that diagnostic status update cannot be persisted, log it without masking
+  the original send error;
 - regression-test that all four recovered states reserve the ID.
 
 Future-release watch: duplicate checks must cover both the application payment
-store and ChannelManager's recovered state before persistence. A failed send
-must not leave a newly created pending record without an in-flight LDK payment.
+store and ChannelManager's recovered state before persistence. `DuplicatePayment`
+is positive evidence of an in-flight LDK payment, not a terminal failure. Only
+non-duplicate send failures should convert the newly created record to failed,
+and diagnostic persistence failures must not replace the original send error.
 
 ## RC.6 continuity rule
 
@@ -226,8 +233,8 @@ against real wallet data, even if the upstream PR has not merged.
 
 - Final diff: exactly `src/event.rs`, `src/payment/bolt11.rs`, and
   `src/payment/store.rs`; `git diff --check` and formatting check passed.
-- Rust default library suite: 52 passed, 0 failed.
-- Rust all-feature library suite: 62 passed, 0 failed.
+- Rust default library suite: 53 passed, 0 failed.
+- Rust all-feature library suite: 63 passed, 0 failed.
 - Warning-denied default library build passed.
 - UniFFI development and optimized release builds passed.
 - Final local CodeRabbit review: 0 findings across the full PR file set.
@@ -246,10 +253,11 @@ against real wallet data, even if the upstream PR has not merged.
 - The canonical application and wallet directory were not opened, copied, or
   modified. No invoice, probe, HTLC, payment, swap, rebalance, or channel
   operation was created.
-- PR #115 readback shows head `bfdf1c0`, open, ready for review, and mergeable.
-  CodeRabbit remote review was still pending at readback; five fork-originated
+- PR #115 readback shows head `8784ee0`, open, ready for review, mergeable, and
+  conflict-free. CodeRabbit marked the duplicate-payment race addressed in that
+  commit; the final local review reported zero findings. Five fork-originated
   upstream workflows reported `action_required`, meaning maintainer approval is
-  still required before those jobs can run.
+  still required before those jobs can run; none reported a test failure.
 
 ## Known non-regression warnings
 
