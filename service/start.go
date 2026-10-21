@@ -20,6 +20,7 @@ import (
 
 	"github.com/getAlby/hub/config"
 	"github.com/getAlby/hub/events"
+	"github.com/getAlby/hub/guidedmigration"
 	"github.com/getAlby/hub/lnclient"
 	"github.com/getAlby/hub/lnclient/bark"
 	"github.com/getAlby/hub/lnclient/cashu"
@@ -309,6 +310,7 @@ func (svc *service) StartApp(encryptionKey string) error {
 }
 
 func (svc *service) startAppInternal(encryptionKey string) error {
+	svc.startupLaunchedNode = false
 	defer func() {
 		svc.startupState = ""
 	}()
@@ -338,6 +340,10 @@ func (svc *service) startAppInternal(encryptionKey string) error {
 		logger.Logger.Errorf("Invalid password")
 		return ErrInvalidPassword
 	}
+	if err = guidedmigration.EnsureWalletAuthority(svc.cfg.GetEnv().Workdir); err != nil {
+		logger.Logger.WithError(err).Error("Wallet authority check failed")
+		return err
+	}
 
 	err = svc.cfg.LoadJWTSecret(encryptionKey)
 	if err != nil {
@@ -363,6 +369,7 @@ func (svc *service) startAppInternal(encryptionKey string) error {
 		cancelFn()
 		return err
 	}
+	svc.startupLaunchedNode = true
 
 	svc.swapsService = swaps.NewSwapsService(ctx, svc.db, svc.cfg, svc.keys, svc.eventPublisher, svc.GetLNClient(), svc.transactionsService, svc.albySvc, encryptionKey)
 

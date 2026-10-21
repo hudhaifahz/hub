@@ -399,6 +399,9 @@ func runMigrationAcceptance(
 	require.NotNil(t, svc.GetLNClient())
 	require.NoFileExists(t, guidedmigration.QuarantinePath(target))
 	require.NoFileExists(t, guidedmigration.ControlPath(target))
+	require.NoDirExists(t, exactSource)
+	require.DirExists(t, guidedmigration.RetirementPath(exactSource, readAcceptanceImportID(t, stage.BackupLocation)))
+	require.FileExists(t, guidedmigration.AuthorityPath(target))
 	require.FileExists(t, filepath.Join(stage.BackupLocation, "migration-acceptance.json"))
 	require.Eventually(t, func() bool {
 		return anyPeerConnectedTo(peerB.node, expectedNodeID) || anyPeerConnectedTo(peerC.node, expectedNodeID)
@@ -419,6 +422,15 @@ func runMigrationAcceptance(
 		_ = probe.Close()
 		return true
 	}, 10*time.Second, 100*time.Millisecond, "the node listener was not released after shutdown")
+}
+
+func readAcceptanceImportID(t *testing.T, backupLocation string) string {
+	t.Helper()
+	record := guidedmigration.Quarantine{}
+	require.NoError(t, guidedmigration.ReadJSON(filepath.Join(backupLocation, "migration-acceptance.json"), &record))
+	require.NotEmpty(t, record.ImportID)
+	require.NotEmpty(t, record.SourceRetiredAt)
+	return record.ImportID
 }
 
 func setSyntheticServiceEnvironment(t *testing.T, bitcoin *regtestBitcoin, workdir, nodeAddress string) {

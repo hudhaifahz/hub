@@ -5,6 +5,25 @@ Date: 2026-10-17
 Status: internal pre-release review; not an independent third-party audit and
 not a public-release approval.
 
+### 2026-10-20 source-authority addendum
+
+The RC.7 migration lifecycle left the original Alby Hub wallet directory
+runnable after Grynvault activation. The successor working tree retires that
+directory atomically before networking, restores it only when startup fails
+before the Lightning backend launches, persists a hash-bound authority record, and refuses future
+starts if the original node reappears or the retired bytes/process state no
+longer match. It also detects prior RC.7 acceptance evidence and requires a
+one-time offline authority upgrade when the old source is unchanged; divergent
+copies remain offline for supervised resolution.
+
+The new authority tests cover idempotent retirement, rollback, ambiguous paths,
+source mutation, recreated duplicates, unrelated replacement wallets, retired
+copy mutation, and legacy upgrade handling. The full Go suite, focused race
+suite, `go vet`, frontend lint/type-check, and Wails production build pass. No
+live wallet was opened or modified for this change. These checks do not replace
+final packaged owner acceptance and do not authorize tagging, signing,
+publication, installation, or value movement.
+
 ## Reviewed boundary
 
 - Grynvault product identity, data-directory isolation, updater boundary, and

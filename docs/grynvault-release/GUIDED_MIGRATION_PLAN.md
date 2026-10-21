@@ -192,7 +192,8 @@ While quarantined, the app must:
   start networking.
 
 The activation confirmation must state the exact source path, node fingerprint,
-channel count, network, and that the source Alby Hub must remain stopped.
+channel count, network, and that Grynvault will atomically retire the source
+Alby Hub wallet directory before networking starts.
 Offline verification and network activation are separate screens/actions. The
 verification password is cleared before activation review. Activation requires
 the password again, the complete verified node ID, an exact typed phrase bound
@@ -201,6 +202,16 @@ and a final native confirmation. The backend accepts only a verification less
 than five minutes old; a failed activation consumes that verification and
 requires another offline verification before retry. Activation is recorded
 without recording credentials.
+
+Before networking starts, Grynvault must verify the source bytes again and
+atomically rename the source wallet directory to an import-bound retired path
+on the same filesystem. It must persist a permanent authority record in the
+Grynvault wallet. Ordinary starts must refuse to connect if the original source
+location regains a runnable copy of the same wallet or if the retired copy is
+open elsewhere. If startup fails before networking succeeds, Grynvault must
+restore the source path and keep the imported copy quarantined. Once networking
+has succeeded, automatic rollback is forbidden because the authoritative copy
+may already contain newer channel state.
 
 Only successful activation clears the quarantine marker. A failed or cancelled
 verification remains offline and recoverable.
@@ -220,7 +231,7 @@ The flow must remain short even though the controls are strict:
 5. **Ready to activate** — show the final continuity summary and one activation
    action.
 6. **Migration complete** — show the connected node and channels, recovery-copy
-   location, and a reminder not to reopen the source installation.
+   location, and the retired source-wallet location.
 
 Requirements across all supported window sizes:
 
@@ -468,6 +479,37 @@ Stop and preserve evidence if any of the following occurs:
 - a test would require placing a cloned production node online;
 - the work reaches tagging, signing, publication, or value movement without the
   corresponding explicit owner approval.
+
+## 2026-10-20 single-authority remediation
+
+RC.7 proved the copied Grynvault wallet could start successfully, but the
+accepted flow left the original Alby Hub wallet directory runnable. That meant
+a later click on the stock application could advance an older copy of the same
+LDK node. The resulting fail-closed LDK startup was correct, but relying on a
+written warning was not an acceptable ownership control.
+
+The successor source now makes the authority transition part of activation:
+
+- immediately before networking, it rechecks source stability and open
+  processes, then atomically renames the original wallet to an import-bound
+  retired sibling on the same filesystem;
+- a verified recovery snapshot remains separate from the retired source;
+- failure before the Lightning backend launches restores the original source
+  path and leaves Grynvault quarantined; any later failure keeps the source
+  retired because the node may already have contacted peers;
+- success writes a permanent, permission-restricted authority record containing
+  the source identity and durable-file hashes;
+- every later Grynvault start blocks if the original location again contains
+  the same node, the retired copy is open, or its durable bytes changed; and
+- a pre-authority RC.7 installation receives a one-time offline authority
+  upgrade only when its source still matches the prior acceptance hashes. Any
+  divergent pair remains offline for supervised comparison instead of choosing
+  a winner.
+
+Automated unit, full-suite, focused race, static-analysis, lint, type-check, and
+Wails production-build checks pass for this working tree. This is engineering
+evidence only. A new exact-commit packaged migration acceptance remains required
+before any tag, signature, publication, installation, or release replacement.
 
 ## Completion definition
 

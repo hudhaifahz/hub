@@ -12,6 +12,7 @@ const (
 	QuarantineVersion = 1
 
 	QuarantineFileName = ".grynvault-migration-quarantine.json"
+	AuthorityFileName  = ".grynvault-wallet-authority.json"
 )
 
 type Phase string
@@ -148,6 +149,21 @@ type Quarantine struct {
 	Verification           *VerificationSummary `json:"verification,omitempty"`
 	LastError              string               `json:"lastError,omitempty"`
 	ActivationAttemptedAt  string               `json:"activationAttemptedAt,omitempty"`
+	RetiredSourcePath      string               `json:"retiredSourcePath,omitempty"`
+	SourceRetiredAt        string               `json:"sourceRetiredAt,omitempty"`
+	AuthorityUpgrade       bool                 `json:"authorityUpgrade,omitempty"`
+}
+
+type Authority struct {
+	Version           int               `json:"version"`
+	ImportID          string            `json:"importId"`
+	TargetPath        string            `json:"targetPath"`
+	SourcePath        string            `json:"sourcePath"`
+	RetiredSourcePath string            `json:"retiredSourcePath"`
+	BackupLocation    string            `json:"backupLocation"`
+	WalletFingerprint string            `json:"walletFingerprint"`
+	SourceFiles       map[string]string `json:"sourceFiles"`
+	ActivatedAt       string            `json:"activatedAt"`
 }
 
 type StageResult struct {
@@ -168,6 +184,9 @@ type Status struct {
 	SourcePath             string               `json:"sourcePath,omitempty"`
 	TargetPath             string               `json:"targetPath,omitempty"`
 	BackupLocation         string               `json:"backupLocation,omitempty"`
+	RetiredSourcePath      string               `json:"retiredSourcePath,omitempty"`
+	SourceRetired          bool                 `json:"sourceRetired"`
+	AuthorityUpgrade       bool                 `json:"authorityUpgrade"`
 	FingerprintHint        string               `json:"fingerprintHint,omitempty"`
 	ActivationConfirmation string               `json:"activationConfirmation,omitempty"`
 	BlockingReason         string               `json:"blockingReason,omitempty"`

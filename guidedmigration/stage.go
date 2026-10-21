@@ -265,6 +265,7 @@ func Stage(sourceSelection, targetWorkdir string, options StageOptions) (*StageR
 		WalletFingerprint: fingerprint,
 		SourceFiles:       backupHashes,
 		SourceCounts:      counts,
+		RetiredSourcePath: RetirementPath(sourceWorkdir, importID),
 	}
 	if err = WriteJSONAtomic(QuarantinePath(stageDir), &quarantine); err != nil {
 		return nil, fmt.Errorf("write migration quarantine: %w", err)

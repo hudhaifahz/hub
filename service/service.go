@@ -52,6 +52,7 @@ type service struct {
 	keys                 keys.Keys
 	relayStatuses        []RelayStatus
 	startupState         string
+	startupLaunchedNode  bool
 	migrationMu          sync.Mutex
 	migrationQuarantine  *guidedmigration.Quarantine
 }
@@ -146,6 +147,12 @@ func NewService(ctx context.Context) (*service, error) {
 			WalletFingerprint: control.WalletFingerprint,
 			SourceFiles:       control.SourceFiles,
 			LastError:         control.BlockedReason,
+		}
+	}
+	if migrationQuarantine == nil {
+		migrationQuarantine, err = guidedmigration.PrepareLegacyAuthorityUpgrade(appConfig.Workdir, time.Now())
+		if err != nil {
+			return nil, fmt.Errorf("prepare wallet authority upgrade: %w", err)
 		}
 	}
 

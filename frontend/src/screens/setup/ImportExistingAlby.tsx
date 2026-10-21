@@ -85,6 +85,9 @@ type MigrationStatus = {
   sourcePath?: string;
   targetPath?: string;
   backupLocation?: string;
+  retiredSourcePath?: string;
+  sourceRetired?: boolean;
+  authorityUpgrade?: boolean;
   fingerprintHint?: string;
   activationConfirmation?: string;
   blockingReason?: string;
@@ -628,10 +631,20 @@ export function ImportExistingAlby() {
                 </span>
               }
             />
+            <EvidenceRow
+              label="Retired Alby wallet"
+              value={
+                <span className="break-all font-mono text-xs">
+                  {status?.retiredSourcePath}
+                </span>
+              }
+            />
           </dl>
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-            Keep the original Alby Hub stopped. Do not run both applications
-            against copies of this node.
+            The original Alby Hub wallet data was safely retired before
+            Lightning connected. Keep using Grynvault for this node; the
+            verified recovery copy remains available if you ever need a
+            supervised rollback.
           </div>
           <Button type="button" onClick={() => window.location.assign("/")}>
             Open Grynvault Rebalance
@@ -705,12 +718,16 @@ export function ImportExistingAlby() {
             <h1 className="font-headline text-2xl font-semibold">
               {blocked
                 ? "Migration stopped safely"
-                : "Migration verification — Lightning is offline"}
+                : status.authorityUpgrade
+                  ? "Secure your previous migration — Lightning is offline"
+                  : "Migration verification — Lightning is offline"}
             </h1>
             <p className="text-muted-foreground">
               {blocked
                 ? "Grynvault did not activate the staged wallet. Your source wallet and recovery evidence were preserved."
-                : "No peer, invoice, payment, rebalance, swap, or channel service is running while you review this copy."}
+                : status.authorityUpgrade
+                  ? "This one-time check retires the unchanged original Alby wallet before reconnecting your Grynvault node."
+                  : "No peer, invoice, payment, rebalance, swap, or channel service is running while you review this copy."}
             </p>
           </div>
 
@@ -746,17 +763,20 @@ export function ImportExistingAlby() {
                   {status.blockingReason}
                 </p>
               </div>
-              <LoadingButton
-                type="button"
-                variant="secondary"
-                loading={loading}
-                onClick={abandonImport}
-              >
-                Archive failed attempt and restart
-              </LoadingButton>
+              {!status.authorityUpgrade && (
+                <LoadingButton
+                  type="button"
+                  variant="secondary"
+                  loading={loading}
+                  onClick={abandonImport}
+                >
+                  Archive failed attempt and restart
+                </LoadingButton>
+              )}
               <p className="text-xs text-muted-foreground">
-                This preserves the source, failed staged copy, and evidence in
-                the recovery folder before allowing a fresh guided import.
+                {status.authorityUpgrade
+                  ? "Both copies remain offline. Review the recovery evidence before choosing either wallet as authoritative."
+                  : "This preserves the source, failed staged copy, and evidence in the recovery folder before allowing a fresh guided import."}
               </p>
             </div>
           )}
@@ -786,19 +806,22 @@ export function ImportExistingAlby() {
             >
               Open recovery evidence
             </LoadingButton>
-            <LoadingButton
-              type="button"
-              variant="ghost"
-              loading={loading}
-              onClick={returnToSource}
-            >
-              Quit and return to source wallet
-            </LoadingButton>
+            {!(blocked && status.authorityUpgrade) && (
+              <LoadingButton
+                type="button"
+                variant="ghost"
+                loading={loading}
+                onClick={returnToSource}
+              >
+                Quit and return to source wallet
+              </LoadingButton>
+            )}
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Returning quits Grynvault without starting Lightning. Reopen the
-            original Alby Hub yourself only after Grynvault has fully closed.
+            {blocked && status.authorityUpgrade
+              ? "Do not open either wallet copy until their channel state has been compared safely."
+              : "Returning quits Grynvault without starting Lightning. Reopen the original Alby Hub yourself only after Grynvault has fully closed."}
           </p>
 
           {!blocked && requiresOfflineVerification && (
@@ -1004,9 +1027,13 @@ export function ImportExistingAlby() {
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       This starts Lightning networking for the verified node.
-                      Keep the source Alby Hub fully stopped. Verification
-                      expires after five minutes, and any failed attempt
-                      requires another offline verification.
+                      Grynvault will atomically retire the source Alby Hub
+                      wallet before connecting. If the node backend never
+                      launches, the source is restored automatically; after a
+                      possible network connection it stays retired to prevent
+                      divergent channel state. Verification expires after five
+                      minutes, and any failed attempt requires another offline
+                      verification.
                     </p>
                   </div>
                   <div className="grid gap-1.5">

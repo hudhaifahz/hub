@@ -105,7 +105,11 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation, 
 	if !sameGuidedMigrationContinuity(record.Verification, freshVerification) {
 		return errors.New("wallet continuity changed after review; activation remains offline")
 	}
-	processIDs, err := guidedmigration.OpenWalletProcessIDs(record.SourcePath)
+	sourceVerificationPath := record.SourcePath
+	if record.SourceRetiredAt != "" {
+		sourceVerificationPath = record.RetiredSourcePath
+	}
+	processIDs, err := guidedmigration.OpenWalletProcessIDs(sourceVerificationPath)
 	if err != nil {
 		return fmt.Errorf("final source-wallet process check failed; activation remains offline: %w", err)
 	}
@@ -120,16 +124,62 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation, 
 	if err = guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), record); err != nil {
 		return err
 	}
+	if err = guidedmigration.RetireSourceWallet(record, now); err != nil {
+		record.Phase = guidedmigration.PhaseActivationFailed
+		record.LastError = err.Error()
+		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		_ = guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), record)
+		return fmt.Errorf("retire original Alby Hub wallet before activation: %w", err)
+	}
+	if err = guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), record); err != nil {
+		if restoreErr := guidedmigration.RestoreSourceWallet(record); restoreErr != nil {
+			return fmt.Errorf("persist source retirement: %v; source restore also failed: %w", err, restoreErr)
+		}
+		return fmt.Errorf("persist source retirement: %w", err)
+	}
+	if err = guidedmigration.WriteAuthority(record, now); err != nil {
+		if restoreErr := guidedmigration.RestoreSourceWallet(record); restoreErr != nil {
+			return fmt.Errorf("record wallet authority: %v; source restore also failed: %w", err, restoreErr)
+		}
+		return fmt.Errorf("record wallet authority: %w", err)
+	}
+	if err = guidedmigration.AppendEvidenceCheckpoint(record, guidedmigration.PhaseActivating, "original Alby Hub wallet atomically retired before Lightning startup", now); err != nil {
+		_ = os.Remove(guidedmigration.AuthorityPath(workdir))
+		if restoreErr := guidedmigration.RestoreSourceWallet(record); restoreErr != nil {
+			return fmt.Errorf("record source retirement evidence: %v; source restore also failed: %w", err, restoreErr)
+		}
+		return fmt.Errorf("record source retirement evidence: %w", err)
+	}
 
 	err = svc.WithStartLock(func() error {
 		return svc.startAppInternal(unlockPassword)
 	})
 	if err != nil {
+		nodeMayHaveNetworked := svc.startupLaunchedNode
+		// startAppInternal cancels a partially launched backend before returning.
+		// Wait for that shutdown before deciding whether the old source can be
+		// made runnable again.
+		svc.wg.Wait()
+		var restoreErr error
+		if nodeMayHaveNetworked {
+			restoreErr = errors.New("the Lightning backend launched before the later startup failure")
+		} else {
+			_ = os.Remove(guidedmigration.AuthorityPath(workdir))
+			restoreErr = guidedmigration.RestoreSourceWallet(record)
+		}
 		record.Phase = guidedmigration.PhaseActivationFailed
 		record.LastError = err.Error()
+		if restoreErr != nil {
+			record.LastError = fmt.Sprintf("%v; original Alby Hub wallet remains retired to prevent divergent channel state: %v", err, restoreErr)
+		} else {
+			_ = guidedmigration.AppendEvidenceCheckpoint(record, guidedmigration.PhaseActivationFailed, "Lightning startup failed; original Alby Hub wallet restored", time.Now())
+		}
 		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		if writeErr := guidedmigration.WriteJSONAtomic(guidedmigration.QuarantinePath(workdir), record); writeErr != nil {
 			return fmt.Errorf("activation failed: %v; additionally failed to preserve quarantine: %w", err, writeErr)
+		}
+		if restoreErr != nil {
+			return errors.New(record.LastError)
 		}
 		return err
 	}
@@ -138,24 +188,35 @@ func (svc *service) ActivateGuidedMigration(unlockPassword, nodeIDConfirmation, 
 	activatedRecord.Phase = guidedmigration.PhaseActivated
 	activatedRecord.LastError = ""
 	activatedRecord.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err = guidedmigration.AppendEvidenceCheckpoint(record, guidedmigration.PhaseActivated, "Grynvault became the sole active wallet authority", time.Now()); err != nil {
+		svc.stopGuidedMigrationActivation()
+		return fmt.Errorf("record successful wallet authority activation: %w", err)
+	}
 	acceptancePath := filepath.Join(record.BackupLocation, "migration-acceptance.json")
 	if err = guidedmigration.WriteJSONAtomic(acceptancePath, &activatedRecord); err != nil {
-		svc.stopAppInternal()
+		svc.stopGuidedMigrationActivation()
 		return fmt.Errorf("preserve migration acceptance: %w", err)
 	}
 	if err = os.Remove(guidedmigration.ControlPath(workdir)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		_ = os.Remove(acceptancePath)
-		svc.stopAppInternal()
+		svc.stopGuidedMigrationActivation()
 		return fmt.Errorf("remove guided import control: %w", err)
 	}
 	if err = os.Remove(guidedmigration.QuarantinePath(workdir)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		_ = os.Remove(acceptancePath)
-		svc.stopAppInternal()
+		svc.stopGuidedMigrationActivation()
 		return fmt.Errorf("clear migration quarantine: %w", err)
 	}
 	record.Phase = guidedmigration.PhaseActivated
 	svc.migrationQuarantine = nil
 	return nil
+}
+
+func (svc *service) stopGuidedMigrationActivation() {
+	_ = svc.WithStartLock(func() error {
+		svc.stopAppInternal()
+		return nil
+	})
 }
 
 func guidedMigrationReadyForActivation(record *guidedmigration.Quarantine) bool {
@@ -200,14 +261,18 @@ func (svc *service) buildGuidedMigrationVerification(record *guidedmigration.Qua
 	if fingerprint != record.WalletFingerprint {
 		return nil, errors.New("imported wallet identity no longer matches the staged source")
 	}
-	if counts.Apps != record.SourceCounts.Apps ||
+	if !record.AuthorityUpgrade && (counts.Apps != record.SourceCounts.Apps ||
 		counts.Permissions != record.SourceCounts.Permissions ||
 		counts.Transactions != record.SourceCounts.Transactions ||
-		counts.RebalanceRecords != record.SourceCounts.RebalanceRecords {
+		counts.RebalanceRecords != record.SourceCounts.RebalanceRecords) {
 		return nil, errors.New("imported wallet continuity counts differ from the staged source")
 	}
 
-	sourceHashes, err := guidedmigration.HashWalletData(record.SourcePath)
+	sourcePath := record.SourcePath
+	if record.SourceRetiredAt != "" {
+		sourcePath = record.RetiredSourcePath
+	}
+	sourceHashes, err := guidedmigration.HashWalletData(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("recheck original Alby Hub data: %w", err)
 	}
