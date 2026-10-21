@@ -33,7 +33,7 @@ if ! command -v wails >/dev/null 2>&1 || [[ "$(wails version | head -n 1)" != "v
   exit 1
 fi
 
-ldk_library_sha256="be8ee3aa741b9ef7f017dda80e90e523b4fd7ae6cc7b4d18a7c2314495c7ef9a"
+ldk_library_sha256="bb487c9c2640e4c053aa508998f459b6b03216be4592ea080a64a4e9b5476f78"
 version_label="owner-acceptance-${source_commit:0:12}"
 source_url="https://github.com/hudhaifahz/hub/commit/${source_commit}"
 export VITE_GRYNVAULT_SOURCE_URL="$source_url"
