@@ -511,6 +511,31 @@ Wails production-build checks pass for this working tree. This is engineering
 evidence only. A new exact-commit packaged migration acceptance remains required
 before any tag, signature, publication, installation, or release replacement.
 
+## 2026-10-20 activation-confirmation acceptance finding
+
+The exact-commit packaged candidate at
+`fec2d674d3ec70d3cefc6c4a374057dbcd45fbb4` passed empty-data startup,
+network-denial, guided staging, recovery-copy verification, restart quarantine,
+and offline continuity inspection against an isolated copy of the current
+wallet. The source and destination bytes matched, and the UI showed the expected
+node identity, stored channel, balances, history, NWC apps and permissions, and
+embedded source/LDK hashes. The canonical Grynvault and Alby directories stayed
+byte-identical to their pre-test manifests.
+
+Activation did not reach the backend. The already-explicit inline review form
+called a second native `window.confirm()` dialog that did not become usable in
+the Wails desktop runtime, leaving an apparently active button with no visible
+result. The owner also found the combined password, full node-ID retyping,
+network phrase, checkbox, destructive button, and second dialog excessive.
+
+The successor keeps password re-entry, one explicit acknowledgement, and the
+destructive activation button. It removes the native dialog and duplicate typed
+fields while still sending the server-derived verified node ID and activation
+phrase. Backend freshness, password, node identity, wallet continuity,
+source-process, atomic retirement, authority persistence, and fail-closed
+recovery checks remain unchanged. The release gate stays closed pending a new
+exact-commit packaged acceptance.
+
 ## Completion definition
 
 The guided importer is complete only when a new user can install Grynvault,

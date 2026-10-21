@@ -301,9 +301,6 @@ export function ImportExistingAlby() {
   >(fixture?.verified);
   const [activated, setActivated] = React.useState(fixture?.activated ?? false);
   const [unlockPassword, setUnlockPassword] = React.useState("");
-  const [nodeConfirmation, setNodeConfirmation] = React.useState("");
-  const [activationConfirmation, setActivationConfirmation] =
-    React.useState("");
   const [activationAcknowledged, setActivationAcknowledged] =
     React.useState(false);
   const [activationReviewOpen, setActivationReviewOpen] = React.useState(false);
@@ -459,8 +456,6 @@ export function ImportExistingAlby() {
               : current
         );
         setUnlockPassword("");
-        setNodeConfirmation("");
-        setActivationConfirmation("");
         setActivationAcknowledged(false);
         setActivationReviewOpen(false);
       }
@@ -474,13 +469,6 @@ export function ImportExistingAlby() {
 
   async function activateImport(event: React.FormEvent) {
     event.preventDefault();
-    if (
-      !window.confirm(
-        "Start Lightning networking for this copied wallet now? This leaves offline verification and connects the verified node to its Bitcoin network."
-      )
-    ) {
-      return;
-    }
     try {
       setLoading(true);
       await request("/api/import-existing-alby/activate", {
@@ -488,20 +476,16 @@ export function ImportExistingAlby() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           unlockPassword,
-          nodeIdConfirmation: nodeConfirmation.trim(),
-          activationConfirmation: activationConfirmation.trim(),
+          nodeIdConfirmation: verified?.nodeId ?? "",
+          activationConfirmation: status?.activationConfirmation ?? "",
         }),
       });
       setUnlockPassword("");
-      setNodeConfirmation("");
-      setActivationConfirmation("");
       setActivationAcknowledged(false);
       setActivationReviewOpen(false);
       setActivated(true);
     } catch (error) {
       setUnlockPassword("");
-      setNodeConfirmation("");
-      setActivationConfirmation("");
       setActivationAcknowledged(false);
       setActivationReviewOpen(false);
       try {
@@ -999,8 +983,6 @@ export function ImportExistingAlby() {
                     disabled={!activationConfirmationText}
                     onClick={() => {
                       setUnlockPassword("");
-                      setNodeConfirmation("");
-                      setActivationConfirmation("");
                       setActivationAcknowledged(false);
                       setActivationReviewOpen(true);
                     }}
@@ -1026,14 +1008,11 @@ export function ImportExistingAlby() {
                       Connect this copied wallet to {activationNetworkLabel}
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      This starts Lightning networking for the verified node.
-                      Grynvault will atomically retire the source Alby Hub
-                      wallet before connecting. If the node backend never
-                      launches, the source is restored automatically; after a
-                      possible network connection it stays retired to prevent
-                      divergent channel state. Verification expires after five
-                      minutes, and any failed attempt requires another offline
-                      verification.
+                      Grynvault will recheck this verified wallet, retire the
+                      old Alby Hub copy, and then start Lightning. If startup
+                      fails before Lightning launches, the old copy is restored
+                      automatically. Otherwise it stays retired so two copies of
+                      the same node cannot run.
                     </p>
                   </div>
                   <div className="grid gap-1.5">
@@ -1047,42 +1026,6 @@ export function ImportExistingAlby() {
                       autoComplete="off"
                     />
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="node-confirmation">
-                      Confirm the complete node ID
-                    </Label>
-                    <Input
-                      id="node-confirmation"
-                      value={nodeConfirmation}
-                      onChange={(event) =>
-                        setNodeConfirmation(event.target.value)
-                      }
-                      className="font-mono text-xs"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <p className="break-all text-xs text-muted-foreground">
-                      Type or locally copy: {verified.nodeId}
-                    </p>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="activation-confirmation">
-                      Type the network activation phrase
-                    </Label>
-                    <Input
-                      id="activation-confirmation"
-                      value={activationConfirmation}
-                      onChange={(event) =>
-                        setActivationConfirmation(event.target.value)
-                      }
-                      className="font-mono text-xs"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <p className="break-all text-xs text-muted-foreground">
-                      Type exactly: {activationConfirmationText}
-                    </p>
-                  </div>
                   <div className="flex items-start gap-3">
                     <Checkbox
                       id="activation-acknowledgement"
@@ -1095,8 +1038,9 @@ export function ImportExistingAlby() {
                       htmlFor="activation-acknowledgement"
                       className="text-sm font-normal leading-5"
                     >
-                      I understand this leaves offline verification and starts
-                      the copied production wallet on {activationNetworkLabel}.
+                      I understand Grynvault will retire the old Alby Hub copy
+                      and start this verified wallet on {activationNetworkLabel}
+                      .
                     </Label>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -1105,8 +1049,6 @@ export function ImportExistingAlby() {
                       variant="secondary"
                       onClick={() => {
                         setUnlockPassword("");
-                        setNodeConfirmation("");
-                        setActivationConfirmation("");
                         setActivationAcknowledged(false);
                         setActivationReviewOpen(false);
                       }}
@@ -1120,9 +1062,7 @@ export function ImportExistingAlby() {
                       disabled={
                         !activationAcknowledged ||
                         !unlockPassword ||
-                        nodeConfirmation.trim() !== verified.nodeId ||
-                        activationConfirmation.trim() !==
-                          activationConfirmationText
+                        !activationConfirmationText
                       }
                     >
                       Connect verified wallet now

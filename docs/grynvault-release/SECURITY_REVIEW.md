@@ -284,6 +284,22 @@ choice and overwrite the reviewed path. The successor now makes the start of
 manual selection authoritative and ignores any later discovery response. This
 must be rechecked in the exact-commit owner acceptance.
 
+### Desktop activation confirmation
+
+The `fec2d674d3ec70d3cefc6c4a374057dbcd45fbb4` acceptance found that the
+guided-migration activation form's additional native `window.confirm()` did not
+produce a usable Wails dialog. No activation request reached the backend, the
+source was not retired, and no Lightning backend started. The canonical wallet
+directories remained byte-identical to their pre-test manifests.
+
+The successor removes that runtime-dependent dialog and the duplicate manual
+node-ID and activation-phrase fields. The reviewed node ID and backend-issued
+wallet/network-bound phrase are still submitted, while the owner must re-enter
+the unlock password and acknowledge the single-authority transition. All
+backend verification, expiry, continuity, process-exclusion, retirement, and
+recovery controls remain authoritative. A source-boundary regression check now
+rejects reintroduction of `window.confirm()` in this flow.
+
 The later PGP-verified RC.5 package rerun exposed a separate acceptance-launch
 failure: macOS LaunchServices did not retain the shell-selected disposable
 `WORK_DIR` or the launcher process's network sandbox. The installed app opened

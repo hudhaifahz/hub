@@ -26,6 +26,12 @@ require_literal '<string>com.grynvault.rebalance.dev</string>' build/darwin/Info
 require_literal 'const defaultWorkdirName = "grynvault-rebalance"' service/workdir.go
 require_literal '//go:build wails && !bindings' main_wails.go
 require_literal 'prepareReleaseAcceptanceLaunch(os.Args)' main_wails.go
+require_literal 'nodeIdConfirmation: verified?.nodeId ?? ""' frontend/src/screens/setup/ImportExistingAlby.tsx
+require_literal 'activationConfirmation: status?.activationConfirmation ?? ""' frontend/src/screens/setup/ImportExistingAlby.tsx
+if grep -nF 'Start Lightning networking for this copied wallet now?' frontend/src/screens/setup/ImportExistingAlby.tsx; then
+  echo "guided migration activation must use its reviewed inline confirmation instead of an unreliable native dialog" >&2
+  exit 1
+fi
 require_literal 'verifyReleaseAcceptanceNetworkDenied()' release_acceptance_launch.go
 require_literal 'verifyReleaseAcceptanceBoundaryPlatform()' release_acceptance_launch_darwin.go
 require_literal '(remote ip "localhost:*")' build/darwin/release-acceptance.sb
