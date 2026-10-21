@@ -1,7 +1,11 @@
 // e.g. https://api.boltz.exchange -> boltz.exchange
 export function getSwapProviderName(swapApiUrl: string) {
   try {
-    return new URL(swapApiUrl).host.replace(/^api\./, "");
+    const host = new URL(swapApiUrl).host;
+    if (host === "swap.coinos.io") {
+      return "Coinos";
+    }
+    return host.replace(/^api\./, "");
   } catch {
     return swapApiUrl;
   }

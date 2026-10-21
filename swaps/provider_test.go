@@ -3,7 +3,10 @@ package swaps
 import (
 	"context"
 	"errors"
+	"net/http"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/BoltzExchange/boltz-client/v2/pkg/boltz"
 	"github.com/getAlby/hub/alby"
@@ -47,10 +50,39 @@ func TestFetchSwapProviderAPIURL(t *testing.T) {
 
 func TestMapSwapProviderToAPIURL(t *testing.T) {
 	assert.Equal(t, "https://api.boltz.exchange", mapSwapProviderToAPIURL("boltz"))
+	assert.Equal(t, coinosSwapAPIURL, mapSwapProviderToAPIURL("coinos"))
+	assert.Equal(t, coinosSwapAPIURL, mapSwapProviderToAPIURL(" Coinos "))
 	assert.Equal(t, "https://api.satsrouting.exchange", mapSwapProviderToAPIURL("satsrouting"))
 	assert.Equal(t, "https://api.satsrouting.exchange", mapSwapProviderToAPIURL(" SatsRouting "))
 	assert.Equal(t, "", mapSwapProviderToAPIURL(""))
 	assert.Equal(t, "", mapSwapProviderToAPIURL("unknown"))
+}
+
+// TestCoinosBoltzV2Compatibility is deliberately opt-in because it calls a
+// third-party mainnet API. It performs discovery only: no swap, invoice, HTLC,
+// or payment is created.
+func TestCoinosBoltzV2Compatibility(t *testing.T) {
+	if os.Getenv("COINOS_READ_ONLY_INTEGRATION") != "1" {
+		t.Skip("set COINOS_READ_ONLY_INTEGRATION=1 to query Coinos read-only pair data")
+	}
+
+	api := &boltz.Api{
+		URL: coinosSwapAPIURL,
+		Client: http.Client{
+			Timeout: 5 * time.Second,
+		},
+	}
+	reversePairs, err := api.GetReversePairs()
+	assert.NoError(t, err)
+
+	pairInfo, err := boltz.FindPair(
+		boltz.Pair{From: boltz.CurrencyBtc, To: boltz.CurrencyBtc},
+		reversePairs,
+	)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, pairInfo.Hash)
+	assert.Positive(t, pairInfo.Limits.Minimal)
+	assert.GreaterOrEqual(t, pairInfo.Limits.Maximal, pairInfo.Limits.Minimal)
 }
 
 func TestCheckSwapApiUrl(t *testing.T) {

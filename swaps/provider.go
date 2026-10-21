@@ -12,7 +12,10 @@ import (
 
 const (
 	swapProviderBoltz       = "boltz"
+	swapProviderCoinos      = "coinos"
 	swapProviderSatsRouting = "satsrouting"
+
+	coinosSwapAPIURL = "https://swap.coinos.io"
 )
 
 var (
@@ -61,6 +64,8 @@ func mapSwapProviderToAPIURL(provider string) string {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case swapProviderBoltz:
 		return "https://api.boltz.exchange"
+	case swapProviderCoinos:
+		return coinosSwapAPIURL
 	case swapProviderSatsRouting:
 		return "https://api.satsrouting.exchange"
 	default:
