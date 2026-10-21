@@ -272,6 +272,6 @@ replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-d
 // Exact-channel circular-payment APIs are not yet available in upstream
 // ldk-node-go v0.7.1. This temporary dependency-order pin is reviewed at
 // hudhaifahz/ldk-node-go commit ea7860a8558930f501df672616b88c0a72c6c584.
-// Upstream path: hudhaifahz:codex/exact-channel-rebalance-v1243 -> getAlby:master,
-// after the corresponding ldk-node contribution is accepted.
+// Maintenance source: local codex/alby-security-20261021; not yet pushed.
+// Publication requires owner approval and independent remote module/hash readback.
 replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261021161128-ea7860a85589
