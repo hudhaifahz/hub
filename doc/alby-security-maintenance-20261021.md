@@ -1,3 +1,5 @@
+> Later maintenance snapshot: [2026-10-22](/Users/kode/Development/alby-security-maintenance-20261021/hub/doc/alby-security-maintenance-20261022.md). The record below preserves the October 21 evidence.
+
 # Alby security maintenance — 2026-10-21
 
 **PREPARED LOCALLY — TESTED WITH OPEN GATES — NOT PUSHED, RELEASED, OR INSTALLED.**
