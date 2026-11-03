@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --global yarn@1.22.22
-          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
           go mod download
 
       - name: Install pinned SBOM tool
