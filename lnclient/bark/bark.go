@@ -651,23 +651,24 @@ func (bs *BarkService) GetBalances(ctx context.Context, includeInactiveChannels 
 	if err != nil {
 		return nil, err
 	}
-	spendableMsat := int64(balance.SpendableSats) * 1000
-	// Since bark 0.8.0, SpendableSats excludes VTXOs awaiting refresh. They are
-	// still the user's funds (maintenance refreshes them), so count them in the
-	// total but not in what can be sent right now.
-	totalMsat := spendableMsat + int64(balance.NeedsRefreshSats)*1000
+	return balancesResponse(balance), nil
+}
 
+func balancesResponse(balance bark.Balance) *lnclient.BalancesResponse {
+	// This response also feeds NWC get_balance and send-amount controls.
+	// Funds awaiting refresh must not be advertised as currently spendable.
+	spendableMsat := int64(balance.SpendableSats) * 1000
 	return &lnclient.BalancesResponse{
 		Onchain: lnclient.OnchainBalanceResponse{
 			PendingBalancesDetails:      []lnclient.PendingBalanceDetails{},
 			PendingSweepBalancesDetails: []lnclient.PendingBalanceDetails{},
 		},
 		Lightning: lnclient.LightningBalanceResponse{
-			TotalSpendableMsat:      totalMsat,
+			TotalSpendableMsat:      spendableMsat,
 			NextMaxSpendableMsat:    spendableMsat,
 			NextMaxSpendableMPPMsat: spendableMsat,
 		},
-	}, nil
+	}
 }
 
 func (bs *BarkService) GetInfo(ctx context.Context) (*lnclient.NodeInfo, error) {
