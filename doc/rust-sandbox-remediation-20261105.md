@@ -1,3 +1,5 @@
+> **Post-push checkpoint:** The two exact dependency branches are now pushed and verified. Canonical public module checksum supersedes the private ZIP checksum below; local Hub go.sum is corrected. VSS CI exposed a missing-binary provisioning gap, with a reviewed local fix awaiting separate push approval. See [approved-push evidence and follow-up packet](dependency-push-20261105.md). Historical preparation details follow.
+
 # Rust and sandbox remediation — 2026-11-05
 
 **PREPARED AND TESTED LOCALLY — NOT PUSHED, RELEASED OR INSTALLED.**
