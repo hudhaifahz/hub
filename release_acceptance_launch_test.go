@@ -243,8 +243,16 @@ func TestReleaseAcceptanceSandboxHelper(t *testing.T) {
 		t.Fatalf("prepare sandboxed acceptance launch: %v", err)
 	}
 
-	for _, address := range desktopLockAddresses {
-		loopback, err := net.Listen("tcp", address)
+	// Exercise the exact production sandbox and lock ports on an isolated IPv6
+	// loopback address. The owner's desktop holds the IPv4 lock addresses; a
+	// fixture must never connect to or stop that process to run this test.
+	for _, productionAddress := range desktopLockAddresses {
+		_, port, err := net.SplitHostPort(productionAddress)
+		if err != nil {
+			t.Fatalf("parse ownership listener address: %v", err)
+		}
+		address := net.JoinHostPort("::1", port)
+		loopback, err := net.Listen("tcp6", address)
 		if err != nil {
 			t.Fatalf("acceptance sandbox blocked loopback ownership listener %s: %v", address, err)
 		}
