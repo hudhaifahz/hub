@@ -277,4 +277,4 @@ replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-d
 // hudhaifahz/ldk-node-go commit ea7860a8558930f501df672616b88c0a72c6c584.
 // Maintenance source: local codex/alby-security-20261021; not yet pushed.
 // Publication requires owner approval and independent remote module/hash readback.
-replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261021161128-ea7860a85589
+replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261106012124-1551acb4e724

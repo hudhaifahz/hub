@@ -21,7 +21,7 @@ if [[ -n "$(git status --porcelain=v1)" ]]; then
 fi
 
 source_commit="$(git rev-parse HEAD)"
-ldk_library_sha256="bb487c9c2640e4c053aa508998f459b6b03216be4592ea080a64a4e9b5476f78"
+ldk_library_sha256="19f9cbea84af10665fe10370a7c1d6e586a2cf8f9cd23a0458ab7e069e411d3f"
 tag_ref="refs/tags/${release_tag}"
 tag_commit="$(git rev-parse --verify "${tag_ref}^{commit}" 2>/dev/null || true)"
 if [[ -z "$tag_commit" || "$tag_commit" != "$source_commit" ]]; then
