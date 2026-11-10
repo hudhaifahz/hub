@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
       APP_NAME: Grynvault Rebalance

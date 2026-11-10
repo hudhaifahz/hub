@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	decodepay "github.com/nbd-wtf/ln-decodepay"
 	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
@@ -470,6 +471,11 @@ func (svc *transactionsService) SendPaymentSync(payReq string, amountMsat *uint6
 }
 
 func (svc *transactionsService) SendKeysend(amountMsat uint64, destination string, customRecords []lnclient.TLVRecord, preimage string, lnClient lnclient.LNClient, appId *uint, requestEventId *uint) (*Transaction, error) {
+	if err := validateKeysendDestination(destination); err != nil {
+		logger.Logger.WithError(err).Error("Invalid keysend destination")
+		return nil, err
+	}
+
 	if preimage == "" {
 		preImageBytes, err := makePreimageHex()
 		if err != nil {
@@ -479,10 +485,13 @@ func (svc *transactionsService) SendKeysend(amountMsat uint64, destination strin
 	}
 
 	preImageBytes, err := hex.DecodeString(preimage)
-	if err != nil || len(preImageBytes) != 32 {
-		logger.Logger.WithFields(logrus.Fields{
-			"preimage": preimage,
-		}).WithError(err).Error("Invalid preimage")
+	if err != nil {
+		logger.Logger.WithError(err).Error("Invalid preimage")
+		return nil, err
+	}
+	if len(preImageBytes) != 32 {
+		err = fmt.Errorf("preimage must be 32 bytes, got %d", len(preImageBytes))
+		logger.Logger.WithError(err).Error("Invalid preimage")
 		return nil, err
 	}
 
@@ -1224,6 +1233,21 @@ func CalculateFeeReserveMsat(amountMsat uint64) uint64 {
 	return uint64(math.Max(math.Ceil(float64(amountMsat)*0.01), 10000))
 }
 
+// validateKeysendDestination checks that destination is a hex-encoded 33-byte compressed secp256k1 node pubkey
+func validateKeysendDestination(destination string) error {
+	destinationBytes, err := hex.DecodeString(destination)
+	if err != nil {
+		return fmt.Errorf("invalid destination pubkey: %w", err)
+	}
+	if len(destinationBytes) != btcec.PubKeyBytesLenCompressed {
+		return fmt.Errorf("destination pubkey must be %d bytes, got %d", btcec.PubKeyBytesLenCompressed, len(destinationBytes))
+	}
+	if _, err := btcec.ParsePubKey(destinationBytes); err != nil {
+		return fmt.Errorf("invalid destination pubkey: %w", err)
+	}
+	return nil
+}
+
 func makePreimageHex() ([]byte, error) {
 	bytes := make([]byte, 32) // 32 bytes * 8 bits/byte = 256 bits
 	_, err := rand.Read(bytes)
@@ -1331,9 +1355,14 @@ func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage 
 		AppId:       &appId,
 	})
 
+	if result.Error != nil {
+		logger.Logger.WithField("payment_hash", paymentHash).WithError(result.Error).Error("Failed to query hold invoice")
+		return nil, errors.New("failed to look up hold invoice")
+	}
+
 	if result.RowsAffected == 0 {
 		logger.Logger.WithField("payment_hash", paymentHash).Error("Failed to find accepted hold invoice")
-		return nil, errors.New("failed to find accepted hold invoice")
+		return nil, NewNotFoundError()
 	}
 
 	if !dbTransaction.SelfPayment {

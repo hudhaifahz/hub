@@ -3,15 +3,19 @@ package wails
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strconv"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/api"
 	"github.com/getAlby/hub/logger"
+	"github.com/getAlby/hub/tests/mocks"
 )
 
 func TestRedactWailsRoute(t *testing.T) {
@@ -54,6 +58,47 @@ func TestRedactWailsRoute(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWailsOAuthCallbackUsesPendingSession(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	oauth := mocks.NewMockAlbyOAuthService(t)
+	svc.On("GetAlbyOAuthSvc").Return(oauth)
+	app := &WailsApp{ctx: context.Background(), svc: svc}
+	oauth.On("GetAuthUrl", mock.Anything, mock.Anything).Return(func(state, _ string) string {
+		return "https://example.test/authorize?state=" + state
+	})
+
+	authURL := func() string {
+		response := app.WailsRequestRouter("/api/alby/auth-url", "GET", "")
+		require.Empty(t, response.Error)
+		return response.Body.(*alby.AlbyAuthUrlResponse).Url
+	}
+	initial := authURL()
+	require.Equal(t, initial, authURL())
+	parsed, err := url.Parse(initial)
+	require.NoError(t, err)
+	state := parsed.Query().Get("state")
+	require.NotEmpty(t, state)
+	verifier := app.albyOAuthVerifier
+	require.NotEmpty(t, verifier)
+
+	callback := func(query string) string {
+		return app.WailsRequestRouter("/api/alby/callback?"+query, "GET", "").Error
+	}
+	for _, query := range []string{"code=fixture", "code=fixture&state=wrong", "code=%zz&state=" + state} {
+		require.Contains(t, callback(query), "Invalid OAuth")
+	}
+	oauth.AssertNotCalled(t, "CallbackHandler", mock.Anything, mock.Anything, mock.Anything)
+
+	query := url.Values{"code": {"fixture+&"}, "state": {state}}.Encode()
+	oauth.On("CallbackHandler", mock.Anything, "fixture+&", verifier).Return(errors.New("retryable fixture failure")).Once()
+	require.Equal(t, "retryable fixture failure", callback(query))
+	require.Equal(t, initial, authURL())
+	oauth.On("CallbackHandler", mock.Anything, "fixture+&", verifier).Return(nil).Once()
+	require.Empty(t, callback(query))
+	require.NotEqual(t, initial, authURL())
+	require.Contains(t, callback(query), "Invalid OAuth state")
 }
 
 type mockRouterAPI struct {

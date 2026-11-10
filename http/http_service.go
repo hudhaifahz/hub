@@ -23,6 +23,7 @@ import (
 	"github.com/getAlby/hub/events"
 	"github.com/getAlby/hub/logger"
 	"github.com/getAlby/hub/service"
+	"github.com/getAlby/hub/swaps"
 
 	"github.com/getAlby/hub/api"
 	"github.com/getAlby/hub/frontend"
@@ -226,7 +227,7 @@ func (httpSvc *HttpService) infoHandler(c echo.Context) error {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader != "" {
 		parts := strings.Split(authHeader, " ")
-		if parts[0] == "Bearer" {
+		if len(parts) == 2 && parts[0] == "Bearer" {
 			tokenString := parts[1]
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				secret, err := httpSvc.cfg.GetJWTSecret()
@@ -1543,8 +1544,13 @@ func (httpSvc *HttpService) listSwapsHandler(c echo.Context) error {
 func (httpSvc *HttpService) lookupSwapHandler(c echo.Context) error {
 	swap, err := httpSvc.api.LookupSwap(c.Param("swapId"))
 	if err != nil {
-		return c.JSON(http.StatusNotFound, ErrorResponse{
-			Message: "App not found",
+		if errors.Is(err, swaps.ErrSwapNotFound) {
+			return c.JSON(http.StatusNotFound, ErrorResponse{
+				Message: "Swap not found",
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Message: "Failed to lookup swap",
 		})
 	}
 

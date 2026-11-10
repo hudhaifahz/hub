@@ -3,6 +3,7 @@ package wails
 import (
 	"context"
 	"embed"
+	"sync"
 
 	"github.com/getAlby/hub/api"
 	"github.com/getAlby/hub/apps"
@@ -23,6 +24,10 @@ type WailsApp struct {
 	api     api.API
 	db      *gorm.DB
 	appsSvc apps.AppsService
+
+	albyOAuthMutex    sync.Mutex
+	albyOAuthState    string
+	albyOAuthVerifier string
 }
 
 func NewApp(svc service.Service) *WailsApp {

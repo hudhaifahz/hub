@@ -1,6 +1,7 @@
 package wails
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/oauth2"
 
 	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/api"
@@ -54,26 +56,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		return WailsRequestRouterResponse{Body: nil, Error: "migration verification is active; Lightning and wallet actions remain offline"}
 	}
 
-	// the grouping is done to avoid other parameters like &unused=true
-	albyCallbackRegex := regexp.MustCompile(
-		`^/api/alby/callback\?code=([^&]+)(&.*)?$`,
-	)
-
-	authCodeMatch := albyCallbackRegex.FindStringSubmatch(route)
-
-	switch {
-	case len(authCodeMatch) > 1 && method == "GET":
-		code := authCodeMatch[1]
-
-		err := app.svc.GetAlbyOAuthSvc().CallbackHandler(ctx, code)
-		if err != nil {
-			logger.Logger.WithFields(logrus.Fields{
-				"route":  safeRoute,
-				"method": method,
-			}).WithError(err).Error("Failed to decode request to wails router")
-			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+	if method == "GET" && safeRoute == "/api/alby/callback" {
+		_, query, _ := strings.Cut(route, "?")
+		if err := app.handleAlbyOAuthCallback(query); err != nil {
+			return WailsRequestRouterResponse{Error: err.Error()}
 		}
-		return WailsRequestRouterResponse{Body: nil, Error: ""}
+		return WailsRequestRouterResponse{}
 	}
 
 	appv2Regex := regexp.MustCompile(
@@ -468,6 +456,14 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: info, Error: ""}
+	case "GET /api/alby/auth-url":
+		state, verifier, err := app.resolveAlbyOAuthSession()
+		if err != nil {
+			return WailsRequestRouterResponse{Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: &alby.AlbyAuthUrlResponse{
+			Url: app.svc.GetAlbyOAuthSvc().GetAuthUrl(state, verifier),
+		}}
 	case "GET /api/alby/me":
 		me, err := app.svc.GetAlbyOAuthSvc().GetMe(ctx)
 		if err != nil {
@@ -1669,4 +1665,40 @@ func startGuidedMigrationRelaunch() error {
 		return fmt.Errorf("start Grynvault replacement process: %w", err)
 	}
 	return command.Process.Release()
+}
+
+// Keep the state and verifier together so refetching the URL does not
+// invalidate an authorization already opened in the browser.
+func (app *WailsApp) resolveAlbyOAuthSession() (string, string, error) {
+	app.albyOAuthMutex.Lock()
+	defer app.albyOAuthMutex.Unlock()
+	if app.albyOAuthState == "" {
+		state, err := alby.GenerateOAuthState()
+		if err != nil {
+			return "", "", err
+		}
+		app.albyOAuthState = state
+		app.albyOAuthVerifier = oauth2.GenerateVerifier()
+	}
+	return app.albyOAuthState, app.albyOAuthVerifier, nil
+}
+
+func (app *WailsApp) handleAlbyOAuthCallback(query string) error {
+	params, err := url.ParseQuery(query)
+	if err != nil || len(params["code"]) != 1 || params.Get("code") == "" || len(params["state"]) != 1 {
+		return errors.New("Invalid OAuth callback. Please try connecting your Alby Account again.")
+	}
+
+	app.albyOAuthMutex.Lock()
+	defer app.albyOAuthMutex.Unlock()
+	if app.albyOAuthState == "" || subtle.ConstantTimeCompare([]byte(app.albyOAuthState), []byte(params.Get("state"))) != 1 {
+		return errors.New("Invalid OAuth state. Please try connecting your Alby Account again.")
+	}
+
+	if err := app.svc.GetAlbyOAuthSvc().CallbackHandler(app.ctx, params.Get("code"), app.albyOAuthVerifier); err != nil {
+		return err
+	}
+	app.albyOAuthState = ""
+	app.albyOAuthVerifier = ""
+	return nil
 }

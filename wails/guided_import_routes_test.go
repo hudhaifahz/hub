@@ -27,6 +27,8 @@ func TestGuidedMigrationRouteAllowlist(t *testing.T) {
 		{"POST", "/api/import-existing-alby/inspect"},
 		{"POST", "/api/import-existing-alby/stage"},
 		{"GET", "/api/health"},
+		{"GET", "/api/alby/auth-url"},
+		{"GET", "/api/alby/callback"},
 		{"DELETE", "/api/apps/1"},
 	}
 	for _, route := range blocked {

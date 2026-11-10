@@ -14,7 +14,7 @@ require (
 	github.com/btcsuite/btcd v0.25.1-0.20260310163610-1c55c7c18179
 	github.com/btcsuite/btcd/btcutil v1.2.0
 	github.com/elnosh/gonuts v0.4.2
-	github.com/getAlby/go-nostr v0.0.0-20261104074428-45060cc10054
+	github.com/getAlby/go-nostr v0.0.0-20261110062342-5d9af3cfa9c8
 	github.com/getAlby/ldk-node-go v0.0.0-20261021094837-02f88de84f63
 	github.com/go-gormigrate/gormigrate/v2 v2.1.7
 	github.com/google/uuid v1.6.0
@@ -272,9 +272,7 @@ require (
 // allows us to specify that as an option.
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.33.0-hex-display
 
-// Exact-channel circular-payment APIs are not yet available in upstream
-// ldk-node-go v0.7.1. This temporary dependency-order pin is reviewed at
-// hudhaifahz/ldk-node-go commit ea7860a8558930f501df672616b88c0a72c6c584.
-// Maintenance source: local codex/alby-security-20261021; not yet pushed.
-// Publication requires owner approval and independent remote module/hash readback.
+// The Grynvault binding provides the exact-channel circular-payment APIs and
+// the reviewed universal macOS library built from LDK d8c68f5534e5.
+// The binding commit 1551acb4e724 is available through the public Go proxy.
 replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261106012124-1551acb4e724
