@@ -44,7 +44,7 @@ trap 'rm -f "$temporary_manifest"' EXIT
 {
   echo "release_tag=${release_tag}"
   echo "source_commit=${source_commit}"
-  echo "upstream_hub_base=378a32260456933c3acd8d65b35017440aee82b0"
+  echo "upstream_hub_base=9bbab996caa994c89e45b3292e1c6f041b063480"
   echo "ldk_node_commit=d8c68f5534e5aaa9d4f994751bc763e3938c2c22"
   echo "ldk_node_go_commit=1551acb4e724cab38f641dde391f0a608201f590"
   echo "build_workflow=.github/workflows/wails.yml@${source_commit}"
