@@ -134,18 +134,19 @@ func TestSelfHoldPaymentCanceledBeforeSettleCommits(t *testing.T) {
 		_, _ = transactionsService.SendPaymentSync(transaction.PaymentRequest, nil, nil, svc.LNClient, nil, nil)
 	}()
 
-	// wait for payment to be accepted
-	time.Sleep(10 * time.Millisecond)
+	// Wait for the actual accepted state, not an assumed scheduling delay.
+	// The race detector and concurrent builds can easily exceed 10ms.
+	var acceptedTransaction db.Transaction
+	require.Eventually(t, func() bool {
+		result := svc.DB.Limit(1).Find(&acceptedTransaction, &db.Transaction{
+			Type:        constants.TRANSACTION_TYPE_INCOMING,
+			State:       constants.TRANSACTION_STATE_ACCEPTED,
+			PaymentHash: paymentHash,
+		})
+		return result.Error == nil && result.RowsAffected == 1
+	}, 5*time.Second, 5*time.Millisecond, "hold payment never reached accepted state")
 
 	// settle reads the invoice while it is still accepted...
-	var acceptedTransaction db.Transaction
-	result := svc.DB.Limit(1).Find(&acceptedTransaction, &db.Transaction{
-		Type:        constants.TRANSACTION_TYPE_INCOMING,
-		State:       constants.TRANSACTION_STATE_ACCEPTED,
-		PaymentHash: paymentHash,
-	})
-	require.NoError(t, result.Error)
-	require.Equal(t, int64(1), result.RowsAffected)
 
 	// ...but the cancellation commits first
 	err = transactionsService.CancelHoldInvoice(ctx, paymentHash, svc.LNClient, app.ID)
