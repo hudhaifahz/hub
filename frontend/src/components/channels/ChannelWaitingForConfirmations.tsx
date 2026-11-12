@@ -19,7 +19,7 @@ export function ChannelWaitingForConfirmations({
     // 0-conf channel or waiting for transaction to be broadcasted, this should only take a few seconds
     return (
       <>
-        <title>Your channel is being opened · Alby Hub</title>
+        <title>Your channel is being opened · Grynvault Rebalance</title>
         <Loading />
       </>
     );
@@ -27,7 +27,7 @@ export function ChannelWaitingForConfirmations({
 
   return (
     <>
-      <title>Your channel is being opened · Alby Hub</title>
+      <title>Your channel is being opened · Grynvault Rebalance</title>
       <div className="flex flex-col justify-center gap-2">
         <Card>
           <CardHeader>

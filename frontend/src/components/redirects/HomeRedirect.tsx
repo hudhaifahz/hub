@@ -21,6 +21,11 @@ export function HomeRedirect() {
       return;
     }
 
+    if (info.migrationQuarantined) {
+      navigate("/migration/verify", { replace: true });
+      return;
+    }
+
     const setupReturnTo = window.localStorage.getItem(
       localStorageKeys.setupReturnTo
     );

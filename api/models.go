@@ -35,6 +35,11 @@ type API interface {
 	DisconnectPeer(ctx context.Context, peerId string) error
 	OpenChannel(ctx context.Context, openChannelRequest *OpenChannelRequest) (*OpenChannelResponse, error)
 	RebalanceChannel(ctx context.Context, rebalanceChannelRequest *RebalanceChannelRequest) (*RebalanceChannelResponse, error)
+	QuoteRebalance(ctx context.Context, request *QuoteRebalanceRequest) (*RebalanceQuoteResponse, error)
+	QuoteLocalRebalance(ctx context.Context, request *QuoteLocalRebalanceRequest) (*LocalRebalanceQuoteResponse, error)
+	ExecuteRebalance(ctx context.Context, request *ExecuteRebalanceRequest) (*RebalanceChannelResponse, error)
+	ExecuteLocalRebalance(ctx context.Context, request *ExecuteLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error)
+	ReconcileLocalRebalance(ctx context.Context, request *ReconcileLocalRebalanceRequest) (*LocalRebalanceOperationResponse, error)
 	CloseChannel(ctx context.Context, peerId, channelId string, force bool) (*CloseChannelResponse, error)
 	UpdateChannel(ctx context.Context, updateChannelRequest *UpdateChannelRequest) error
 	MakeOffer(ctx context.Context, description string) (string, error)
@@ -51,6 +56,7 @@ type API interface {
 	SetTransactionUserLabels(ctx context.Context, id uint, labels map[string]string) error
 	RequestMempoolApi(ctx context.Context, endpoint string) (interface{}, error)
 	GetInfo(ctx context.Context) (*InfoResponse, error)
+	GetJitChannelsInfo() (*JitChannelsInfoResponse, error)
 	GetMnemonic(unlockPassword string) (*MnemonicResponse, error)
 	SetNextBackupReminder(backupReminderRequest *BackupReminderRequest) error
 	Start(startRequest *StartRequest)
@@ -69,8 +75,8 @@ type API interface {
 	ListSwaps() (*ListSwapsResponse, error)
 	GetSwapInInfo() (*SwapInfoResponse, error)
 	GetSwapOutInfo() (*SwapInfoResponse, error)
-	InitiateSwapIn(ctx context.Context, initiateSwapInRequest *InitiateSwapRequest) (*swaps.SwapResponse, error)
-	InitiateSwapOut(ctx context.Context, initiateSwapOutRequest *InitiateSwapRequest) (*swaps.SwapResponse, error)
+	InitiateSwapIn(ctx context.Context, initiateSwapInRequest *InitiateSwapInRequest) (*swaps.SwapResponse, error)
+	InitiateSwapOut(ctx context.Context, initiateSwapOutRequest *InitiateSwapOutRequest) (*swaps.SwapResponse, error)
 	RefundSwap(refundSwapRequest *RefundSwapRequest) error
 	GetSwapMnemonic() string
 	GetAutoSwapConfig() (*GetAutoSwapConfigResponse, error)
@@ -168,7 +174,14 @@ type CreateLightningAddressRequest struct {
 	AppId   uint   `json:"appId"`
 }
 
-type InitiateSwapRequest struct {
+type InitiateSwapInRequest struct {
+	SwapAmount      *uint64 `json:"swapAmount"` // deprecated
+	SwapAmountSat   *uint64 `json:"swapAmountSat"`
+	InternalPayment bool    `json:"internalPayment"`
+	FeeRate         *uint64 `json:"feeRate"`
+}
+
+type InitiateSwapOutRequest struct {
 	SwapAmount    *uint64 `json:"swapAmount"` // deprecated
 	SwapAmountSat *uint64 `json:"swapAmountSat"`
 	Destination   string  `json:"destination"`
@@ -236,6 +249,7 @@ type Swap struct {
 	CreatedAt          string `json:"createdAt"`
 	UpdatedAt          string `json:"updatedAt"`
 	UsedXpub           bool   `json:"usedXpub"`
+	ApiUrl             string `json:"apiUrl"`
 }
 
 type StartRequest struct {
@@ -304,41 +318,46 @@ type InfoResponseRelay struct {
 }
 
 type InfoResponse struct {
-	BackendType                   string              `json:"backendType"`
-	SetupCompleted                bool                `json:"setupCompleted"`
-	OAuthRedirect                 bool                `json:"oauthRedirect"`
-	Running                       bool                `json:"running"`
-	Unlocked                      bool                `json:"unlocked"`
-	AlbyAuthUrl                   string              `json:"albyAuthUrl"`
-	NextBackupReminder            string              `json:"nextBackupReminder"`
-	AlbyUserIdentifier            string              `json:"albyUserIdentifier"`
-	AlbyAccountConnected          bool                `json:"albyAccountConnected"`
-	Version                       string              `json:"version"`
-	Network                       string              `json:"network"`
-	EnableAdvancedSetup           bool                `json:"enableAdvancedSetup"`
-	LdkVssEnabled                 bool                `json:"ldkVssEnabled"`
-	LdkVssUrl                     string              `json:"ldkVssUrl"`
-	VssSupported                  bool                `json:"vssSupported"`
-	DatabaseType                  string              `json:"databaseType"`
-	StartupState                  string              `json:"startupState"`
-	StartupError                  string              `json:"startupError"`
-	StartupErrorTime              time.Time           `json:"startupErrorTime"`
-	AutoUnlockPasswordSupported   bool                `json:"autoUnlockPasswordSupported"`
-	AutoUnlockPasswordEnabled     bool                `json:"autoUnlockPasswordEnabled"`
-	Currency                      string              `json:"currency"`
-	BitcoinDisplayFormat          string              `json:"bitcoinDisplayFormat"`
-	Relays                        []InfoResponseRelay `json:"relays"`
-	NodeAlias                     string              `json:"nodeAlias"`
-	MempoolUrl                    string              `json:"mempoolUrl"`
-	ChainDataSourceType           string              `json:"chainDataSourceType,omitempty"`
-	ChainDataSourceAddress        string              `json:"chainDataSourceAddress,omitempty"`
-	JitChannelsLiquiditySource    string              `json:"jitChannelsLiquiditySource,omitempty"`
-	JitChannelsMinPaymentSizeMsat *uint64             `json:"jitChannelsMinPaymentSizeMsat,omitempty"`
-	JitChannelsMaxPaymentSizeMsat *uint64             `json:"jitChannelsMaxPaymentSizeMsat,omitempty"`
-	JitChannelsEnabled            bool                `json:"jitChannelsEnabled"`
-	HideUpdateBanner              bool                `json:"hideUpdateBanner"`
-	SupportsBolt12                bool                `json:"supportsBolt12"`
-	NodeMigrationFileCreated      bool                `json:"nodeMigrationFileCreated"`
+	BackendType                 string              `json:"backendType"`
+	SetupCompleted              bool                `json:"setupCompleted"`
+	OAuthRedirect               bool                `json:"oauthRedirect"`
+	Running                     bool                `json:"running"`
+	Unlocked                    bool                `json:"unlocked"`
+	NextBackupReminder          string              `json:"nextBackupReminder"`
+	AlbyUserIdentifier          string              `json:"albyUserIdentifier"`
+	AlbyAccountConnected        bool                `json:"albyAccountConnected"`
+	Version                     string              `json:"version"`
+	Network                     string              `json:"network"`
+	EnableAdvancedSetup         bool                `json:"enableAdvancedSetup"`
+	LdkVssEnabled               bool                `json:"ldkVssEnabled"`
+	LdkVssUrl                   string              `json:"ldkVssUrl"`
+	VssSupported                bool                `json:"vssSupported"`
+	DatabaseType                string              `json:"databaseType"`
+	SwapApiUrl                  string              `json:"swapApiUrl"`
+	StartupState                string              `json:"startupState"`
+	StartupError                string              `json:"startupError"`
+	StartupErrorTime            time.Time           `json:"startupErrorTime"`
+	AutoUnlockPasswordSupported bool                `json:"autoUnlockPasswordSupported"`
+	AutoUnlockPasswordEnabled   bool                `json:"autoUnlockPasswordEnabled"`
+	Currency                    string              `json:"currency"`
+	BitcoinDisplayFormat        string              `json:"bitcoinDisplayFormat"`
+	Relays                      []InfoResponseRelay `json:"relays"`
+	NodeAlias                   string              `json:"nodeAlias"`
+	MempoolUrl                  string              `json:"mempoolUrl"`
+	ChainDataSourceType         string              `json:"chainDataSourceType,omitempty"`
+	ChainDataSourceAddress      string              `json:"chainDataSourceAddress,omitempty"`
+	JitChannelsLiquiditySource  string              `json:"jitChannelsLiquiditySource,omitempty"`
+	JitChannelsEnabled          bool                `json:"jitChannelsEnabled"`
+	HideUpdateBanner            bool                `json:"hideUpdateBanner"`
+	SupportsBolt12              bool                `json:"supportsBolt12"`
+	NodeMigrationFileCreated    bool                `json:"nodeMigrationFileCreated"`
+	MigrationQuarantined        bool                `json:"migrationQuarantined"`
+	MigrationPhase              string              `json:"migrationPhase,omitempty"`
+}
+
+type JitChannelsInfoResponse struct {
+	MinPaymentSizeMsat *uint64 `json:"minPaymentSizeMsat,omitempty"`
+	MaxPaymentSizeMsat *uint64 `json:"maxPaymentSizeMsat,omitempty"`
 }
 
 type UpdateSettingsRequest struct {
@@ -438,6 +457,142 @@ type RebalanceChannelRequest struct {
 type RebalanceChannelResponse struct {
 	TotalFeeSat  uint64 `json:"totalFeeSat"`
 	TotalFeeMsat uint64 `json:"totalFeeMsat"`
+}
+
+type QuoteRebalanceRequest struct {
+	OutgoingChannelId  string `json:"outgoingChannelId"`
+	OutgoingNodePubkey string `json:"outgoingNodePubkey"`
+	IncomingChannelId  string `json:"incomingChannelId"`
+	IncomingNodePubkey string `json:"incomingNodePubkey"`
+	AmountMsat         uint64 `json:"amountMsat"`
+	MaxProviderFeeMsat uint64 `json:"maxProviderFeeMsat"`
+	MaxRoutingFeeMsat  uint64 `json:"maxRoutingFeeMsat"`
+}
+
+type RebalanceQuoteResponse struct {
+	QuoteId                        string    `json:"quoteId"`
+	AmountMsat                     uint64    `json:"amountMsat"`
+	ProviderFeeMsat                uint64    `json:"providerFeeMsat"`
+	MaxProviderFeeMsat             uint64    `json:"maxProviderFeeMsat"`
+	MaxRoutingFeeMsat              uint64    `json:"maxRoutingFeeMsat"`
+	MaxTotalDebitMsat              uint64    `json:"maxTotalDebitMsat"`
+	OutgoingChannelId              string    `json:"outgoingChannelId"`
+	OutgoingNodePubkey             string    `json:"outgoingNodePubkey"`
+	IncomingChannelId              string    `json:"incomingChannelId"`
+	IncomingNodePubkey             string    `json:"incomingNodePubkey"`
+	OutgoingSpendableSnapshotMsat  uint64    `json:"outgoingSpendableSnapshotMsat"`
+	IncomingReceivableSnapshotMsat uint64    `json:"incomingReceivableSnapshotMsat"`
+	ExpiresAt                      time.Time `json:"expiresAt"`
+	ExecutionEnabled               bool      `json:"executionEnabled"`
+	BlockedReason                  string    `json:"blockedReason,omitempty"`
+}
+
+type QuoteLocalRebalanceRequest struct {
+	OutgoingChannelId  string `json:"outgoingChannelId"`
+	OutgoingNodePubkey string `json:"outgoingNodePubkey"`
+	IncomingChannelId  string `json:"incomingChannelId"`
+	IncomingNodePubkey string `json:"incomingNodePubkey"`
+	AmountMsat         uint64 `json:"amountMsat"`
+	MaxRoutingFeeMsat  uint64 `json:"maxRoutingFeeMsat"`
+}
+
+type LocalCircularRouteHop struct {
+	NodePubkey     string `json:"nodePubkey"`
+	ShortChannelId string `json:"shortChannelId"`
+	FeeMsat        uint64 `json:"feeMsat"`
+	CltvDelta      uint32 `json:"cltvDelta"`
+}
+
+type LocalCircularRoutePath struct {
+	Hops       []LocalCircularRouteHop `json:"hops"`
+	AmountMsat uint64                  `json:"amountMsat"`
+	FeeMsat    uint64                  `json:"feeMsat"`
+}
+
+type LocalRebalanceQuoteResponse struct {
+	QuoteId                        string                   `json:"quoteId"`
+	RouteFingerprint               string                   `json:"routeFingerprint"`
+	AmountMsat                     uint64                   `json:"amountMsat"`
+	TotalRoutingFeeMsat            uint64                   `json:"totalRoutingFeeMsat"`
+	MaxRoutingFeeMsat              uint64                   `json:"maxRoutingFeeMsat"`
+	MaxTotalDebitMsat              uint64                   `json:"maxTotalDebitMsat"`
+	OutgoingChannelId              string                   `json:"outgoingChannelId"`
+	OutgoingNodePubkey             string                   `json:"outgoingNodePubkey"`
+	OutgoingShortChannelId         string                   `json:"outgoingShortChannelId"`
+	IncomingChannelId              string                   `json:"incomingChannelId"`
+	IncomingNodePubkey             string                   `json:"incomingNodePubkey"`
+	IncomingShortChannelId         string                   `json:"incomingShortChannelId"`
+	OutgoingSpendableSnapshotMsat  uint64                   `json:"outgoingSpendableSnapshotMsat"`
+	IncomingReceivableSnapshotMsat uint64                   `json:"incomingReceivableSnapshotMsat"`
+	OutgoingLocalSnapshotMsat      uint64                   `json:"outgoingLocalSnapshotMsat"`
+	OutgoingRemoteSnapshotMsat     uint64                   `json:"outgoingRemoteSnapshotMsat"`
+	OutgoingLocalReserveMsat       uint64                   `json:"outgoingLocalReserveMsat"`
+	OutgoingRemoteReserveMsat      uint64                   `json:"outgoingRemoteReserveMsat"`
+	IncomingLocalSnapshotMsat      uint64                   `json:"incomingLocalSnapshotMsat"`
+	IncomingRemoteSnapshotMsat     uint64                   `json:"incomingRemoteSnapshotMsat"`
+	IncomingLocalReserveMsat       uint64                   `json:"incomingLocalReserveMsat"`
+	IncomingRemoteReserveMsat      uint64                   `json:"incomingRemoteReserveMsat"`
+	Paths                          []LocalCircularRoutePath `json:"paths"`
+	QuotedAt                       time.Time                `json:"quotedAt"`
+	ExpiresAt                      time.Time                `json:"expiresAt"`
+	ExecutionEnabled               bool                     `json:"executionEnabled"`
+	BlockedReason                  string                   `json:"blockedReason"`
+	ExecutionConfirmation          string                   `json:"executionConfirmation"`
+	routeBytes                     []byte
+}
+
+type ExecuteRebalanceRequest struct {
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
+}
+
+type ExecuteLocalRebalanceRequest struct {
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
+	Confirmation     string `json:"confirmation"`
+}
+
+type ReconcileLocalRebalanceRequest struct {
+	QuoteId          string `json:"quoteId"`
+	RouteFingerprint string `json:"routeFingerprint"`
+}
+
+type LocalRebalanceOperationResponse struct {
+	QuoteId                           string     `json:"quoteId"`
+	RouteFingerprint                  string     `json:"routeFingerprint"`
+	State                             string     `json:"state"`
+	Phase                             string     `json:"phase"`
+	OperationId                       string     `json:"operationId"`
+	PaymentHash                       string     `json:"paymentHash"`
+	OutboundPaymentId                 string     `json:"outboundPaymentId"`
+	AmountMsat                        uint64     `json:"amountMsat"`
+	QuotedRoutingFeeMsat              uint64     `json:"quotedRoutingFeeMsat"`
+	MaxRoutingFeeMsat                 uint64     `json:"maxRoutingFeeMsat"`
+	ActualRoutingFeeMsat              *uint64    `json:"actualRoutingFeeMsat,omitempty"`
+	OutgoingChannelId                 string     `json:"outgoingChannelId"`
+	OutgoingNodePubkey                string     `json:"outgoingNodePubkey"`
+	IncomingChannelId                 string     `json:"incomingChannelId"`
+	IncomingNodePubkey                string     `json:"incomingNodePubkey"`
+	OutgoingLocalSnapshotMsat         uint64     `json:"outgoingLocalSnapshotMsat"`
+	OutgoingRemoteSnapshotMsat        uint64     `json:"outgoingRemoteSnapshotMsat"`
+	OutgoingLocalReserveMsat          uint64     `json:"outgoingLocalReserveMsat"`
+	OutgoingRemoteReserveMsat         uint64     `json:"outgoingRemoteReserveMsat"`
+	IncomingLocalSnapshotMsat         uint64     `json:"incomingLocalSnapshotMsat"`
+	IncomingRemoteSnapshotMsat        uint64     `json:"incomingRemoteSnapshotMsat"`
+	IncomingLocalReserveMsat          uint64     `json:"incomingLocalReserveMsat"`
+	IncomingRemoteReserveMsat         uint64     `json:"incomingRemoteReserveMsat"`
+	PreparedAt                        *time.Time `json:"preparedAt,omitempty"`
+	SubmittedAt                       *time.Time `json:"submittedAt,omitempty"`
+	LightningTerminalAt               *time.Time `json:"lightningTerminalAt,omitempty"`
+	ReconciledAt                      *time.Time `json:"reconciledAt,omitempty"`
+	TerminalEvidenceHash              string     `json:"terminalEvidenceHash,omitempty"`
+	TerminalEvidenceVersion           uint32     `json:"terminalEvidenceVersion,omitempty"`
+	FailureReason                     string     `json:"failureReason,omitempty"`
+	FailureCode                       string     `json:"failureCode,omitempty"`
+	ObservedReceivingChannelIds       []string   `json:"observedReceivingChannelIds,omitempty"`
+	UnidentifiedReceivingChannelCount uint32     `json:"unidentifiedReceivingChannelCount,omitempty"`
+	RequiresExactRetry                bool       `json:"requiresExactRetry"`
+	ReconciliationPending             bool       `json:"reconciliationPending"`
 }
 
 type RedeemOnchainFundsRequest struct {

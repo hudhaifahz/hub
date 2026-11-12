@@ -1,18 +1,15 @@
-import { compare } from "compare-versions";
 import React from "react";
-import { useAlbyInfo } from "src/hooks/useAlbyInfo";
 import { useAlbyMe } from "src/hooks/useAlbyMe";
 import { useInfo } from "src/hooks/useInfo";
 
 export function useBanner() {
   const { data: info } = useInfo();
-  const { data: albyInfo } = useAlbyInfo();
   const { data: albyMe } = useAlbyMe();
   const [showBanner, setShowBanner] = React.useState(false);
   const isDismissedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!info || !albyInfo || info.hideUpdateBanner || isDismissedRef.current) {
+    if (!info || info.hideUpdateBanner || isDismissedRef.current) {
       return;
     }
 
@@ -24,13 +21,12 @@ export function useBanner() {
       info.vssSupported &&
       !info.ldkVssEnabled;
 
-    const upToDate =
-      Boolean(info.version) &&
-      info.version.startsWith("v") &&
-      compare(info.version.substring(1), albyInfo.hub.latestVersion, ">=");
-
-    setShowBanner(!upToDate || vssMigrationRequired);
-  }, [info, albyInfo, albyMe?.subscription.plan_code]);
+    // Grynvault is a tested fork, not a skin over the current upstream binary.
+    // Do not turn an upstream Alby release into an actionable update prompt.
+    // Compatible Grynvault releases are announced only after their own release
+    // gates pass.
+    setShowBanner(vssMigrationRequired);
+  }, [info, albyMe?.subscription.plan_code]);
 
   const dismissBanner = () => {
     isDismissedRef.current = true;

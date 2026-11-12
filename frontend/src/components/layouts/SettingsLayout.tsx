@@ -90,12 +90,12 @@ export default function SettingsLayout() {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>
-                    Do you want to turn off your Alby Hub?
+                    Do you want to turn off Grynvault Rebalance?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will turn off your Alby Hub and make your node offline.
-                    You won't be able to send or receive bitcoin until you
-                    unlock it.
+                    This will turn off Grynvault Rebalance and make your node
+                    offline. You won't be able to send or receive bitcoin until
+                    you unlock it.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

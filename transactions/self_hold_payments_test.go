@@ -26,8 +26,11 @@ func TestSelfHoldPaymentSettled(t *testing.T) {
 	preimage := tests.MockLNClientHoldTransaction.Preimage
 	paymentHash := tests.MockLNClientHoldTransaction.PaymentHash
 
+	app, _, err := tests.CreateApp(svc)
+	require.NoError(t, err)
+
 	transactionsService := NewTransactionsService(svc.DB, svc.EventPublisher)
-	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, nil, nil)
+	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, &app.ID, nil)
 	require.NoError(t, err)
 	assert.True(t, transaction.Hold)
 	// use the pubkey from the decoded tests.MockLNClientHoldTransaction invoice
@@ -47,7 +50,7 @@ func TestSelfHoldPaymentSettled(t *testing.T) {
 
 	// wait for payment to be accepted
 	time.Sleep(10 * time.Millisecond)
-	settledTransaction, err := transactionsService.SettleHoldInvoice(ctx, preimage, svc.LNClient)
+	settledTransaction, err := transactionsService.SettleHoldInvoice(ctx, preimage, svc.LNClient, app.ID)
 	assert.NoError(t, err)
 	require.NotNil(t, settledTransaction)
 	assert.Equal(t, constants.TRANSACTION_STATE_SETTLED, settledTransaction.State)
@@ -64,8 +67,11 @@ func TestSelfHoldPaymentCanceled(t *testing.T) {
 
 	paymentHash := tests.MockLNClientHoldTransaction.PaymentHash
 
+	app, _, err := tests.CreateApp(svc)
+	require.NoError(t, err)
+
 	transactionsService := NewTransactionsService(svc.DB, svc.EventPublisher)
-	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, nil, nil)
+	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, &app.ID, nil)
 	require.NoError(t, err)
 	assert.True(t, transaction.Hold)
 	// use the pubkey from the decoded tests.MockLNClientHoldTransaction invoice
@@ -90,7 +96,7 @@ func TestSelfHoldPaymentCanceled(t *testing.T) {
 
 	// wait for payment to be accepted
 	time.Sleep(10 * time.Millisecond)
-	err = transactionsService.CancelHoldInvoice(ctx, paymentHash, svc.LNClient)
+	err = transactionsService.CancelHoldInvoice(ctx, paymentHash, svc.LNClient, app.ID)
 	assert.NoError(t, err)
 
 	incomingTransactionType := constants.TRANSACTION_TYPE_INCOMING
@@ -100,6 +106,117 @@ func TestSelfHoldPaymentCanceled(t *testing.T) {
 	assert.Equal(t, true, updatedHoldTransaction.SelfPayment)
 	assert.Equal(t, true, updatedHoldTransaction.Hold)
 	wg.Wait()
+}
+
+func TestSelfHoldPaymentCanceledBeforeSettleCommits(t *testing.T) {
+	ctx := context.TODO()
+
+	svc, err := tests.CreateTestService(t)
+	require.NoError(t, err)
+	defer svc.Remove()
+
+	preimage := tests.MockLNClientHoldTransaction.Preimage
+	paymentHash := tests.MockLNClientHoldTransaction.PaymentHash
+
+	app, _, err := tests.CreateApp(svc)
+	require.NoError(t, err)
+
+	transactionsService := NewTransactionsService(svc.DB, svc.EventPublisher)
+	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, &app.ID, nil)
+	require.NoError(t, err)
+	// use the pubkey from the decoded tests.MockLNClientHoldTransaction invoice
+	svc.LNClient.(*tests.MockLn).Pubkey = "038a73de75fdc3c7ec951a5e0b0fa95c5cd353bd7ca72df2086aa228c1f92819a5"
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = transactionsService.SendPaymentSync(transaction.PaymentRequest, nil, nil, svc.LNClient, nil, nil)
+	}()
+
+	// Wait for the actual accepted state, not an assumed scheduling delay.
+	// The race detector and concurrent builds can easily exceed 10ms.
+	var acceptedTransaction db.Transaction
+	require.Eventually(t, func() bool {
+		result := svc.DB.Limit(1).Find(&acceptedTransaction, &db.Transaction{
+			Type:        constants.TRANSACTION_TYPE_INCOMING,
+			State:       constants.TRANSACTION_STATE_ACCEPTED,
+			PaymentHash: paymentHash,
+		})
+		return result.Error == nil && result.RowsAffected == 1
+	}, 5*time.Second, 5*time.Millisecond, "hold payment never reached accepted state")
+
+	// settle reads the invoice while it is still accepted...
+
+	// ...but the cancellation commits first
+	err = transactionsService.CancelHoldInvoice(ctx, paymentHash, svc.LNClient, app.ID)
+	require.NoError(t, err)
+	wg.Wait()
+
+	_, err = transactionsService.markTransactionSettled(&acceptedTransaction, preimage, 0, true)
+	assert.ErrorIs(t, err, lnclient.NewHoldInvoiceCanceledError())
+
+	incomingTransactionType := constants.TRANSACTION_TYPE_INCOMING
+	incomingTransaction, err := transactionsService.LookupTransaction(ctx, paymentHash, &incomingTransactionType, svc.LNClient, nil)
+	require.NoError(t, err)
+	assert.Equal(t, constants.TRANSACTION_STATE_FAILED, incomingTransaction.State)
+
+	outgoingTransactionType := constants.TRANSACTION_TYPE_OUTGOING
+	outgoingTransaction, err := transactionsService.LookupTransaction(ctx, paymentHash, &outgoingTransactionType, svc.LNClient, nil)
+	require.NoError(t, err)
+	assert.Equal(t, constants.TRANSACTION_STATE_FAILED, outgoingTransaction.State)
+}
+
+func TestSelfHoldPaymentCanceledCannotBePaidAgain(t *testing.T) {
+	ctx := context.TODO()
+
+	svc, err := tests.CreateTestService(t)
+	require.NoError(t, err)
+	defer svc.Remove()
+
+	paymentHash := tests.MockLNClientHoldTransaction.PaymentHash
+
+	app, _, err := tests.CreateApp(svc)
+	require.NoError(t, err)
+
+	transactionsService := NewTransactionsService(svc.DB, svc.EventPublisher)
+	transaction, err := transactionsService.MakeHoldInvoice(ctx, 1000, "Hold payment test", "", 0, paymentHash, nil, nil, svc.LNClient, &app.ID, nil)
+	require.NoError(t, err)
+	// use the pubkey from the decoded tests.MockLNClientHoldTransaction invoice
+	svc.LNClient.(*tests.MockLn).Pubkey = "038a73de75fdc3c7ec951a5e0b0fa95c5cd353bd7ca72df2086aa228c1f92819a5"
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = transactionsService.SendPaymentSync(transaction.PaymentRequest, nil, nil, svc.LNClient, nil, nil)
+	}()
+
+	// wait for payment to be accepted
+	time.Sleep(10 * time.Millisecond)
+	err = transactionsService.CancelHoldInvoice(ctx, paymentHash, svc.LNClient, app.ID)
+	require.NoError(t, err)
+	wg.Wait()
+
+	result, err := transactionsService.SendPaymentSync(transaction.PaymentRequest, nil, nil, svc.LNClient, nil, nil)
+	assert.ErrorIs(t, err, NewNotFoundError())
+	assert.Nil(t, result)
+
+	incomingTransactionType := constants.TRANSACTION_TYPE_INCOMING
+	incomingTransaction, err := transactionsService.LookupTransaction(ctx, paymentHash, &incomingTransactionType, svc.LNClient, nil)
+	require.NoError(t, err)
+	assert.Equal(t, constants.TRANSACTION_STATE_FAILED, incomingTransaction.State)
+
+	var outgoingTransactions []db.Transaction
+	err = svc.DB.Find(&outgoingTransactions, &db.Transaction{
+		Type:        constants.TRANSACTION_TYPE_OUTGOING,
+		PaymentHash: paymentHash,
+	}).Error
+	require.NoError(t, err)
+	require.Len(t, outgoingTransactions, 2)
+	for _, outgoingTransaction := range outgoingTransactions {
+		assert.Equal(t, constants.TRANSACTION_STATE_FAILED, outgoingTransaction.State)
+	}
 }
 
 func TestWrappedInvoice(t *testing.T) {
@@ -265,7 +382,7 @@ func TestWrappedInvoice(t *testing.T) {
 
 	// Bob settles Alice's invoice using the preimage from Charlie
 	// TODO: allow passing a payment request
-	settledAliceInvoice, err := transactionsService.SettleHoldInvoice(ctx, *result.Preimage, svc.LNClient)
+	settledAliceInvoice, err := transactionsService.SettleHoldInvoice(ctx, *result.Preimage, svc.LNClient, bobApp.ID)
 	assert.NoError(t, err)
 	require.NotNil(t, settledAliceInvoice)
 	assert.Equal(t, constants.TRANSACTION_STATE_SETTLED, settledAliceInvoice.State)

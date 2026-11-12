@@ -1,21 +1,29 @@
 package wails
 
 import (
+	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/oauth2"
 
 	"github.com/getAlby/hub/alby"
 	"github.com/getAlby/hub/api"
+	"github.com/getAlby/hub/guidedmigration"
 	"github.com/getAlby/hub/logger"
+	"github.com/getAlby/hub/service"
 )
 
 type WailsRequestRouterResponse struct {
@@ -23,34 +31,41 @@ type WailsRequestRouterResponse struct {
 	Error string      `json:"error"`
 }
 
+func redactWailsRoute(route string) string {
+	parsedURL, err := url.Parse(route)
+	var path string
+	if err != nil {
+		path = strings.SplitN(route, "?", 2)[0]
+		path = strings.SplitN(path, "#", 2)[0]
+	} else {
+		path = parsedURL.Path
+	}
+
+	if strings.HasPrefix(path, "/api/payments/") {
+		return "/api/payments/[REDACTED]"
+	}
+
+	return path
+}
+
 // TODO: make this match echo
 func (app *WailsApp) WailsRequestRouter(route string, method string, body string) WailsRequestRouterResponse {
 	ctx := app.ctx
+	safeRoute := redactWailsRoute(route)
+	if guard, ok := app.svc.(service.MigrationGuard); ok && guard.IsGuidedMigrationQuarantined() && !guidedMigrationRouteAllowed(method, safeRoute) {
+		return WailsRequestRouterResponse{Body: nil, Error: "migration verification is active; Lightning and wallet actions remain offline"}
+	}
 
-	// the grouping is done to avoid other parameters like &unused=true
-	albyCallbackRegex := regexp.MustCompile(
-		`/api/alby/callback\?code=([^&]+)(&.*)?`,
-	)
-
-	authCodeMatch := albyCallbackRegex.FindStringSubmatch(route)
-
-	switch {
-	case len(authCodeMatch) > 1:
-		code := authCodeMatch[1]
-
-		err := app.svc.GetAlbyOAuthSvc().CallbackHandler(ctx, code)
-		if err != nil {
-			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
-				"method": method,
-			}).WithError(err).Error("Failed to decode request to wails router")
-			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+	if method == "GET" && safeRoute == "/api/alby/callback" {
+		_, query, _ := strings.Cut(route, "?")
+		if err := app.handleAlbyOAuthCallback(query); err != nil {
+			return WailsRequestRouterResponse{Error: err.Error()}
 		}
-		return WailsRequestRouterResponse{Body: nil, Error: ""}
+		return WailsRequestRouterResponse{}
 	}
 
 	appv2Regex := regexp.MustCompile(
-		`/api/v2/apps/([0-9a-f]+)`,
+		`^/api/v2/apps/([0-9a-f]+)$`,
 	)
 
 	appv2Match := appv2Regex.FindStringSubmatch(route)
@@ -80,7 +95,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	appRegex := regexp.MustCompile(
-		`/api/apps/([0-9a-f]+)`,
+		`^/api/apps/([0-9a-f]+)$`,
 	)
 
 	appMatch := appRegex.FindStringSubmatch(route)
@@ -105,7 +120,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			err := json.Unmarshal([]byte(body), updateAppRequest)
 			if err != nil {
 				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
+					"route":  safeRoute,
 					"method": method,
 				}).WithError(err).Error("Failed to decode request to wails router")
 				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -125,7 +140,10 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	// list apps
-	if strings.HasPrefix(route, "/api/apps") && method == "GET" {
+	listAppsRegex := regexp.MustCompile(
+		`^/api/apps(\?.*)?$`,
+	)
+	if listAppsRegex.MatchString(route) && method == "GET" {
 		limit := uint64(0)
 		offset := uint64(0)
 		var filtersJSON string
@@ -170,7 +188,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	peerChannelRegex := regexp.MustCompile(
-		`/api/peers/([^/]+)/channels/([^/]+)`,
+		`^/api/peers/([^/]+)/channels/([^/]+)$`,
 	)
 
 	peerChannelMatch := peerChannelRegex.FindStringSubmatch(route)
@@ -185,7 +203,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			err := json.Unmarshal([]byte(body), updateChannelRequest)
 			if err != nil {
 				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
+					"route":  safeRoute,
 					"method": method,
 				}).WithError(err).Error("Failed to decode request to wails router")
 				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -217,7 +235,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	peerRegex := regexp.MustCompile(
-		`/api/peers/([^/]+)`,
+		`^/api/peers/([^/]+)$`,
 	)
 
 	peerMatch := peerRegex.FindStringSubmatch(route)
@@ -236,13 +254,13 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	networkGraphRegex := regexp.MustCompile(
-		`/api/node/network-graph\?nodeIds=(.+)`,
+		`^/api/node/network-graph\?nodeIds=(.+)$`,
 	)
 
 	networkGraphMatch := networkGraphRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(networkGraphMatch) == 2:
+	case len(networkGraphMatch) == 2 && method == "GET":
 		nodeIds := networkGraphMatch[1]
 		networkGraphResponse, err := app.api.GetNetworkGraph(ctx, strings.Split(nodeIds, ","))
 		if err != nil {
@@ -252,12 +270,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	mempoolApiRegex := regexp.MustCompile(
-		`/api/mempool\?endpoint=(.+)`,
+		`^/api/mempool\?endpoint=(.+)$`,
 	)
 	mempoolApiEndpointMatch := mempoolApiRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(mempoolApiEndpointMatch) > 1:
+	case len(mempoolApiEndpointMatch) > 1 && method == "GET":
 		endpoint := mempoolApiEndpointMatch[1]
 		node, err := app.api.RequestMempoolApi(ctx, endpoint)
 		if err != nil {
@@ -268,7 +286,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	transactionLabelRegex := regexp.MustCompile(
-		`/api/transactions/([0-9]+)/labels`,
+		`^/api/transactions/([0-9]+)/labels$`,
 	)
 	transactionLabelMatch := transactionLabelRegex.FindStringSubmatch(route)
 
@@ -284,7 +302,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			err = json.Unmarshal([]byte(body), labelsRequest)
 			if err != nil {
 				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
+					"route":  safeRoute,
 					"method": method,
 				}).WithError(err).Error("Failed to decode request to wails router")
 				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -298,12 +316,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	transactionRegex := regexp.MustCompile(
-		`/api/transactions/([0-9a-fA-F]+)`,
+		`^/api/transactions/([0-9a-fA-F]+)$`,
 	)
 	paymentHashMatch := transactionRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(paymentHashMatch) > 1:
+	case len(paymentHashMatch) > 1 && method == "GET":
 		paymentHash := paymentHashMatch[1]
 		paymentInfo, err := app.api.LookupInvoice(ctx, paymentHash)
 		if err != nil {
@@ -314,11 +332,11 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	listTransactionsRegex := regexp.MustCompile(
-		`/api/transactions`,
+		`^/api/transactions(\?.*)?$`,
 	)
 
 	switch {
-	case listTransactionsRegex.MatchString(route):
+	case listTransactionsRegex.MatchString(route) && method == "GET":
 		limit := uint64(20)
 		offset := uint64(0)
 		var appId *uint
@@ -361,19 +379,19 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	paymentRegex := regexp.MustCompile(
-		`/api/payments/([0-9a-zA-Z]+)`,
+		`^/api/payments/([0-9a-zA-Z]+)$`,
 	)
 	invoiceMatch := paymentRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(invoiceMatch) > 1:
+	case len(invoiceMatch) > 1 && method == "POST":
 		invoice := invoiceMatch[1]
 		payRequest := &api.PayInvoiceRequest{}
 		if body != "" {
 			err := json.Unmarshal([]byte(body), payRequest)
 			if err != nil {
 				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
+					"route":  safeRoute,
 					"method": method,
 				}).WithError(err).Error("Failed to decode request to wails router")
 				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -388,16 +406,16 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		return WailsRequestRouterResponse{Body: paymentResponse, Error: ""}
 	}
 
-	albyRateRegex := regexp.MustCompile(`/api/alby/rates/([^/?]+)`)
+	albyRateRegex := regexp.MustCompile(`^/api/alby/rates/([^/?]+)$`)
 	albyRateMatch := albyRateRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(albyRateMatch) > 1:
+	case len(albyRateMatch) > 1 && method == "GET":
 		currency := albyRateMatch[1]
 		rate, err := app.svc.GetAlbySvc().GetBitcoinRate(ctx, currency)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":    route,
+				"route":    safeRoute,
 				"method":   method,
 				"currency": currency,
 			}).WithError(err).Error("Failed to get Bitcoin rate")
@@ -406,13 +424,13 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		return WailsRequestRouterResponse{Body: rate, Error: ""}
 	}
 
-	switch route {
-	case "/api/transfers":
+	switch method + " " + route {
+	case "POST /api/transfers":
 		transferRequest := &api.TransferRequest{}
 		err := json.Unmarshal([]byte(body), transferRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -428,77 +446,82 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/alby/info":
+	case "GET /api/alby/info":
 		info, err := app.svc.GetAlbySvc().GetInfo(ctx)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: info, Error: ""}
-	case "/api/alby/me":
+	case "GET /api/alby/auth-url":
+		state, verifier, err := app.resolveAlbyOAuthSession()
+		if err != nil {
+			return WailsRequestRouterResponse{Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: &alby.AlbyAuthUrlResponse{
+			Url: app.svc.GetAlbyOAuthSvc().GetAuthUrl(state, verifier),
+		}}
+	case "GET /api/alby/me":
 		me, err := app.svc.GetAlbyOAuthSvc().GetMe(ctx)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: me, Error: ""}
-	case "/api/alby/unlink-account":
+	case "POST /api/alby/unlink-account":
 		err := app.svc.GetAlbyOAuthSvc().UnlinkAccount(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/alby/currencies":
+	case "GET /api/alby/currencies":
 		currencies, err := app.svc.GetAlbySvc().GetCurrencies(ctx)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get currencies")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: currencies, Error: ""}
-	case "/api/alby/stories":
+	case "GET /api/alby/stories":
 		stories, err := app.api.GetStories(ctx)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get stories")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: stories, Error: ""}
-	case "/api/apps":
-		switch method {
-		case "POST":
-			createAppRequest := &api.CreateAppRequest{}
-			err := json.Unmarshal([]byte(body), createAppRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to decode request to wails router")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-
-			createAppResponse, err := app.api.CreateApp(createAppRequest)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: createAppResponse, Error: ""}
+	case "POST /api/apps":
+		createAppRequest := &api.CreateAppRequest{}
+		err := json.Unmarshal([]byte(body), createAppRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/reset-router":
+
+		createAppResponse, err := app.api.CreateApp(createAppRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: createAppResponse, Error: ""}
+	case "POST /api/reset-router":
 		resetRouterRequest := &api.ResetRouterRequest{}
 		err := json.Unmarshal([]byte(body), resetRouterRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -510,58 +533,55 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 		res := WailsRequestRouterResponse{Body: nil, Error: ""}
 		return res
-	case "/api/stop":
+	case "POST /api/stop":
 		err := app.api.Stop()
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		res := WailsRequestRouterResponse{Body: nil, Error: ""}
 		return res
-	case "/api/channels":
-		switch method {
-		case "GET":
-			channels, err := app.api.ListChannels(ctx)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			res := WailsRequestRouterResponse{Body: channels, Error: ""}
-			return res
-		case "POST":
-			openChannelRequest := &api.OpenChannelRequest{}
-			err := json.Unmarshal([]byte(body), openChannelRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to decode request to wails router")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			openChannelResponse, err := app.api.OpenChannel(ctx, openChannelRequest)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: openChannelResponse, Error: ""}
+	case "GET /api/channels":
+		channels, err := app.api.ListChannels(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/channel-offer":
+		res := WailsRequestRouterResponse{Body: channels, Error: ""}
+		return res
+	case "POST /api/channels":
+		openChannelRequest := &api.OpenChannelRequest{}
+		err := json.Unmarshal([]byte(body), openChannelRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		openChannelResponse, err := app.api.OpenChannel(ctx, openChannelRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: openChannelResponse, Error: ""}
+	case "GET /api/channel-offer":
 		offer, err := app.api.GetLSPChannelOffer(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		res := WailsRequestRouterResponse{Body: offer, Error: ""}
 		return res
-	case "/api/channels/suggestions":
+	case "GET /api/channels/suggestions":
 		suggestions, err := app.api.GetChannelPeerSuggestions(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		res := WailsRequestRouterResponse{Body: suggestions, Error: ""}
 		return res
-	case "/api/channels/rebalance":
+	case "POST /api/channels/rebalance":
 		rebalanceChannelRequest := &api.RebalanceChannelRequest{}
 		err := json.Unmarshal([]byte(body), rebalanceChannelRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -571,19 +591,92 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: rebalanceChannelResponse, Error: ""}
-	case "/api/balances":
+	case "POST /api/channels/rebalance/quote":
+		quoteRebalanceRequest := &api.QuoteRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), quoteRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		quoteRebalanceResponse, err := app.api.QuoteRebalance(ctx, quoteRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: quoteRebalanceResponse, Error: ""}
+	case "POST /api/channels/rebalance/local-quote":
+		quoteLocalRebalanceRequest := &api.QuoteLocalRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), quoteLocalRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		quoteLocalRebalanceResponse, err := app.api.QuoteLocalRebalance(ctx, quoteLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: quoteLocalRebalanceResponse, Error: ""}
+	case "POST /api/channels/rebalance/execute":
+		executeRebalanceRequest := &api.ExecuteRebalanceRequest{}
+		err := json.Unmarshal([]byte(body), executeRebalanceRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		executeRebalanceResponse, err := app.api.ExecuteRebalance(ctx, executeRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: executeRebalanceResponse, Error: ""}
+	case "POST /api/channels/rebalance/local-execute":
+		executeLocalRebalanceRequest := &api.ExecuteLocalRebalanceRequest{}
+		if err := json.Unmarshal([]byte(body), executeLocalRebalanceRequest); err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		executeLocalRebalanceResponse, err := app.api.ExecuteLocalRebalance(ctx, executeLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: executeLocalRebalanceResponse, Error: ""}
+	case "POST /api/channels/rebalance/local-status":
+		reconcileLocalRebalanceRequest := &api.ReconcileLocalRebalanceRequest{}
+		if err := json.Unmarshal([]byte(body), reconcileLocalRebalanceRequest); err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		reconcileLocalRebalanceResponse, err := app.api.ReconcileLocalRebalance(ctx, reconcileLocalRebalanceRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: reconcileLocalRebalanceResponse, Error: ""}
+	case "GET /api/balances":
 		balancesResponse, err := app.api.GetBalances(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		res := WailsRequestRouterResponse{Body: *balancesResponse, Error: ""}
 		return res
-	case "/api/invoices":
+	case "POST /api/invoices":
 		makeInvoiceRequest := &api.MakeInvoiceRequest{}
 		err := json.Unmarshal([]byte(body), makeInvoiceRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -599,27 +692,27 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 		res := WailsRequestRouterResponse{Body: invoice, Error: ""}
 		return res
-	case "/api/wallet/sync":
+	case "POST /api/wallet/sync":
 		app.api.SyncWallet()
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/wallet/address":
+	case "GET /api/wallet/address":
 		address, err := app.api.GetUnusedOnchainAddress(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: address, Error: ""}
-	case "/api/wallet/new-address":
+	case "POST /api/wallet/new-address":
 		newAddress, err := app.api.GetNewOnchainAddress(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: newAddress, Error: ""}
-	case "/api/wallet/redeem-onchain-funds":
+	case "POST /api/wallet/redeem-onchain-funds":
 		redeemOnchainFundsRequest := &api.RedeemOnchainFundsRequest{}
 		err := json.Unmarshal([]byte(body), redeemOnchainFundsRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -636,7 +729,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *redeemOnchainFundsResponse, Error: ""}
-	case "/api/wallet/sign-message":
+	case "POST /api/wallet/sign-message":
 		signMessageRequest := &api.SignMessageRequest{}
 		err := json.Unmarshal([]byte(body), signMessageRequest)
 		if err != nil {
@@ -647,13 +740,13 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *signMessageResponse, Error: ""}
-	case "/api/wallet/capabilities":
+	case "GET /api/wallet/capabilities":
 		capabilitiesResponse, err := app.api.GetWalletCapabilities(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *capabilitiesResponse, Error: ""}
-	case "/api/lsp-orders":
+	case "POST /api/lsp-orders":
 		newInstantChannelRequest := &api.LSPOrderRequest{}
 		err := json.Unmarshal([]byte(body), newInstantChannelRequest)
 		if err != nil {
@@ -664,37 +757,34 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *newInstantChannelResponse, Error: ""}
-	case "/api/peers":
-		switch method {
-		case "GET":
-			peers, err := app.api.ListPeers(ctx)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: peers, Error: ""}
-		case "POST":
-			connectPeerRequest := &api.ConnectPeerRequest{}
-			err := json.Unmarshal([]byte(body), connectPeerRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to decode request to wails router")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			err = app.api.ConnectPeer(ctx, connectPeerRequest)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "GET /api/peers":
+		peers, err := app.api.ListPeers(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/node/connection-info":
+		return WailsRequestRouterResponse{Body: peers, Error: ""}
+	case "POST /api/peers":
+		connectPeerRequest := &api.ConnectPeerRequest{}
+		err := json.Unmarshal([]byte(body), connectPeerRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		err = app.api.ConnectPeer(ctx, connectPeerRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "GET /api/node/connection-info":
 		nodeConnectionInfo, err := app.api.GetNodeConnectionInfo(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *nodeConnectionInfo, Error: ""}
-	case "/api/node/status":
+	case "GET /api/node/status":
 		nodeStatus, err := app.api.GetNodeStatus(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -703,13 +793,13 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: ""}
 		}
 		return WailsRequestRouterResponse{Body: *nodeStatus, Error: ""}
-	case "/api/node/transactions":
+	case "GET /api/node/transactions":
 		transactions, err := app.api.ListOnchainTransactions(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: transactions, Error: ""}
-	case "/api/info":
+	case "GET /api/info":
 		infoResponse, err := app.api.GetInfo(ctx)
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -717,12 +807,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		infoResponse.Unlocked = infoResponse.Running
 		res := WailsRequestRouterResponse{Body: *infoResponse, Error: ""}
 		return res
-	case "/api/node/migrate-storage":
+	case "GET /api/jit-channels/info":
+		jitChannelsInfoResponse, err := app.api.GetJitChannelsInfo()
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: *jitChannelsInfoResponse, Error: ""}
+	case "POST /api/node/migrate-storage":
 		migrateNodeStorageRequest := &api.MigrateNodeStorageRequest{}
 		err := json.Unmarshal([]byte(body), migrateNodeStorageRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -732,12 +828,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/alby/auto-channel":
+	case "POST /api/alby/auto-channel":
 		newAutoChannelRequest := &alby.AutoChannelRequest{}
 		err := json.Unmarshal([]byte(body), newAutoChannelRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -748,12 +844,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 		return WailsRequestRouterResponse{Body: *autoChannelResponse, Error: ""}
 
-	case "/api/alby/link-account":
+	case "POST /api/alby/link-account":
 		linkAccountRequest := &alby.AlbyLinkAccountRequest{}
 		err := json.Unmarshal([]byte(body), linkAccountRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -764,12 +860,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		}
 		res := WailsRequestRouterResponse{Error: ""}
 		return res
-	case "/api/mnemonic":
+	case "POST /api/mnemonic":
 		mnemonicRequest := &api.MnemonicRequest{}
 		err := json.Unmarshal([]byte(body), mnemonicRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to parse mnemonic request")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -777,19 +873,19 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		mnemonicResponse, err := app.api.GetMnemonic(mnemonicRequest.UnlockPassword)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get mnemonic")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		res := WailsRequestRouterResponse{Body: *mnemonicResponse, Error: ""}
 		return res
-	case "/api/backup-reminder":
+	case "PATCH /api/backup-reminder":
 		backupReminderRequest := &api.BackupReminderRequest{}
 		err := json.Unmarshal([]byte(body), backupReminderRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -798,18 +894,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.SetNextBackupReminder(backupReminderRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to store backup reminder")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/unlock-password":
+	case "PATCH /api/unlock-password":
 		changeUnlockPasswordRequest := &api.ChangeUnlockPasswordRequest{}
 		err := json.Unmarshal([]byte(body), changeUnlockPasswordRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -818,18 +914,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.ChangeUnlockPassword(changeUnlockPasswordRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to change unlock password")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/settings":
+	case "PATCH /api/settings":
 		updateSettingsRequest := &api.UpdateSettingsRequest{}
 		err := json.Unmarshal([]byte(body), updateSettingsRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -838,18 +934,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.UpdateSettings(updateSettingsRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to update settings")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/auto-unlock":
+	case "PATCH /api/auto-unlock":
 		autoUnlockRequest := &api.AutoUnlockRequest{}
 		err := json.Unmarshal([]byte(body), autoUnlockRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -858,18 +954,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.SetAutoUnlockPassword(autoUnlockRequest.UnlockPassword)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to set auto unlock password")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/start":
+	case "POST /api/start":
 		startRequest := &api.StartRequest{}
 		err := json.Unmarshal([]byte(body), startRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -878,12 +974,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		go app.api.Start(startRequest)
 
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/setup":
+	case "POST /api/setup":
 		setupRequest := &api.SetupRequest{}
 		err := json.Unmarshal([]byte(body), setupRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -891,18 +987,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.Setup(ctx, setupRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to setup node")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/backup":
+	case "POST /api/backup":
 		backupRequest := &api.BasicBackupRequest{}
 		err := json.Unmarshal([]byte(body), backupRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -914,7 +1010,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		})
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to open save file dialog")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -923,7 +1019,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		backupFile, err := os.Create(saveFilePath)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to create backup file")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -935,18 +1031,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to create backup")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/restore":
+	case "POST /api/restore":
 		restoreRequest := &api.BasicRestoreWailsRequest{}
 		err := json.Unmarshal([]byte(body), restoreRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -958,7 +1054,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		})
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to open save file dialog")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -967,7 +1063,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		backupFile, err := os.Open(backupFilePath)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to open backup file")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -978,28 +1074,258 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.RestoreBackup(restoreRequest.UnlockPassword, backupFile)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to restore backup")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/health":
+	case "GET /api/import-existing-alby/status":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: status, Error: ""}
+	case "POST /api/import-existing-alby/discover":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+		defaultDirectory := canonicalLegacyAlbyWorkdir()
+		summary, inspectErr := guidedmigration.InspectSource(defaultDirectory)
+		if inspectErr != nil {
+			blockingReason := "No embedded-LDK Alby Hub wallet was found in the standard location."
+			if _, statErr := os.Stat(defaultDirectory); statErr == nil {
+				logger.Logger.WithError(inspectErr).WithField("source_path", defaultDirectory).Warn("Standard Alby Hub wallet could not be validated")
+				blockingReason = fmt.Sprintf("The standard Alby Hub folder exists but could not be validated: %v", inspectErr)
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				logger.Logger.WithError(statErr).WithField("source_path", defaultDirectory).Warn("Standard Alby Hub wallet location could not be inspected")
+				blockingReason = fmt.Sprintf("The standard Alby Hub location could not be inspected: %v", statErr)
+			}
+			return WailsRequestRouterResponse{Body: guidedmigration.SourceSummary{
+				SourcePath:      defaultDirectory,
+				DefaultLocation: true,
+				Ready:           false,
+				BlockingReason:  blockingReason,
+			}, Error: ""}
+		}
+		summary.DefaultLocation = true
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/inspect":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+
+		request := &guidedImportSourceRequest{}
+		if err = json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid guided import source request"}
+		}
+		selectedPath := strings.TrimSpace(request.SourcePath)
+		if selectedPath == "" {
+			return WailsRequestRouterResponse{Body: nil, Error: "enter the Alby Hub data folder path"}
+		}
+		selectedDirectory, err := legacyAlbyWorkdirFromSelection(selectedPath)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		summary, err := guidedmigration.InspectSource(selectedDirectory)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		summary.DefaultLocation = filepath.Clean(summary.SourcePath) == filepath.Clean(canonicalLegacyAlbyWorkdir())
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/select":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+
+		defaultDirectory := canonicalLegacyAlbyWorkdir()
+		if _, statErr := os.Stat(defaultDirectory); statErr != nil {
+			defaultDirectory, _ = os.UserHomeDir()
+		}
+		selectedPath, pickerErr := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
+			Title:            "Select your existing Alby Hub data folder",
+			DefaultDirectory: defaultDirectory,
+		})
+		if pickerErr != nil {
+			logger.Logger.WithError(pickerErr).Error("Failed to open Alby Hub data folder picker")
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to open the Alby Hub folder picker"}
+		}
+		if selectedPath == "" {
+			return WailsRequestRouterResponse{Body: guidedImportSelectionResponse{Cancelled: true}, Error: ""}
+		}
+		selectedDirectory, err := legacyAlbyWorkdirFromSelection(selectedPath)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		summary, err := guidedmigration.InspectSource(selectedDirectory)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: guidedImportSelectionResponse{Summary: summary}, Error: ""}
+	case "POST /api/import-existing-alby/stage":
+		info, err := app.api.GetInfo(ctx)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "failed to inspect Grynvault setup state"}
+		}
+		if info.SetupCompleted {
+			return WailsRequestRouterResponse{Body: nil, Error: "Grynvault Rebalance is already configured"}
+		}
+		request := &guidedImportStageRequest{}
+		if err = json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid guided import request"}
+		}
+
+		targetWorkdir := app.svc.GetConfig().GetEnv().Workdir
+		stageOptions := guidedmigration.DefaultStageOptions()
+		if acceptanceHome := releaseAcceptanceStageHomeDirectory(targetWorkdir); acceptanceHome != "" {
+			// The process-level acceptance launch has already validated and bound
+			// this exact target under the network-dark sandbox. Scan only its
+			// synthetic home so preserved live copies cannot become test inputs.
+			stageOptions.HomeDirectory = acceptanceHome
+		}
+		stageOptions.Progress = func(progress guidedmigration.Progress) {
+			runtime.EventsEmit(ctx, "grynvault:migration-progress", progress)
+		}
+		result, err := guidedmigration.Stage(request.SourcePath, targetWorkdir, stageOptions)
+		if err != nil {
+			logger.Logger.WithError(err).Error("Failed to stage existing Alby Hub import")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+
+		go func() {
+			// Give the user time to read the verified-copy result and recovery
+			// location. The replacement process waits for both wallet locks, so it
+			// cannot race this service during shutdown.
+			time.Sleep(5 * time.Second)
+			if err := startGuidedMigrationRelaunch(); err != nil {
+				logger.Logger.WithError(err).Error("Failed to schedule guided migration restart; leaving Grynvault open for manual restart")
+				return
+			}
+			logger.Logger.Info("Existing Alby Hub import staged. Restarting into network quarantine...")
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+
+		return WailsRequestRouterResponse{Body: result, Error: ""}
+	case "POST /api/import-existing-alby/verify":
+		request := &guidedImportVerifyRequest{}
+		if err := json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid migration verification request"}
+		}
+		verifier, ok := app.svc.(service.MigrationVerifier)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration verification is unavailable"}
+		}
+		summary, err := verifier.VerifyGuidedMigration(request.UnlockPassword)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: summary, Error: ""}
+	case "POST /api/import-existing-alby/activate":
+		request := &guidedImportActivateRequest{}
+		if err := json.Unmarshal([]byte(body), request); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: "invalid migration activation request"}
+		}
+		verifier, ok := app.svc.(service.MigrationVerifier)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration activation is unavailable"}
+		}
+		if err := verifier.ActivateGuidedMigration(
+			request.UnlockPassword,
+			request.NodeIDConfirmation,
+			request.ActivationConfirmation,
+		); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/open-evidence":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || status.BackupLocation == "" {
+			return WailsRequestRouterResponse{Body: nil, Error: "no guided migration recovery folder is available"}
+		}
+		if err = revealLocalDirectory(status.BackupLocation); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/return-to-source":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || !status.LightningOffline {
+			return WailsRequestRouterResponse{Body: nil, Error: "the migration is not in offline recovery mode"}
+		}
+		go func() {
+			time.Sleep(750 * time.Millisecond)
+			logger.Logger.Info("Quitting guided migration without activating Lightning; source wallet remains unchanged")
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby/abandon":
+		provider, ok := app.svc.(service.MigrationStatusProvider)
+		if !ok {
+			return WailsRequestRouterResponse{Body: nil, Error: "guided migration is unavailable"}
+		}
+		status, err := provider.GetGuidedMigrationStatus()
+		if err != nil || status == nil || !status.Active || !status.LightningOffline {
+			return WailsRequestRouterResponse{Body: nil, Error: "the migration is not in offline recovery mode"}
+		}
+		if _, err = guidedmigration.RequestAbandon(app.svc.GetConfig().GetEnv().Workdir, time.Now()); err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		go func() {
+			time.Sleep(750 * time.Millisecond)
+			if err := startGuidedMigrationRelaunch(); err != nil {
+				logger.Logger.WithError(err).Error("Failed to relaunch while archiving guided migration")
+				return
+			}
+			app.svc.Shutdown()
+			time.Sleep(time.Second)
+			os.Exit(0)
+		}()
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/import-existing-alby":
+		return WailsRequestRouterResponse{Body: nil, Error: "the one-step importer is disabled; use the guided discovery and review flow"}
+	case "GET /api/health":
 		nodeHealth, err := app.api.Health(ctx)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to check node health")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: *nodeHealth, Error: ""}
-	case "/api/offers":
+	case "POST /api/offers":
 		makeOfferRequest := &api.MakeOfferRequest{}
 		err := json.Unmarshal([]byte(body), makeOfferRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1007,28 +1333,28 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		offer, err := app.api.MakeOffer(ctx, makeOfferRequest.Description)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to generate BOLT-12 offer")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: offer, Error: ""}
-	case "/api/commands":
+	case "GET /api/commands":
 		nodeCommandsResponse, err := app.api.GetCustomNodeCommands()
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get node commands")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nodeCommandsResponse, Error: ""}
-	case "/api/command":
+	case "POST /api/command":
 		commandRequest := &api.ExecuteCustomNodeCommandRequest{}
 		err := json.Unmarshal([]byte(body), commandRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1036,80 +1362,77 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		commandResponse, err := app.api.ExecuteCustomNodeCommand(ctx, commandRequest.Command)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to execute command")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: commandResponse, Error: ""}
-	case "/api/autoswap":
-		switch method {
-		case "GET":
-			autoSwapsConfig, err := app.api.GetAutoSwapConfig()
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to get auto swap configuration")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: autoSwapsConfig, Error: ""}
-		case "POST":
-			enableAutoSwapRequest := &api.EnableAutoSwapRequest{}
-			err := json.Unmarshal([]byte(body), enableAutoSwapRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to decode request to wails router")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			err = app.api.EnableAutoSwapOut(ctx, enableAutoSwapRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to enable auto swap")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: nil, Error: ""}
-		case "DELETE":
-			err := app.api.DisableAutoSwap()
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to disable auto swap")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "GET /api/autoswap":
+		autoSwapsConfig, err := app.api.GetAutoSwapConfig()
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to get auto swap configuration")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/swaps/out/info":
+		return WailsRequestRouterResponse{Body: autoSwapsConfig, Error: ""}
+	case "POST /api/autoswap":
+		enableAutoSwapRequest := &api.EnableAutoSwapRequest{}
+		err := json.Unmarshal([]byte(body), enableAutoSwapRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		err = app.api.EnableAutoSwapOut(ctx, enableAutoSwapRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to enable auto swap")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "DELETE /api/autoswap":
+		err := app.api.DisableAutoSwap()
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to disable auto swap")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "GET /api/swaps/out/info":
 		swapOutInfo, err := app.api.GetSwapOutInfo()
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get swap out info")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: swapOutInfo, Error: ""}
-	case "/api/swaps/in/info":
+	case "GET /api/swaps/in/info":
 		swapInInfo, err := app.api.GetSwapInInfo()
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get swap in info")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: swapInInfo, Error: ""}
-	case "/api/swaps/out":
-		initiateSwapOutRequest := &api.InitiateSwapRequest{}
+	case "POST /api/swaps/out":
+		initiateSwapOutRequest := &api.InitiateSwapOutRequest{}
 		err := json.Unmarshal([]byte(body), initiateSwapOutRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1117,18 +1440,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		swapOutResponse, err := app.api.InitiateSwapOut(ctx, initiateSwapOutRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to initiate swap out")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: swapOutResponse, Error: ""}
-	case "/api/swaps/in":
-		initiateSwapInRequest := &api.InitiateSwapRequest{}
+	case "POST /api/swaps/in":
+		initiateSwapInRequest := &api.InitiateSwapInRequest{}
 		err := json.Unmarshal([]byte(body), initiateSwapInRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1136,18 +1459,18 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		swapInResponse, err := app.api.InitiateSwapIn(ctx, initiateSwapInRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to initiate swap in")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: swapInResponse, Error: ""}
-	case "/api/swaps/refund":
+	case "POST /api/swaps/refund":
 		refundSwapRequest := &api.RefundSwapRequest{}
 		err := json.Unmarshal([]byte(body), refundSwapRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1155,21 +1478,21 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.RefundSwap(refundSwapRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to process swap refund")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/swaps/mnemonic":
+	case "GET /api/swaps/mnemonic":
 		mnemonic := app.api.GetSwapMnemonic()
 		return WailsRequestRouterResponse{Body: mnemonic, Error: ""}
-	case "/api/node/alias":
+	case "POST /api/node/alias":
 		setNodeAliasRequest := &api.SetNodeAliasRequest{}
 		err := json.Unmarshal([]byte(body), setNodeAliasRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to decode request to wails router")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1178,49 +1501,43 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		err = app.api.SetNodeAlias(setNodeAliasRequest.NodeAlias)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to set node alias")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
 		return WailsRequestRouterResponse{Body: nil, Error: ""}
-	case "/api/event":
-		switch method {
-		case "POST":
-			sendEventRequest := &api.SendEventRequest{}
-			err := json.Unmarshal([]byte(body), sendEventRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to send event")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-
-			app.api.SendEvent(sendEventRequest.Event, sendEventRequest.Properties)
-
-			return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/event":
+		sendEventRequest := &api.SendEventRequest{}
+		err := json.Unmarshal([]byte(body), sendEventRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to send event")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/lightning-addresses":
-		switch method {
-		case "POST":
-			createLightningAddressRequest := &api.CreateLightningAddressRequest{}
-			err := json.Unmarshal([]byte(body), createLightningAddressRequest)
-			if err != nil {
-				logger.Logger.WithFields(logrus.Fields{
-					"route":  route,
-					"method": method,
-				}).WithError(err).Error("Failed to decode request to wails router")
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
 
-			err = app.api.CreateLightningAddress(ctx, createLightningAddressRequest)
-			if err != nil {
-				return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
-			}
-			return WailsRequestRouterResponse{Body: nil, Error: ""}
+		app.api.SendEvent(sendEventRequest.Event, sendEventRequest.Properties)
+
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "POST /api/lightning-addresses":
+		createLightningAddressRequest := &api.CreateLightningAddressRequest{}
+		err := json.Unmarshal([]byte(body), createLightningAddressRequest)
+		if err != nil {
+			logger.Logger.WithFields(logrus.Fields{
+				"route":  safeRoute,
+				"method": method,
+			}).WithError(err).Error("Failed to decode request to wails router")
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
 		}
-	case "/api/forwards":
+
+		err = app.api.CreateLightningAddress(ctx, createLightningAddressRequest)
+		if err != nil {
+			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
+		}
+		return WailsRequestRouterResponse{Body: nil, Error: ""}
+	case "GET /api/forwards":
 		forwards, err := app.api.GetForwards()
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1229,7 +1546,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	lightningAddressRegex := regexp.MustCompile(
-		`/api/lightning-addresses/([^/]+)`,
+		`^/api/lightning-addresses/([^/]+)$`,
 	)
 	lightningAddressMatch := lightningAddressRegex.FindStringSubmatch(route)
 
@@ -1254,12 +1571,12 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	// Swap lookup and listing is shifted to the bottom so it
 	// doesn't interfere with other swap endpoints
 	swapRegex := regexp.MustCompile(
-		`/api/swaps/([0-9a-zA-Z]+)`,
+		`^/api/swaps/([0-9a-zA-Z]+)$`,
 	)
 	swapIdMatch := swapRegex.FindStringSubmatch(route)
 
 	switch {
-	case len(swapIdMatch) > 1:
+	case len(swapIdMatch) > 1 && method == "GET":
 		swapId := swapIdMatch[1]
 		swapInfo, err := app.api.LookupSwap(swapId)
 		if err != nil {
@@ -1270,11 +1587,11 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	listSwapsRegex := regexp.MustCompile(
-		`/api/swaps`,
+		`^/api/swaps$`,
 	)
 
 	switch {
-	case listSwapsRegex.MatchString(route):
+	case listSwapsRegex.MatchString(route) && method == "GET":
 		swaps, err := app.api.ListSwaps()
 		if err != nil {
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1282,7 +1599,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		return WailsRequestRouterResponse{Body: swaps, Error: ""}
 	}
 
-	if strings.HasPrefix(route, "/api/log/") {
+	if strings.HasPrefix(route, "/api/log/") && method == "GET" {
 		logType := strings.TrimPrefix(route, "/api/log/")
 		logType = strings.Split(logType, "?")[0]
 		if logType != api.LogTypeNode && logType != api.LogTypeApp {
@@ -1303,7 +1620,7 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 		logOutputResponse, err := app.api.GetLogOutput(ctx, logType, getLogOutputRequest)
 		if err != nil {
 			logger.Logger.WithFields(logrus.Fields{
-				"route":  route,
+				"route":  safeRoute,
 				"method": method,
 			}).WithError(err).Error("Failed to get log output")
 			return WailsRequestRouterResponse{Body: nil, Error: err.Error()}
@@ -1312,8 +1629,76 @@ func (app *WailsApp) WailsRequestRouter(route string, method string, body string
 	}
 
 	logger.Logger.WithFields(logrus.Fields{
-		"route":  route,
+		"route":  safeRoute,
 		"method": method,
 	}).Error("Unhandled route")
-	return WailsRequestRouterResponse{Body: nil, Error: fmt.Sprintf("Unhandled route: %s %s", method, route)}
+	return WailsRequestRouterResponse{Body: nil, Error: fmt.Sprintf("Unhandled route: %s %s", method, safeRoute)}
+}
+
+func guidedMigrationRouteAllowed(method, route string) bool {
+	if method == "GET" && (route == "/api/info" || route == "/api/import-existing-alby/status") {
+		return true
+	}
+	if method != "POST" {
+		return false
+	}
+	switch route {
+	case "/api/import-existing-alby/verify",
+		"/api/import-existing-alby/activate",
+		"/api/import-existing-alby/open-evidence",
+		"/api/import-existing-alby/return-to-source",
+		"/api/import-existing-alby/abandon":
+		return true
+	default:
+		return false
+	}
+}
+
+func startGuidedMigrationRelaunch() error {
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate Grynvault executable: %w", err)
+	}
+	command := exec.Command(executable)
+	command.Env = append(os.Environ(), "GRYNVAULT_GUIDED_MIGRATION_RELAUNCH=1")
+	if err = command.Start(); err != nil {
+		return fmt.Errorf("start Grynvault replacement process: %w", err)
+	}
+	return command.Process.Release()
+}
+
+// Keep the state and verifier together so refetching the URL does not
+// invalidate an authorization already opened in the browser.
+func (app *WailsApp) resolveAlbyOAuthSession() (string, string, error) {
+	app.albyOAuthMutex.Lock()
+	defer app.albyOAuthMutex.Unlock()
+	if app.albyOAuthState == "" {
+		state, err := alby.GenerateOAuthState()
+		if err != nil {
+			return "", "", err
+		}
+		app.albyOAuthState = state
+		app.albyOAuthVerifier = oauth2.GenerateVerifier()
+	}
+	return app.albyOAuthState, app.albyOAuthVerifier, nil
+}
+
+func (app *WailsApp) handleAlbyOAuthCallback(query string) error {
+	params, err := url.ParseQuery(query)
+	if err != nil || len(params["code"]) != 1 || params.Get("code") == "" || len(params["state"]) != 1 {
+		return errors.New("Invalid OAuth callback. Please try connecting your Alby Account again.")
+	}
+
+	app.albyOAuthMutex.Lock()
+	defer app.albyOAuthMutex.Unlock()
+	if app.albyOAuthState == "" || subtle.ConstantTimeCompare([]byte(app.albyOAuthState), []byte(params.Get("state"))) != 1 {
+		return errors.New("Invalid OAuth state. Please try connecting your Alby Account again.")
+	}
+
+	if err := app.svc.GetAlbyOAuthSvc().CallbackHandler(app.ctx, params.Get("code"), app.albyOAuthVerifier); err != nil {
+		return err
+	}
+	app.albyOAuthState = ""
+	app.albyOAuthVerifier = ""
+	return nil
 }

@@ -15,6 +15,10 @@ export function StartRedirect({ children }: React.PropsWithChildren) {
       navigate("/create-node-migration-file-success", { replace: true });
       return;
     }
+    if (info?.migrationQuarantined) {
+      navigate("/migration/verify", { replace: true });
+      return;
+    }
     if (!info || (info.setupCompleted && !info.running)) {
       if (info && !info.albyAccountConnected && info.albyUserIdentifier) {
         navigate("/alby/auth");

@@ -28,13 +28,13 @@ import { Input } from "src/components/ui/input";
 import { Label } from "src/components/ui/label";
 import { Separator } from "src/components/ui/separator";
 import { Textarea } from "src/components/ui/textarea";
+import { asString } from "src/lib/utils";
 import { PayInvoiceResponse } from "src/types";
 import { request } from "src/utils/request";
 
 // Must be a sub-wallet connection with only make invoice and list transactions permissions!
-const LIGHTNING_MESSAGEBOARD_NWC_URL =
-  import.meta.env.VITE_LIGHTNING_MESSAGEBOARD_NWC_URL ||
-  "nostr+walletconnect://31758cb11d8060fa87ea955808dc22e3602aad7390717edd56dbbbd136c85a9b?relay=wss://relay.getalby.com&relay=wss://relay2.getalby.com&secret=dce4d879ca8d875b0dc38f98425829eff71a5d213db9d5d423bf284fa75efc80";
+const LIGHTNING_MESSAGEBOARD_NWC_URL = import.meta.env
+  .VITE_LIGHTNING_MESSAGEBOARD_NWC_URL;
 
 type Message = {
   name?: string;
@@ -47,6 +47,9 @@ type TabType = "latest" | "top";
 
 let nwcClient: NWCClient | undefined;
 function getNWCClient(): NWCClient {
+  if (!LIGHTNING_MESSAGEBOARD_NWC_URL) {
+    throw new Error("Lightning messageboard is not configured");
+  }
   if (!nwcClient) {
     nwcClient = new NWCClient({
       nostrWalletConnectUrl: LIGHTNING_MESSAGEBOARD_NWC_URL,
@@ -93,11 +96,13 @@ export function LightningMessageboardWidget() {
           const newMessages = transactions.transactions.map((transaction) => ({
             created_at: transaction.created_at,
             message: transaction.description,
-            name: (
-              transaction.metadata as
-                | { payer_data?: { name?: string } }
-                | undefined
-            )?.payer_data?.name as string | undefined,
+            name: asString(
+              (
+                transaction.metadata as
+                  | { payer_data?: { name?: unknown } }
+                  | undefined
+              )?.payer_data?.name
+            ),
             amountSat: Math.floor(transaction.amount / 1000),
           }));
 

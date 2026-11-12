@@ -4,15 +4,24 @@ import Loading from "src/components/Loading";
 import SettingsHeader from "src/components/SettingsHeader";
 import { Badge } from "src/components/ui/badge";
 import { useAlbyMe } from "src/hooks/useAlbyMe";
+import { useInfo } from "src/hooks/useInfo";
+import { useJitChannelsInfo } from "src/hooks/useJitChannelsInfo";
 import { useNodeDetails } from "src/hooks/useNodeDetails";
 import { backendTypeConfigs } from "src/lib/backendType";
-
-import { useInfo } from "src/hooks/useInfo";
+import {
+  GRYNVAULT_PRODUCT_NAME,
+  GRYNVAULT_SOURCE_URL,
+  UPSTREAM_ALBY_VERSION,
+} from "src/lib/grynvault";
+import { getSwapProviderName } from "src/utils/getSwapProviderName";
 
 export function About() {
   const { data: info } = useInfo();
   const { data: albyMe, error: albyMeError } = useAlbyMe();
   const lsps2Source = info?.jitChannelsLiquiditySource;
+  const { data: jitChannelsInfo } = useJitChannelsInfo(
+    !!info?.jitChannelsEnabled && !!lsps2Source
+  );
   const lsps2Pubkey = lsps2Source?.includes("@")
     ? lsps2Source.split("@")[0]
     : undefined;
@@ -20,11 +29,11 @@ export function About() {
   const lsps2Label =
     lsps2NodeDetails?.alias ||
     (lsps2Pubkey ? lsps2Pubkey.slice(0, 8) + "..." : lsps2Source);
-  const lsps2MinPaymentSizeSat = info?.jitChannelsMinPaymentSizeMsat
-    ? Math.ceil(info.jitChannelsMinPaymentSizeMsat / 1000)
+  const lsps2MinPaymentSizeSat = jitChannelsInfo?.minPaymentSizeMsat
+    ? Math.ceil(jitChannelsInfo.minPaymentSizeMsat / 1000)
     : undefined;
-  const lsps2MaxPaymentSizeSat = info?.jitChannelsMaxPaymentSizeMsat
-    ? Math.floor(info.jitChannelsMaxPaymentSizeMsat / 1000)
+  const lsps2MaxPaymentSizeSat = jitChannelsInfo?.maxPaymentSizeMsat
+    ? Math.floor(jitChannelsInfo.maxPaymentSizeMsat / 1000)
     : undefined;
 
   if (!info || (info.albyAccountConnected && !albyMe && !albyMeError)) {
@@ -48,9 +57,23 @@ export function About() {
       <SettingsHeader
         pageTitle="About"
         title="About"
-        description="Info about your Alby Hub"
+        description={`Info about ${GRYNVAULT_PRODUCT_NAME}`}
       />
       <div className="grid gap-4">
+        <div className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-50 p-4 text-sm dark:bg-amber-950">
+          <p className="font-medium">{GRYNVAULT_PRODUCT_NAME}</p>
+          <p className="text-muted-foreground">
+            Experimental, independently maintained fork built from Alby Hub{" "}
+            {UPSTREAM_ALBY_VERSION}. This is not an official Alby release.
+          </p>
+          <ExternalLink
+            to={GRYNVAULT_SOURCE_URL}
+            className="inline-flex w-fit items-center gap-1 underline"
+          >
+            Review exact source
+            <ExternalLinkIcon className="size-4" />
+          </ExternalLink>
+        </div>
         <div className="grid gap-2">
           <p className="font-medium text-sm">Alby Hub Version</p>
           <p className="text-muted-foreground text-sm slashed-zero">
@@ -107,6 +130,14 @@ export function About() {
             <ExternalLinkIcon className="size-4" />
           </ExternalLink>
         </div>
+        {info.swapApiUrl && (
+          <div className="grid gap-2">
+            <p className="font-medium text-sm">Swap Provider</p>
+            <p className="text-muted-foreground text-sm break-all">
+              {getSwapProviderName(info.swapApiUrl)}
+            </p>
+          </div>
+        )}
         {info.jitChannelsLiquiditySource && (
           <div className="grid gap-2">
             <p className="font-medium text-sm">

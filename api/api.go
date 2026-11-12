@@ -132,7 +132,10 @@ func (api *api) CreateApp(createAppRequest *CreateAppRequest) (*CreateAppRespons
 	responseBody.PairingSecret = pairingSecretKey
 	responseBody.WalletPubkey = *app.WalletPubkey
 	responseBody.RelayUrls = relayUrls
-	responseBody.Lud16 = lightningAddress
+	// isolated apps must not learn the owner's main lightning address
+	if !app.Isolated {
+		responseBody.Lud16 = lightningAddress
+	}
 
 	responseBody.ReturnTo = buildReturnToUrl(createAppRequest.ReturnTo, relayUrls, *app.WalletPubkey, lightningAddress, app.Isolated)
 
@@ -405,11 +408,11 @@ func (api *api) DeleteLightningAddress(ctx context.Context, appId uint) error {
 		return err
 	}
 
-	if metadata["lud16"] == nil {
+	lud16, ok := metadata["lud16"].(string)
+	if !ok {
 		return errors.New("no lightning address set")
 	}
 
-	lud16 := metadata["lud16"].(string)
 	if !strings.Contains(lud16, "@") {
 		return errors.New("invalid lightning address")
 	}
@@ -955,6 +958,7 @@ func toApiSwap(swap *swaps.Swap) *Swap {
 		CreatedAt:          swap.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:          swap.UpdatedAt.Format(time.RFC3339),
 		UsedXpub:           swap.UsedXpub,
+		ApiUrl:             swap.ApiUrl,
 	}
 }
 
@@ -1002,7 +1006,7 @@ func (api *api) GetSwapOutInfo() (*SwapInfoResponse, error) {
 	}, nil
 }
 
-func (api *api) InitiateSwapOut(ctx context.Context, initiateSwapOutRequest *InitiateSwapRequest) (*swaps.SwapResponse, error) {
+func (api *api) InitiateSwapOut(ctx context.Context, initiateSwapOutRequest *InitiateSwapOutRequest) (*swaps.SwapResponse, error) {
 	lnClient := api.svc.GetLNClient()
 	if lnClient == nil {
 		return nil, ErrLNClientNotStarted
@@ -1035,7 +1039,7 @@ func (api *api) InitiateSwapOut(ctx context.Context, initiateSwapOutRequest *Ini
 	return swapOutResponse, nil
 }
 
-func (api *api) InitiateSwapIn(ctx context.Context, initiateSwapInRequest *InitiateSwapRequest) (*swaps.SwapResponse, error) {
+func (api *api) InitiateSwapIn(ctx context.Context, initiateSwapInRequest *InitiateSwapInRequest) (*swaps.SwapResponse, error) {
 	lnClient := api.svc.GetLNClient()
 	if lnClient == nil {
 		return nil, ErrLNClientNotStarted
@@ -1055,10 +1059,11 @@ func (api *api) InitiateSwapIn(ctx context.Context, initiateSwapInRequest *Initi
 		return nil, errors.New("invalid swap amount")
 	}
 
-	swapInResponse, err := api.svc.GetSwapsService().SwapIn(amountSat, false)
+	swapInResponse, err := api.svc.GetSwapsService().SwapIn(amountSat, false, initiateSwapInRequest.InternalPayment, initiateSwapInRequest.FeeRate)
 	if err != nil {
 		logger.Logger.WithFields(logrus.Fields{
-			"amount_sat": amountSat,
+			"amount_sat":       amountSat,
+			"internal_payment": initiateSwapInRequest.InternalPayment,
 		}).WithError(err).Error("Failed to initiate swap in")
 		return nil, err
 	}
@@ -1490,6 +1495,14 @@ func (api *api) RequestMempoolApi(ctx context.Context, endpoint string) (interfa
 
 func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 	info := InfoResponse{}
+	if provider, ok := api.svc.(service.MigrationStatusProvider); ok {
+		migrationStatus, err := provider.GetGuidedMigrationStatus()
+		if err != nil {
+			return nil, fmt.Errorf("read guided migration status: %w", err)
+		}
+		info.MigrationQuarantined = migrationStatus.Active && migrationStatus.LightningOffline
+		info.MigrationPhase = string(migrationStatus.Phase)
+	}
 
 	if api.nodeMigrationFileCreated.Load() {
 		// the hub is halted and the database is closed after a migration file
@@ -1524,7 +1537,6 @@ func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 	info.Running = lnClient != nil
 	info.NodeMigrationFileCreated = api.nodeMigrationFileCreated.Load()
 	info.BackendType = backendType
-	info.AlbyAuthUrl = api.albyOAuthSvc.GetAuthUrl()
 	info.OAuthRedirect = !api.cfg.GetEnv().IsDefaultClientId()
 	info.Version = version.Tag
 	info.EnableAdvancedSetup = api.cfg.GetEnv().EnableAdvancedSetup
@@ -1534,6 +1546,9 @@ func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 	info.VssSupported = backendType == config.LDKBackendType && api.cfg.GetEnv().LDKVssUrl != ""
 	info.LdkVssUrl = api.cfg.GetEnv().LDKVssUrl
 	info.DatabaseType = api.db.Dialector.Name()
+	if swapsService := api.svc.GetSwapsService(); swapsService != nil {
+		info.SwapApiUrl = swapsService.GetApiUrl()
+	}
 	info.SupportsBolt12 = backendType == config.LDKBackendType || backendType == config.CLNBackendType
 	info.AutoUnlockPasswordEnabled = autoUnlockPassword != ""
 	info.AutoUnlockPasswordSupported = api.cfg.GetEnv().IsDefaultClientId()
@@ -1572,24 +1587,12 @@ func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 			type lsps2SourceProvider interface {
 				GetLiquiditySourceLsps2() string
 			}
-			type lsps2MinPaymentSizeProvider interface {
-				GetLiquiditySourceLsps2MinPaymentSizeMsat() *uint64
-			}
-			type lsps2MaxPaymentSizeProvider interface {
-				GetLiquiditySourceLsps2MaxPaymentSizeMsat() *uint64
-			}
 
-			if ldkService, ok := api.svc.GetLNClient().(chainSourceProvider); ok {
+			if ldkService, ok := lnClient.(chainSourceProvider); ok {
 				info.ChainDataSourceType, info.ChainDataSourceAddress = ldkService.GetChainDataSource()
 			}
-			if ldkService, ok := api.svc.GetLNClient().(lsps2SourceProvider); ok {
+			if ldkService, ok := lnClient.(lsps2SourceProvider); ok {
 				info.JitChannelsLiquiditySource = ldkService.GetLiquiditySourceLsps2()
-			}
-			if ldkService, ok := api.svc.GetLNClient().(lsps2MinPaymentSizeProvider); ok {
-				info.JitChannelsMinPaymentSizeMsat = ldkService.GetLiquiditySourceLsps2MinPaymentSizeMsat()
-			}
-			if ldkService, ok := api.svc.GetLNClient().(lsps2MaxPaymentSizeProvider); ok {
-				info.JitChannelsMaxPaymentSizeMsat = ldkService.GetLiquiditySourceLsps2MaxPaymentSizeMsat()
 			}
 		}
 	}
@@ -1599,6 +1602,38 @@ func (api *api) GetInfo(ctx context.Context) (*InfoResponse, error) {
 	info.NodeAlias, _ = api.cfg.Get("NodeAlias", "")
 
 	return &info, nil
+}
+
+func (api *api) GetJitChannelsInfo() (*JitChannelsInfoResponse, error) {
+	info := &JitChannelsInfoResponse{}
+
+	backendType, err := api.cfg.Get("LNBackendType", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get LN backend type: %w", err)
+	}
+	jitChannelsEnabled, err := api.cfg.Get("JitChannelsEnabled", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get JIT channels enabled setting: %w", err)
+	}
+	if backendType != config.LDKBackendType || jitChannelsEnabled == "false" {
+		return info, nil
+	}
+
+	lnClient := api.svc.GetLNClient()
+	if lnClient == nil {
+		return info, nil
+	}
+
+	type lsps2PaymentSizeRangeProvider interface {
+		GetLiquiditySourceLsps2PaymentSizeRangeMsat() (*uint64, *uint64)
+	}
+	ldkService, ok := lnClient.(lsps2PaymentSizeRangeProvider)
+	if !ok {
+		return info, nil
+	}
+
+	info.MinPaymentSizeMsat, info.MaxPaymentSizeMsat = ldkService.GetLiquiditySourceLsps2PaymentSizeRangeMsat()
+	return info, nil
 }
 
 func (api *api) setCurrency(currency string) error {
@@ -1715,6 +1750,9 @@ func (api *api) Start(startRequest *StartRequest) {
 }
 
 func (api *api) Setup(ctx context.Context, setupRequest *SetupRequest) error {
+	if guard, ok := api.svc.(service.MigrationGuard); ok && guard.IsGuidedMigrationQuarantined() {
+		return service.ErrMigrationQuarantined
+	}
 	// hold the start/stop lock so setup cannot run concurrently with a start
 	return api.svc.WithStartLock(func() error {
 		return api.setupInternal(ctx, setupRequest)

@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"testing"
 
+	"github.com/getAlby/hub/config"
 	"github.com/getAlby/hub/constants"
+	"github.com/getAlby/hub/tests"
 	"github.com/getAlby/hub/tests/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,4 +49,72 @@ func TestCreateApp_SuperuserScopeIncorrectPassword(t *testing.T) {
 	assert.Nil(t, response)
 	require.Error(t, err)
 	assert.Equal(t, "incorrect unlock password to create app with superuser permission", err.Error())
+}
+
+func TestCreateApp_LightningAddress(t *testing.T) {
+	for _, isolated := range []bool{false, true} {
+		testSvc, err := tests.CreateTestService(t)
+		require.NoError(t, err)
+		// isolated apps require a backend that supports sub-wallets
+		testSvc.Cfg.SetUpdate("LNBackendType", config.LDKBackendType, "")
+
+		albyOAuthSvc := mocks.NewMockAlbyOAuthService(t)
+		albyOAuthSvc.On("GetLightningAddress").Return("owner@getalby.com", nil)
+
+		theAPI := &api{
+			appsSvc:      testSvc.AppsService,
+			cfg:          testSvc.Cfg,
+			albyOAuthSvc: albyOAuthSvc,
+		}
+
+		response, err := theAPI.CreateApp(&CreateAppRequest{
+			Name:     "Test",
+			Scopes:   []string{constants.GET_INFO_SCOPE},
+			Isolated: isolated,
+			ReturnTo: "https://example.com",
+		})
+		require.NoError(t, err)
+
+		if isolated {
+			// isolated apps must not receive the owner's lightning address
+			assert.Empty(t, response.Lud16)
+			assert.NotContains(t, response.PairingUri, "lud16")
+			assert.NotContains(t, response.ReturnTo, "lud16")
+		} else {
+			assert.Equal(t, "owner@getalby.com", response.Lud16)
+			assert.Contains(t, response.PairingUri, "&lud16=owner@getalby.com")
+			assert.Contains(t, response.ReturnTo, "lud16=owner%40getalby.com")
+		}
+
+		testSvc.Remove()
+	}
+}
+
+func TestDeleteApp_NonStringLightningAddress(t *testing.T) {
+	testSvc, err := tests.CreateTestService(t)
+	require.NoError(t, err)
+	defer testSvc.Remove()
+
+	// no expectations: the Alby API must not be called for a non-string lud16
+	albyOAuthSvc := mocks.NewMockAlbyOAuthService(t)
+	theAPI := &api{
+		appsSvc:      testSvc.AppsService,
+		cfg:          testSvc.Cfg,
+		albyOAuthSvc: albyOAuthSvc,
+	}
+
+	metadata := map[string]interface{}{
+		constants.METADATA_APPSTORE_APP_ID_KEY: constants.SUBWALLET_APPSTORE_APP_ID,
+		"lud16":                                map[string]interface{}{"a": 1},
+	}
+	app, _, err := testSvc.AppsService.CreateApp("test", "", 0, "monthly", nil, []string{constants.GET_INFO_SCOPE}, false, metadata)
+	require.NoError(t, err)
+
+	assert.False(t, testSvc.AppsService.HasLightningAddress(app))
+
+	err = theAPI.DeleteLightningAddress(context.Background(), app.ID)
+	assert.EqualError(t, err, "no lightning address set")
+
+	require.NoError(t, theAPI.DeleteApp(app))
+	assert.Nil(t, testSvc.AppsService.GetAppById(app.ID))
 }

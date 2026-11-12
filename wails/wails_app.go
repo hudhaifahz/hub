@@ -3,6 +3,7 @@ package wails
 import (
 	"context"
 	"embed"
+	"sync"
 
 	"github.com/getAlby/hub/api"
 	"github.com/getAlby/hub/apps"
@@ -23,6 +24,10 @@ type WailsApp struct {
 	api     api.API
 	db      *gorm.DB
 	appsSvc apps.AppsService
+
+	albyOAuthMutex    sync.Mutex
+	albyOAuthState    string
+	albyOAuthVerifier string
 }
 
 func NewApp(svc service.Service) *WailsApp {
@@ -44,7 +49,7 @@ func (app *WailsApp) onBeforeClose(ctx context.Context) bool {
 	response, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
 		Type:          runtime.QuestionDialog,
 		Title:         "Confirm Exit",
-		Message:       "Are you sure you want to shut down Alby Hub? Alby Hub needs to stay online to send and receive transactions. Channels may be closed if your hub stays offline for an extended period of time.",
+		Message:       "Are you sure you want to shut down Grynvault Rebalance? It needs to stay online to send and receive transactions. Channels may be closed if your hub stays offline for an extended period of time.",
 		Buttons:       []string{"Yes", "No"},
 		DefaultButton: "No",
 	})
@@ -57,7 +62,7 @@ func (app *WailsApp) onBeforeClose(ctx context.Context) bool {
 
 func LaunchWailsApp(app *WailsApp, assets embed.FS, appIcon []byte) {
 	err := wails.Run(&options.App{
-		Title:  "Alby Hub",
+		Title:  "Grynvault Rebalance",
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{
@@ -76,7 +81,7 @@ func LaunchWailsApp(app *WailsApp, assets embed.FS, appIcon []byte) {
 		},
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
-				Title: "Alby Hub",
+				Title: "Grynvault Rebalance",
 				Icon:  appIcon,
 			},
 		},

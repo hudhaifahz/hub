@@ -8,7 +8,7 @@
         <key>CFBundleExecutable</key>
         <string>{{.Name}}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.getalby.{{.Name}}</string>
+        <string>com.grynvault.rebalance.dev</string>
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
@@ -48,7 +48,7 @@
           {{range .Info.Protocols}}
             <dict>
                 <key>CFBundleURLName</key>
-                <string>com.getalby.{{.Scheme}}</string>
+                <string>com.grynvault.rebalance.dev.{{.Scheme}}</string>
                 <key>CFBundleURLSchemes</key>
                 <array>
                     <string>{{.Scheme}}</string>

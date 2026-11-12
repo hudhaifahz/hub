@@ -20,6 +20,7 @@ import (
 
 	"github.com/getAlby/hub/config"
 	"github.com/getAlby/hub/events"
+	"github.com/getAlby/hub/guidedmigration"
 	"github.com/getAlby/hub/lnclient"
 	"github.com/getAlby/hub/lnclient/bark"
 	"github.com/getAlby/hub/lnclient/cashu"
@@ -47,7 +48,7 @@ func (svc *service) startNostr(ctx context.Context) error {
 		"hex":        svc.keys.GetNostrPublicKey(),
 		"version":    version.Tag,
 		"relay_urls": relayUrls,
-	}).Info("Starting Alby Hub")
+	}).Info("Starting Grynvault Rebalance")
 
 	// To debug go-nostr, run with -tags "debug dev" (dev tag so LND build doesn't break with debug tag set)
 	// go run -tags "debug dev" -ldflags="-X 'github.com/getAlby/hub/version.Tag=v1.20.0'" cmd/http/main.go
@@ -299,6 +300,9 @@ func (svc *service) WithStartLock(fn func() error) error {
 }
 
 func (svc *service) StartApp(encryptionKey string) error {
+	if svc.isMigrationQuarantined() {
+		return ErrMigrationQuarantined
+	}
 	// do not allow to start twice in case this is somehow called twice
 	return svc.WithStartLock(func() error {
 		return svc.startAppInternal(encryptionKey)
@@ -306,6 +310,7 @@ func (svc *service) StartApp(encryptionKey string) error {
 }
 
 func (svc *service) startAppInternal(encryptionKey string) error {
+	svc.startupLaunchedNode = false
 	defer func() {
 		svc.startupState = ""
 	}()
@@ -335,6 +340,10 @@ func (svc *service) startAppInternal(encryptionKey string) error {
 		logger.Logger.Errorf("Invalid password")
 		return ErrInvalidPassword
 	}
+	if err = guidedmigration.EnsureWalletAuthority(svc.cfg.GetEnv().Workdir); err != nil {
+		logger.Logger.WithError(err).Error("Wallet authority check failed")
+		return err
+	}
 
 	err = svc.cfg.LoadJWTSecret(encryptionKey)
 	if err != nil {
@@ -360,8 +369,9 @@ func (svc *service) startAppInternal(encryptionKey string) error {
 		cancelFn()
 		return err
 	}
+	svc.startupLaunchedNode = true
 
-	svc.swapsService = swaps.NewSwapsService(ctx, svc.db, svc.cfg, svc.keys, svc.eventPublisher, svc.GetLNClient(), svc.transactionsService, encryptionKey)
+	svc.swapsService = swaps.NewSwapsService(ctx, svc.db, svc.cfg, svc.keys, svc.eventPublisher, svc.GetLNClient(), svc.transactionsService, svc.albySvc, encryptionKey)
 
 	svc.publishAllAppInfoEvents()
 

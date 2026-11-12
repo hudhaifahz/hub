@@ -1,12 +1,25 @@
 package ldk
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/getAlby/ldk-node-go/ldk_node"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/getAlby/hub/events"
+	"github.com/getAlby/hub/lnclient"
+	"github.com/getAlby/hub/logger"
 	"github.com/getAlby/hub/tests"
 )
 
@@ -132,6 +145,320 @@ func TestComputeLsps2MinPaymentSizeMsat(t *testing.T) {
 	})
 }
 
+func TestFetchLsps2OpeningFeeParamsCachesSuccessfulResponse(t *testing.T) {
+	ls := &LDKService{
+		lsps2Pubkey:  "pubkey",
+		lsps2Address: "127.0.0.1:9735",
+	}
+	menu := []ldk_node.Lsps2OpeningFeeParams{
+		makeLsps2OpeningFeeParams(10_000, 5_000, 1_000_000, 100_000_000),
+	}
+	calls := 0
+	request := func() ([]ldk_node.Lsps2OpeningFeeParams, error) {
+		calls++
+		return menu, nil
+	}
+
+	ls.fetchLsps2OpeningFeeParamsWith(time.Hour, request)
+	ls.fetchLsps2OpeningFeeParamsWith(time.Hour, request)
+
+	assert.Equal(t, 1, calls)
+	require.NotNil(t, ls.lsps2MinPaymentSizeMsat)
+	require.NotNil(t, ls.lsps2MaxPaymentSizeMsat)
+	assert.Equal(t, uint64(1_000_000), *ls.lsps2MinPaymentSizeMsat)
+	assert.Equal(t, uint64(100_000_000), *ls.lsps2MaxPaymentSizeMsat)
+	assert.Equal(t, menu, ls.lsps2OpeningFeeParamsMenu)
+}
+
+func TestFetchLsps2OpeningFeeParamsBacksOffAfterFailure(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+	oldMin := uint64(2_000_000)
+	oldMax := uint64(50_000_000)
+	oldMenu := []ldk_node.Lsps2OpeningFeeParams{
+		makeLsps2OpeningFeeParams(20_000, 5_000, oldMin, oldMax),
+	}
+	ls := &LDKService{
+		lsps2Pubkey:               "pubkey",
+		lsps2Address:              "127.0.0.1:9735",
+		lsps2InfoFetchedAt:        time.Now().Add(-2 * time.Hour),
+		lsps2MinPaymentSizeMsat:   &oldMin,
+		lsps2MaxPaymentSizeMsat:   &oldMax,
+		lsps2OpeningFeeParamsMenu: oldMenu,
+	}
+	calls := 0
+	request := func() ([]ldk_node.Lsps2OpeningFeeParams, error) {
+		calls++
+		return nil, errors.New("LSP unavailable")
+	}
+
+	ls.fetchLsps2OpeningFeeParamsWith(time.Hour, request)
+	ls.fetchLsps2OpeningFeeParamsWith(time.Hour, request)
+
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, oldMin, *ls.lsps2MinPaymentSizeMsat)
+	assert.Equal(t, oldMax, *ls.lsps2MaxPaymentSizeMsat)
+	assert.Equal(t, oldMenu, ls.lsps2OpeningFeeParamsMenu)
+
+	ls.lsps2InfoMu.Lock()
+	ls.lsps2InfoLastAttemptedAt = time.Now().Add(-lsps2InfoRetryBackoff - time.Second)
+	ls.lsps2InfoMu.Unlock()
+	ls.fetchLsps2OpeningFeeParamsWith(time.Hour, request)
+
+	assert.Equal(t, 2, calls)
+}
+
+func TestFetchLsps2OpeningFeeParamsConcurrentCallersWaitForInFlightFetch(t *testing.T) {
+	ls := &LDKService{
+		lsps2Pubkey:  "pubkey",
+		lsps2Address: "127.0.0.1:9735",
+	}
+	fetchStarted := make(chan struct{})
+	releaseFetch := make(chan struct{})
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		ls.fetchLsps2OpeningFeeParamsWith(time.Hour, func() ([]ldk_node.Lsps2OpeningFeeParams, error) {
+			close(fetchStarted)
+			<-releaseFetch
+			return []ldk_node.Lsps2OpeningFeeParams{
+				makeLsps2OpeningFeeParams(10_000, 5_000, 1_000_000, 100_000_000),
+			}, nil
+		})
+	}()
+	<-fetchStarted
+
+	secondDone := make(chan struct{})
+	secondFetchCalled := false
+	go func() {
+		defer close(secondDone)
+		ls.fetchLsps2OpeningFeeParamsWith(time.Hour, func() ([]ldk_node.Lsps2OpeningFeeParams, error) {
+			secondFetchCalled = true
+			return nil, nil
+		})
+	}()
+
+	select {
+	case <-secondDone:
+		t.Fatal("concurrent LSPS2 caller returned before the in-flight fetch completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(releaseFetch)
+	<-firstDone
+	<-secondDone
+
+	assert.False(t, secondFetchCalled)
+	min, max := ls.GetLiquiditySourceLsps2PaymentSizeRangeMsat()
+	require.NotNil(t, min)
+	require.NotNil(t, max)
+	assert.Equal(t, uint64(1_000_000), *min)
+	assert.Equal(t, uint64(100_000_000), *max)
+}
+
+func testCircularPaymentRecords(
+	inboundStatus ldk_node.PaymentStatus,
+	outboundStatus ldk_node.PaymentStatus,
+	includeOutbound bool,
+) (*ldk_node.PaymentDetails, *ldk_node.PaymentDetails, string, string, string) {
+	stringPointer := func(value string) *string { return &value }
+	uint64Pointer := func(value uint64) *uint64 { return &value }
+	preimage := strings.Repeat("11", 32)
+	preimageBytes, _ := hex.DecodeString(preimage)
+	paymentHashBytes := sha256.Sum256(preimageBytes)
+	paymentHash := hex.EncodeToString(paymentHashBytes[:])
+	operationID := strings.Repeat("22", 32)
+	operationBytes, _ := hex.DecodeString(operationID)
+	outboundMaterial := append([]byte("ldk-node circular outbound payment id v1"), operationBytes...)
+	outboundIDBytes := sha256.Sum256(outboundMaterial)
+	outboundPaymentID := hex.EncodeToString(outboundIDBytes[:])
+	secret := strings.Repeat("33", 32)
+	invoice := "test-circular-invoice"
+	firstHopChannelID := "source-channel"
+	lastHopChannelID := "kraken-channel"
+	maxRoutingFeeMsat := uint64(1_000_000)
+	amountMsat := uint64(20_000_000)
+
+	inbound := &ldk_node.PaymentDetails{
+		Id: paymentHash,
+		Kind: ldk_node.PaymentKindBolt11{
+			Hash:                       paymentHash,
+			Preimage:                   stringPointer(preimage),
+			Secret:                     stringPointer(secret),
+			Bolt11Invoice:              stringPointer(invoice),
+			RequiredReceivingChannelId: stringPointer(lastHopChannelID),
+			RequiredSendingChannelId:   stringPointer(firstHopChannelID),
+			CircularOperationId:        stringPointer(operationID),
+			CircularOutboundPaymentId:  stringPointer(outboundPaymentID),
+			CircularMaxRoutingFeeMsat:  uint64Pointer(maxRoutingFeeMsat),
+		},
+		AmountMsat:            uint64Pointer(amountMsat),
+		Direction:             ldk_node.PaymentDirectionInbound,
+		Status:                inboundStatus,
+		LatestUpdateTimestamp: 100,
+	}
+	if !includeOutbound {
+		return inbound, nil, operationID, paymentHash, outboundPaymentID
+	}
+	outboundKind := ldk_node.PaymentKindBolt11{
+		Hash:                       paymentHash,
+		Secret:                     stringPointer(secret),
+		Bolt11Invoice:              stringPointer(invoice),
+		RequiredReceivingChannelId: stringPointer(lastHopChannelID),
+		RequiredSendingChannelId:   stringPointer(firstHopChannelID),
+		CircularOperationId:        stringPointer(operationID),
+		CircularOutboundPaymentId:  stringPointer(outboundPaymentID),
+		CircularMaxRoutingFeeMsat:  uint64Pointer(maxRoutingFeeMsat),
+	}
+	var feePaidMsat *uint64
+	if outboundStatus == ldk_node.PaymentStatusSucceeded {
+		outboundKind.Preimage = stringPointer(preimage)
+		feePaidMsat = uint64Pointer(17_062)
+	}
+	outbound := &ldk_node.PaymentDetails{
+		Id:                    outboundPaymentID,
+		Kind:                  outboundKind,
+		AmountMsat:            uint64Pointer(amountMsat),
+		FeePaidMsat:           feePaidMsat,
+		Direction:             ldk_node.PaymentDirectionOutbound,
+		Status:                outboundStatus,
+		LatestUpdateTimestamp: 101,
+	}
+	return inbound, outbound, operationID, paymentHash, outboundPaymentID
+}
+
+func reconcileTestCircularPayment(
+	inbound *ldk_node.PaymentDetails,
+	outbound *ldk_node.PaymentDetails,
+	operationID string,
+	paymentHash string,
+	outboundPaymentID string,
+) (*lnclient.CircularPaymentReconciliation, error) {
+	return reconcileCircularPaymentRecords(
+		inbound,
+		outbound,
+		operationID,
+		paymentHash,
+		outboundPaymentID,
+		20_000_000,
+		17_062,
+		1_000_000,
+		"source-channel",
+		"kraken-channel",
+	)
+}
+
+func TestReconcileCircularPaymentRecordsRequiresTwoMatchingTerminalLegs(t *testing.T) {
+	inbound, outbound, operationID, paymentHash, outboundPaymentID := testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	reconciliation, err := reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStateSucceeded, reconciliation.State)
+	require.Equal(t, uint64(17_062), *reconciliation.ActualRoutingFeeMsat)
+	require.Equal(t, uint64(101), reconciliation.LatestUpdateTimestamp)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStateFailed, reconciliation.State)
+	require.Nil(t, reconciliation.ActualRoutingFeeMsat)
+	require.Empty(t, reconciliation.FailureCode)
+
+	failureReason := ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch
+	inbound.CircularFailureReason = &failureReason
+	inbound.CircularObservedReceivingChannelIds = []string{"incoming-channel-a", "incoming-channel-b"}
+	inbound.CircularUnidentifiedReceivingChannelCount = 1
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, "receiving_channel_mismatch", reconciliation.FailureCode)
+	require.Equal(t, []string{"incoming-channel-a", "incoming-channel-b"}, reconciliation.ObservedReceivingChannelIDs)
+	require.Equal(t, uint32(1), reconciliation.UnidentifiedReceivingChannelCount)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusPending,
+		ldk_node.PaymentStatusPending,
+		false,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStatePending, reconciliation.State)
+	require.Equal(t, "missing", reconciliation.OutboundPaymentStatus)
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusPending,
+		true,
+	)
+	reconciliation, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.NoError(t, err)
+	require.Equal(t, lnclient.CircularPaymentStatePending, reconciliation.State)
+}
+
+func TestReconcileCircularPaymentRecordsRejectsContradictionsAndTampering(t *testing.T) {
+	inbound, outbound, operationID, paymentHash, outboundPaymentID := testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	_, err := reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "contradictory terminal outcomes")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	outboundKind := outbound.Kind.(ldk_node.PaymentKindBolt11)
+	wrongChannel := "wrong-channel"
+	outboundKind.RequiredReceivingChannelId = &wrongChannel
+	outbound.Kind = outboundKind
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "outbound payment binding is invalid")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	wrongFee := uint64(17_063)
+	outbound.FeePaidMsat = &wrongFee
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "exact terminal fee")
+
+	inbound, _, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusPending,
+		false,
+	)
+	_, err = reconcileTestCircularPayment(inbound, nil, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "terminal circular inbound payment has no outbound record")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusSucceeded,
+		ldk_node.PaymentStatusSucceeded,
+		true,
+	)
+	failureReason := ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch
+	inbound.CircularFailureReason = &failureReason
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "non-failed circular inbound payment has rejection diagnostics")
+
+	inbound, outbound, operationID, paymentHash, outboundPaymentID = testCircularPaymentRecords(
+		ldk_node.PaymentStatusFailed,
+		ldk_node.PaymentStatusFailed,
+		true,
+	)
+	outbound.CircularFailureReason = &failureReason
+	_, err = reconcileTestCircularPayment(inbound, outbound, operationID, paymentHash, outboundPaymentID)
+	require.ErrorContains(t, err, "outbound payment unexpectedly has receiving-channel diagnostics")
+}
+
 func TestSanitizeChainEndpointForBitcoind(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -200,4 +527,82 @@ func TestSanitizeChainEndpointForURLs(t *testing.T) {
 			assert.Equal(t, tt.expected, sanitizeChainEndpoint(tt.endpoint, ""))
 		})
 	}
+}
+
+// writeChannelBackup saves a static channel backup containing the given
+// channels to the backup directory.
+func writeChannelBackup(t *testing.T, backupDir string, fileName string, channelIds ...string) {
+	backup := events.StaticChannelsBackupEvent{}
+	for _, channelId := range channelIds {
+		backup.Channels = append(backup.Channels, events.ChannelBackup{ChannelID: channelId})
+	}
+	backupBytes, err := json.Marshal(backup)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(backupDir, fileName), backupBytes, 0600))
+}
+
+func TestLatestChannelBackupIsMissingChannels(t *testing.T) {
+	logger.Init(strconv.Itoa(int(logrus.DebugLevel)))
+
+	t.Run("no channels", func(t *testing.T) {
+		assert.False(t, latestChannelBackupIsMissingChannels(filepath.Join(t.TempDir(), "static_channel_backups"), []string{}))
+	})
+
+	t.Run("missing backup directory", func(t *testing.T) {
+		assert.True(t, latestChannelBackupIsMissingChannels(filepath.Join(t.TempDir(), "static_channel_backups"), []string{"a"}))
+	})
+
+	t.Run("empty backup directory", func(t *testing.T) {
+		assert.True(t, latestChannelBackupIsMissingChannels(t.TempDir(), []string{"a"}))
+	})
+
+	t.Run("only non-backup files", func(t *testing.T) {
+		backupDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(backupDir, "notes.txt"), []byte("x"), 0600))
+		assert.True(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a"}))
+	})
+
+	t.Run("latest backup contains all channels", func(t *testing.T) {
+		backupDir := t.TempDir()
+		writeChannelBackup(t, backupDir, "2024-01-02T03-04-05.json", "a", "b", "closed")
+		assert.False(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a", "b"}))
+	})
+
+	t.Run("latest backup is missing a channel", func(t *testing.T) {
+		backupDir := t.TempDir()
+		writeChannelBackup(t, backupDir, "2024-01-02T03-04-05.json", "a")
+		assert.True(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a", "b"}))
+	})
+
+	t.Run("only the latest backup is checked", func(t *testing.T) {
+		backupDir := t.TempDir()
+		writeChannelBackup(t, backupDir, "2024-01-02T03-04-05.json", "a", "b")
+		writeChannelBackup(t, backupDir, "2024-02-01T00-00-00.json", "a")
+		assert.True(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a", "b"}))
+
+		writeChannelBackup(t, backupDir, "2024-03-01T00-00-00.json", "a", "b")
+		assert.False(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a", "b"}))
+	})
+
+	t.Run("invalid latest backup", func(t *testing.T) {
+		backupDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(backupDir, "2024-01-02T03-04-05.json"), []byte("not json"), 0600))
+		assert.True(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a"}))
+	})
+
+	t.Run("glob characters in path", func(t *testing.T) {
+		backupDir := filepath.Join(t.TempDir(), "work[dir")
+		require.NoError(t, os.MkdirAll(backupDir, 0700))
+		assert.True(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a"}))
+
+		writeChannelBackup(t, backupDir, "2024-01-02T03-04-05.json", "a")
+		assert.False(t, latestChannelBackupIsMissingChannels(backupDir, []string{"a"}))
+	})
+
+	t.Run("unreadable backup path", func(t *testing.T) {
+		// a file instead of a directory: neither missing nor listable
+		backupPath := filepath.Join(t.TempDir(), "static_channel_backups")
+		require.NoError(t, os.WriteFile(backupPath, []byte("x"), 0600))
+		assert.False(t, latestChannelBackupIsMissingChannels(backupPath, []string{"a"}))
+	})
 }

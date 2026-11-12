@@ -84,7 +84,7 @@ export function SetupFinish() {
   if (connectionError) {
     return (
       <>
-        <title>Connection Failed · Alby Hub</title>
+        <title>Connection Failed · Grynvault Rebalance</title>
         <Container>
           <div className="flex flex-col gap-5 text-center items-center">
             <div className="grid gap-2">
@@ -106,7 +106,7 @@ export function SetupFinish() {
 
   return (
     <>
-      <title>Setting up... · Alby Hub</title>
+      <title>Setting up... · Grynvault Rebalance</title>
       <Container>
         <div className="flex flex-col gap-5 justify-center text-center">
           <LottieLoading size={400} />

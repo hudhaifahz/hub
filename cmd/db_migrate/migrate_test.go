@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"github.com/getAlby/hub/constants"
 	"github.com/getAlby/hub/db"
+	"github.com/getAlby/hub/db/queries"
 	"github.com/getAlby/hub/logger"
 	test_db "github.com/getAlby/hub/tests/db"
 )
@@ -30,13 +33,13 @@ func (e *testEnvironment) cleanup(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMigrate(t *testing.T) {
-	type testCase struct {
-		name      string
-		sourceURI string
-		destURI   string
-	}
+type testCase struct {
+	name      string
+	sourceURI string
+	destURI   string
+}
 
+func getTestCases() []testCase {
 	// Test migration between sqlite instances for basic sanity checking.
 	tc := []testCase{
 		{
@@ -64,7 +67,11 @@ func TestMigrate(t *testing.T) {
 		tc = append(tc, tcPg...)
 	}
 
-	for _, tt := range tc {
+	return tc
+}
+
+func TestMigrate(t *testing.T) {
+	for _, tt := range getTestCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			env, err := setupTest(t, tt.sourceURI, tt.destURI)
 			require.NoError(t, err)
@@ -80,7 +87,76 @@ func TestMigrate(t *testing.T) {
 			requireCount[db.Transaction](t, env.dest, 1)
 			requireCount[db.Swap](t, env.dest, 1)
 			requireCount[db.Forward](t, env.dest, 1)
+			requireCount[db.LocalRebalanceQuote](t, env.dest, 1)
+			var migratedQuote db.LocalRebalanceQuote
+			require.NoError(t, env.dest.First(&migratedQuote, "id = ?", "local-quote-1").Error)
+			require.Equal(t, "succeeded", migratedQuote.State)
+			require.Equal(t, "succeeded", migratedQuote.ExecutionPhase)
+			require.Equal(t, "operation-id", migratedQuote.OperationId)
+			require.Equal(t, "payment-hash", migratedQuote.PreparedPaymentHash)
+			require.Equal(t, "outbound-payment-id", migratedQuote.OutboundPaymentId)
+			require.NotNil(t, migratedQuote.PreparedAt)
+			require.NotNil(t, migratedQuote.ActualRoutingFeeMsat)
+			require.Equal(t, uint64(17_062), *migratedQuote.ActualRoutingFeeMsat)
+			require.NotNil(t, migratedQuote.LightningTerminalAt)
+			require.NotNil(t, migratedQuote.ReconciledAt)
+			require.Equal(t, "terminal-evidence-hash", migratedQuote.TerminalEvidenceHash)
+			require.Equal(t, uint64(1_000_000_000), migratedQuote.OutgoingLocalSnapshotMsat)
+			require.Equal(t, uint64(500_000_000), migratedQuote.OutgoingRemoteSnapshotMsat)
+			require.Equal(t, uint64(10_000_000), migratedQuote.OutgoingLocalReserveMsat)
+			require.Equal(t, uint64(11_000_000), migratedQuote.OutgoingRemoteReserveMsat)
+			require.Equal(t, uint64(489_340_000), migratedQuote.IncomingLocalSnapshotMsat)
+			require.Equal(t, uint64(840_710_000), migratedQuote.IncomingRemoteSnapshotMsat)
+			require.Equal(t, uint64(12_000_000), migratedQuote.IncomingLocalReserveMsat)
+			require.Equal(t, uint64(13_000_000), migratedQuote.IncomingRemoteReserveMsat)
 			requireCount[db.UserConfig](t, env.dest, 1)
+		})
+	}
+}
+
+func TestMigrateRemovesDeletedAppsFromTransactions(t *testing.T) {
+	for _, tt := range getTestCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			env, err := setupTest(t, tt.sourceURI, tt.destURI)
+			require.NoError(t, err)
+			defer env.cleanup(t)
+
+			deletedApp := &db.App{
+				Name:      "deleted",
+				AppPubkey: "b923bc264d8d0a680f81599ea5b4e0145734564ccb314eb230b9916eeb5de170",
+				Isolated:  true,
+				Metadata:  datatypes.JSON("{}"),
+			}
+			create(t, env.source, deletedApp)
+			transaction := &db.Transaction{
+				AppId:       &deletedApp.ID,
+				Type:        constants.TRANSACTION_TYPE_INCOMING,
+				State:       constants.TRANSACTION_STATE_SETTLED,
+				AmountMsat:  5_000_000,
+				PaymentHash: "13a165e20d710ebd58cb0f41529cbd3a32454445beb54d1f169115e69dd6313d",
+			}
+			create(t, env.source, transaction)
+			require.NoError(t, env.source.Delete(deletedApp).Error)
+
+			err = db.MigrateDB(env.source, env.dest)
+			require.NoError(t, err)
+
+			var migratedTransaction db.Transaction
+			require.NoError(t, env.dest.First(&migratedTransaction, transaction.ID).Error)
+			assert.Nil(t, migratedTransaction.AppId)
+
+			// the new app may get the deleted app's ID
+			newApp := &db.App{
+				Name:      "new",
+				AppPubkey: "8d2c60ccd6f70721dd86573a062c65e06263f0e9e057ba8e5015e53d4b704870",
+				Isolated:  true,
+				Metadata:  datatypes.JSON("{}"),
+			}
+			create(t, env.dest, newApp)
+
+			balance, err := queries.GetIsolatedBalanceMsat(env.dest, newApp.ID)
+			require.NoError(t, err)
+			assert.Zero(t, balance, "new app must not inherit the deleted app's balance")
 		})
 	}
 }
@@ -245,6 +321,52 @@ func insertMockData(t *testing.T, tx *gorm.DB) {
 		UpdatedAt:                   baseTime,
 	}
 	create(t, tx, forward1)
+
+	preparedAt := baseTime.Add(time.Minute)
+	terminalAt := baseTime.Add(2 * time.Minute)
+	reconciledAt := baseTime.Add(3 * time.Minute)
+	actualRoutingFeeMsat := uint64(17_062)
+	localRebalanceQuote1 := &db.LocalRebalanceQuote{
+		ID:                             "local-quote-1",
+		State:                          "succeeded",
+		RequestHash:                    "request-hash",
+		RouteFingerprint:               "route-fingerprint",
+		AmountMsat:                     20_000_000,
+		TotalRoutingFeeMsat:            17_062,
+		MaxRoutingFeeMsat:              1_000_000,
+		MaxTotalDebitMsat:              20_017_062,
+		OutgoingChannelId:              "outgoing-channel",
+		OutgoingNodePubkey:             "outgoing-peer",
+		OutgoingShortChannelId:         "101",
+		IncomingChannelId:              "incoming-channel",
+		IncomingNodePubkey:             "incoming-peer",
+		IncomingShortChannelId:         "202",
+		OutgoingSpendableSnapshotMsat:  989_340_000,
+		IncomingReceivableSnapshotMsat: 840_710_000,
+		OutgoingLocalSnapshotMsat:      1_000_000_000,
+		OutgoingRemoteSnapshotMsat:     500_000_000,
+		OutgoingLocalReserveMsat:       10_000_000,
+		OutgoingRemoteReserveMsat:      11_000_000,
+		IncomingLocalSnapshotMsat:      489_340_000,
+		IncomingRemoteSnapshotMsat:     840_710_000,
+		IncomingLocalReserveMsat:       12_000_000,
+		IncomingRemoteReserveMsat:      13_000_000,
+		RouteJson:                      `[{"hops":[]}]`,
+		OperationId:                    "operation-id",
+		ExecutionPhase:                 "succeeded",
+		PreparedPaymentHash:            "payment-hash",
+		OutboundPaymentId:              "outbound-payment-id",
+		ActualRoutingFeeMsat:           &actualRoutingFeeMsat,
+		LightningTerminalAt:            &terminalAt,
+		ReconciledAt:                   &reconciledAt,
+		TerminalEvidenceHash:           "terminal-evidence-hash",
+		ExpiresAt:                      baseTime.Add(5 * time.Minute),
+		CreatedAt:                      baseTime,
+		UpdatedAt:                      baseTime,
+		PreparedAt:                     &preparedAt,
+		ExecutedAt:                     &terminalAt,
+	}
+	create(t, tx, localRebalanceQuote1)
 }
 
 func requireCount[T any](t *testing.T, tx *gorm.DB, expected int64) {
@@ -255,8 +377,7 @@ func requireCount[T any](t *testing.T, tx *gorm.DB, expected int64) {
 }
 
 func create[T any](t *testing.T, tx *gorm.DB, v T) *gorm.DB {
-	tx.Create(v)
-	require.NoError(t, tx.Error)
+	require.NoError(t, tx.Create(v).Error)
 	return tx
 }
 

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	decodepay "github.com/nbd-wtf/ln-decodepay"
 	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
@@ -43,8 +44,8 @@ type TransactionsService interface {
 	SendPaymentSync(payReq string, amountMsat *uint64, metadata map[string]interface{}, lnClient lnclient.LNClient, appId *uint, requestEventId *uint) (*Transaction, error)
 	SendKeysend(amountMsat uint64, destination string, customRecords []lnclient.TLVRecord, preimage string, lnClient lnclient.LNClient, appId *uint, requestEventId *uint) (*Transaction, error)
 	MakeHoldInvoice(ctx context.Context, amountMsat uint64, description string, descriptionHash string, expiry uint64, paymentHash string, minCltvExpiryDelta *uint64, metadata map[string]interface{}, lnClient lnclient.LNClient, appId *uint, requestEventId *uint) (*Transaction, error)
-	SettleHoldInvoice(ctx context.Context, preimage string, lnClient lnclient.LNClient) (*Transaction, error)
-	CancelHoldInvoice(ctx context.Context, paymentHash string, lnClient lnclient.LNClient) error
+	SettleHoldInvoice(ctx context.Context, preimage string, lnClient lnclient.LNClient, appId uint) (*Transaction, error)
+	CancelHoldInvoice(ctx context.Context, paymentHash string, lnClient lnclient.LNClient, appId uint) error
 	SetTransactionMetadata(ctx context.Context, id uint, metadata map[string]interface{}) error
 	SetTransactionUserLabels(ctx context.Context, id uint, labels map[string]string) error
 }
@@ -349,8 +350,15 @@ func (svc *transactionsService) SendPaymentSync(payReq string, amountMsat *uint6
 
 	var dbTransaction db.Transaction
 
+	if amountMsat != nil && paymentRequest.MSatoshi != 0 {
+		if *amountMsat != uint64(paymentRequest.MSatoshi) {
+			return nil, errors.New("amount cannot be specified for an invoice that already has an amount")
+		}
+		amountMsat = nil
+	}
+
 	paymentAmountMsat := uint64(paymentRequest.MSatoshi)
-	if amountMsat != nil && paymentRequest.MSatoshi == 0 {
+	if amountMsat != nil {
 		paymentAmountMsat = *amountMsat
 	}
 
@@ -463,6 +471,11 @@ func (svc *transactionsService) SendPaymentSync(payReq string, amountMsat *uint6
 }
 
 func (svc *transactionsService) SendKeysend(amountMsat uint64, destination string, customRecords []lnclient.TLVRecord, preimage string, lnClient lnclient.LNClient, appId *uint, requestEventId *uint) (*Transaction, error) {
+	if err := validateKeysendDestination(destination); err != nil {
+		logger.Logger.WithError(err).Error("Invalid keysend destination")
+		return nil, err
+	}
+
 	if preimage == "" {
 		preImageBytes, err := makePreimageHex()
 		if err != nil {
@@ -472,10 +485,13 @@ func (svc *transactionsService) SendKeysend(amountMsat uint64, destination strin
 	}
 
 	preImageBytes, err := hex.DecodeString(preimage)
-	if err != nil || len(preImageBytes) != 32 {
-		logger.Logger.WithFields(logrus.Fields{
-			"preimage": preimage,
-		}).WithError(err).Error("Invalid preimage")
+	if err != nil {
+		logger.Logger.WithError(err).Error("Invalid preimage")
+		return nil, err
+	}
+	if len(preImageBytes) != 32 {
+		err = fmt.Errorf("preimage must be 32 bytes, got %d", len(preImageBytes))
+		logger.Logger.WithError(err).Error("Invalid preimage")
 		return nil, err
 	}
 
@@ -626,7 +642,8 @@ func (svc *transactionsService) LookupTransaction(ctx context.Context, paymentHa
 
 	// order settled first, otherwise by created date, as there can be multiple outgoing payments
 	// for the same payment hash (if you tried to pay an invoice multiple times - e.g. the first time failed)
-	result := tx.Order("settled_at desc, created_at desc").Limit(1).Find(&transaction, &db.Transaction{
+	// NULL settled_at is sorted last explicitly, as Postgres sorts NULLs first in descending order
+	result := tx.Order("settled_at desc nulls last, created_at desc").Limit(1).Find(&transaction, &db.Transaction{
 		// Type:        transactionType,
 		PaymentHash: paymentHash,
 	})
@@ -1216,6 +1233,21 @@ func CalculateFeeReserveMsat(amountMsat uint64) uint64 {
 	return uint64(math.Max(math.Ceil(float64(amountMsat)*0.01), 10000))
 }
 
+// validateKeysendDestination checks that destination is a hex-encoded 33-byte compressed secp256k1 node pubkey
+func validateKeysendDestination(destination string) error {
+	destinationBytes, err := hex.DecodeString(destination)
+	if err != nil {
+		return fmt.Errorf("invalid destination pubkey: %w", err)
+	}
+	if len(destinationBytes) != btcec.PubKeyBytesLenCompressed {
+		return fmt.Errorf("destination pubkey must be %d bytes, got %d", btcec.PubKeyBytesLenCompressed, len(destinationBytes))
+	}
+	if _, err := btcec.ParsePubKey(destinationBytes); err != nil {
+		return fmt.Errorf("invalid destination pubkey: %w", err)
+	}
+	return nil
+}
+
 func makePreimageHex() ([]byte, error) {
 	bytes := make([]byte, 32) // 32 bytes * 8 bits/byte = 256 bits
 	_, err := rand.Read(bytes)
@@ -1303,7 +1335,7 @@ func (svc *transactionsService) getAppIdFromCustomRecords(customRecords []lnclie
 	return nil
 }
 
-func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage string, lnClient lnclient.LNClient) (*Transaction, error) {
+func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage string, lnClient lnclient.LNClient, appId uint) (*Transaction, error) {
 	if len(preimage) != 64 {
 		return nil, errors.New("invalid preimage format")
 	}
@@ -1320,11 +1352,17 @@ func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage 
 		Type:        constants.TRANSACTION_TYPE_INCOMING,
 		State:       constants.TRANSACTION_STATE_ACCEPTED,
 		PaymentHash: paymentHash,
+		AppId:       &appId,
 	})
+
+	if result.Error != nil {
+		logger.Logger.WithField("payment_hash", paymentHash).WithError(result.Error).Error("Failed to query hold invoice")
+		return nil, errors.New("failed to look up hold invoice")
+	}
 
 	if result.RowsAffected == 0 {
 		logger.Logger.WithField("payment_hash", paymentHash).Error("Failed to find accepted hold invoice")
-		return nil, errors.New("failed to find accepted hold invoice")
+		return nil, NewNotFoundError()
 	}
 
 	if !dbTransaction.SelfPayment {
@@ -1332,9 +1370,7 @@ func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage 
 	}
 
 	if err != nil {
-		logger.Logger.WithFields(logrus.Fields{
-			"preimage": preimage,
-		}).WithError(err).Error("Failed to settle hold invoice via LN client")
+		logger.Logger.WithField("payment_hash", paymentHash).WithError(err).Error("Failed to settle hold invoice via LN client")
 		// Don't mark DB as failed here, as the settle might succeed later or might have already succeeded.
 		return nil, err
 	}
@@ -1343,7 +1379,6 @@ func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage 
 	if err != nil {
 		logger.Logger.WithFields(logrus.Fields{
 			"payment_hash": paymentHash,
-			"preimage":     preimage,
 		}).WithError(err).Error("Failed to mark hold invoice as settled")
 		return nil, err
 	}
@@ -1351,13 +1386,14 @@ func (svc *transactionsService) SettleHoldInvoice(ctx context.Context, preimage 
 	return settledTransaction, nil
 }
 
-func (svc *transactionsService) CancelHoldInvoice(ctx context.Context, paymentHash string, lnClient lnclient.LNClient) error {
+func (svc *transactionsService) CancelHoldInvoice(ctx context.Context, paymentHash string, lnClient lnclient.LNClient, appId uint) error {
 
 	var dbTransaction db.Transaction
 	result := svc.db.Limit(1).Find(&dbTransaction, &db.Transaction{
 		Type:        constants.TRANSACTION_TYPE_INCOMING,
 		State:       constants.TRANSACTION_STATE_ACCEPTED,
 		PaymentHash: paymentHash,
+		AppId:       &appId,
 	})
 
 	if result.RowsAffected == 0 {
@@ -1485,6 +1521,12 @@ func (svc *transactionsService) markTransactionSettled(dbTransaction *db.Transac
 			return nil
 		}
 
+		if dbTransaction.Hold {
+			if err := svc.checkHoldInvoiceNotCanceled(tx, dbTransaction); err != nil {
+				return err
+			}
+		}
+
 		settledAt := time.Now()
 		err = tx.Model(dbTransaction).Updates(map[string]interface{}{
 			"State":          constants.TRANSACTION_STATE_SETTLED,
@@ -1516,6 +1558,24 @@ func (svc *transactionsService) markTransactionSettled(dbTransaction *db.Transac
 	svc.publishEvents(eventsToPublish)
 
 	return settledTransaction, nil
+}
+
+func (svc *transactionsService) checkHoldInvoiceNotCanceled(tx *gorm.DB, dbTransaction *db.Transaction) error {
+	var currentTransaction db.Transaction
+	result := tx.Limit(1).Find(&currentTransaction, &db.Transaction{
+		ID: dbTransaction.ID,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return NewNotFoundError()
+	}
+	if currentTransaction.State == constants.TRANSACTION_STATE_FAILED {
+		logger.Logger.WithField("payment_hash", dbTransaction.PaymentHash).Info("hold invoice was already canceled")
+		return lnclient.NewHoldInvoiceCanceledError()
+	}
+	return nil
 }
 
 // createSettledTransactionFromNotification inserts a transaction directly in

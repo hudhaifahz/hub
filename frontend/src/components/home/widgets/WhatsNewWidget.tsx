@@ -9,6 +9,7 @@ import {
 import { ExternalLinkButton } from "src/components/ui/custom/external-link-button";
 import { useAlbyInfo } from "src/hooks/useAlbyInfo";
 import { useInfo } from "src/hooks/useInfo";
+import { GRYNVAULT_UPDATE_URL } from "src/lib/grynvault";
 
 export function WhatsNewWidget() {
   const { data: info } = useInfo();
@@ -31,16 +32,17 @@ export function WhatsNewWidget() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>What's New in {upToDate && "your "}Alby Hub?</CardTitle>
+        <CardTitle>
+          {upToDate
+            ? "Upstream Alby Hub release notes"
+            : "Upstream Alby Hub update available"}
+        </CardTitle>
         <CardDescription>{albyInfo.hub.latestReleaseNotes}</CardDescription>
       </CardHeader>
       {!upToDate && (
         <CardContent className="text-right">
-          <ExternalLinkButton
-            to={`https://getalby.com/update/hub?version=${info.version}`}
-            size="sm"
-          >
-            Update Now
+          <ExternalLinkButton to={GRYNVAULT_UPDATE_URL} size="sm">
+            Review Compatibility
           </ExternalLinkButton>
         </CardContent>
       )}

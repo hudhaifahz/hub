@@ -1,3 +1,5 @@
+import { GRYNVAULT_PRODUCT_NAME } from "src/lib/grynvault";
+
 type Props = {
   title: string;
   description: string;
@@ -11,7 +13,7 @@ export default function TwoColumnLayoutHeader({
 }: Props) {
   return (
     <>
-      {pageTitle && <title>{`${pageTitle} · Alby Hub`}</title>}
+      {pageTitle && <title>{`${pageTitle} · ${GRYNVAULT_PRODUCT_NAME}`}</title>}
       <div className="grid gap-2 text-center">
         <h1 className="text-2xl font-semibold">{title}</h1>
         <p className="text-muted-foreground">{description}</p>

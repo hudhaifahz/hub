@@ -111,6 +111,7 @@ type Swap struct {
 	TimeoutBlockHeight uint32
 	BoltzPubkey        string
 	SwapTree           datatypes.JSON
+	ApiUrl             string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -121,6 +122,82 @@ type Forward struct {
 	TotalFeeEarnedMsat          uint64
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
+}
+
+type RebalanceQuote struct {
+	ID                             string `gorm:"primaryKey"`
+	State                          string
+	RequestHash                    string
+	OrderId                        string
+	ReceivePaymentRequest          string
+	ReceivePaymentHash             string
+	PaymentRequest                 string
+	PaymentHash                    string
+	AmountMsat                     uint64
+	ProviderFeeMsat                uint64
+	MaxProviderFeeMsat             uint64
+	MaxRoutingFeeMsat              uint64
+	OutgoingChannelId              string
+	OutgoingNodePubkey             string
+	IncomingChannelId              string
+	IncomingNodePubkey             string
+	OutgoingSpendableSnapshotMsat  uint64
+	IncomingReceivableSnapshotMsat uint64
+	ExpiresAt                      time.Time
+	CreatedAt                      time.Time
+	UpdatedAt                      time.Time
+	ExecutedAt                     *time.Time
+	FailureReason                  string
+}
+
+// LocalRebalanceQuote is a non-paying, expiring record of an exact circular route review.
+// It contains no invoice, preimage, HTLC, or other payment authorization material.
+type LocalRebalanceQuote struct {
+	ID                                string `gorm:"primaryKey"`
+	State                             string
+	RequestHash                       string
+	RouteFingerprint                  string
+	AmountMsat                        uint64
+	TotalRoutingFeeMsat               uint64
+	MaxRoutingFeeMsat                 uint64
+	MaxTotalDebitMsat                 uint64
+	OutgoingChannelId                 string
+	OutgoingNodePubkey                string
+	OutgoingShortChannelId            string
+	IncomingChannelId                 string
+	IncomingNodePubkey                string
+	IncomingShortChannelId            string
+	OutgoingSpendableSnapshotMsat     uint64
+	IncomingReceivableSnapshotMsat    uint64
+	OutgoingLocalSnapshotMsat         uint64
+	OutgoingRemoteSnapshotMsat        uint64
+	OutgoingLocalReserveMsat          uint64
+	OutgoingRemoteReserveMsat         uint64
+	IncomingLocalSnapshotMsat         uint64
+	IncomingRemoteSnapshotMsat        uint64
+	IncomingLocalReserveMsat          uint64
+	IncomingRemoteReserveMsat         uint64
+	RouteJson                         string
+	RouteBytes                        []byte
+	OperationId                       string
+	ExecutionPhase                    string
+	PreparedPaymentHash               string
+	OutboundPaymentId                 string
+	ExpiresAt                         time.Time
+	CreatedAt                         time.Time
+	UpdatedAt                         time.Time
+	PreparedAt                        *time.Time
+	SubmittedAt                       *time.Time
+	ActualRoutingFeeMsat              *uint64
+	LightningTerminalAt               *time.Time
+	ReconciledAt                      *time.Time
+	TerminalEvidenceHash              string
+	TerminalEvidenceVersion           uint32
+	FailureCode                       string
+	ObservedReceivingChannelIDsJSON   string
+	UnidentifiedReceivingChannelCount uint32
+	ExecutedAt                        *time.Time
+	FailureReason                     string
 }
 
 const (

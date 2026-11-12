@@ -3,6 +3,7 @@ import { Outlet } from "react-router";
 import { AppSidebar } from "src/components/AppSidebar";
 import { Banner } from "src/components/Banner";
 import { CommandPalette } from "src/components/CommandPalette";
+import { GrynvaultForkNotice } from "src/components/GrynvaultForkNotice";
 import { SidebarInset, SidebarProvider } from "src/components/ui/sidebar";
 import {
   CommandPaletteProvider,
@@ -41,12 +42,12 @@ function AppLayoutInner() {
           <div className="flex flex-1">
             <AppSidebar />
             <SidebarInset className="min-w-0">
-              <div
+              <GrynvaultForkNotice
                 className={cn(
-                  "flex flex-1 flex-col gap-4 p-4",
                   showBanner && "mt-14 md:mt-9" // Banner height is 36px with 1 line (>=md width) and 56px with 2 lines (<md width)
                 )}
-              >
+              />
+              <div className="flex flex-1 flex-col gap-4 p-4">
                 <Outlet />
               </div>
             </SidebarInset>

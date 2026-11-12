@@ -59,6 +59,8 @@ type LDKService struct {
 	lsps2Address                       string
 	lsps2InfoMu                        sync.Mutex
 	lsps2InfoFetchedAt                 time.Time
+	lsps2InfoLastAttemptedAt           time.Time
+	lsps2InfoFetchDone                 chan struct{}
 	lsps2MinPaymentSizeMsat            *uint64
 	lsps2MaxPaymentSizeMsat            *uint64
 	lsps2OpeningFeeParamsMenu          []ldk_node.Lsps2OpeningFeeParams
@@ -66,9 +68,14 @@ type LDKService struct {
 	eventHandlingMutex                 sync.Mutex
 }
 
+var _ lnclient.PinnedPaymentClient = (*LDKService)(nil)
+var _ lnclient.CircularRouteQuoter = (*LDKService)(nil)
+var _ lnclient.PreparedCircularPaymentClient = (*LDKService)(nil)
+
 const resetRouterKey = "ResetRouter"
 const maxInvoiceExpiry = 24 * time.Hour
 const lsps2InfoCacheTTL = 60 * time.Minute
+const lsps2InfoRetryBackoff = 1 * time.Minute
 
 // cached opening fee params must be at most this old when used to derive the
 // maximum LSP fee for a new JIT channel invoice
@@ -419,6 +426,12 @@ func NewLDKService(ctx context.Context, cfg config.Config, eventPublisher events
 		"duration": math.Ceil(time.Since(syncStartTime).Seconds()),
 	}).Info("LDK node synced successfully")
 
+	// Alby Cloud hubs are skipped: their disk is not persistent, so this would
+	// create a new backup on every restart.
+	if cfg.GetEnv().IsDefaultClientId() && ls.needsChannelBackup() {
+		ls.backupChannels()
+	}
+
 	// setup background sync
 	go func() {
 		MIN_SYNC_INTERVAL := 1 * time.Minute
@@ -701,6 +714,436 @@ func (ls *LDKService) SendPaymentSync(invoice string, amountMsat *uint64) (*lncl
 			}
 		}
 	}
+}
+
+// SendPaymentSyncWithFirstHop pays a fixed-amount BOLT11 invoice through exactly one local
+// channel. LDK route construction receives only the requested first hop and submits a fixed route
+// with automatic retries disabled, so failure cannot fall back to a different local channel.
+func (ls *LDKService) SendPaymentSyncWithFirstHop(invoice string, firstHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.PayInvoiceResponse, error) {
+	paymentRequest, err := decodepay.Decodepay(invoice)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode pinned payment invoice: %w", err)
+	}
+	if paymentRequest.MSatoshi <= 0 {
+		return nil, errors.New("pinned payments require a fixed positive invoice amount")
+	}
+	if firstHopChannelID == "" {
+		return nil, errors.New("pinned payments require a first-hop channel ID")
+	}
+
+	var selectedChannel *ldk_node.ChannelDetails
+	for _, channel := range ls.node.ListChannels() {
+		if channel.UserChannelId != firstHopChannelID {
+			continue
+		}
+		if selectedChannel != nil {
+			return nil, fmt.Errorf("first-hop channel ID %s is ambiguous", firstHopChannelID)
+		}
+		channelCopy := channel
+		selectedChannel = &channelCopy
+	}
+	if selectedChannel == nil {
+		return nil, fmt.Errorf("first-hop channel %s was not found", firstHopChannelID)
+	}
+	if !selectedChannel.IsUsable {
+		return nil, fmt.Errorf("first-hop channel %s is not usable", firstHopChannelID)
+	}
+	if uint64(paymentRequest.MSatoshi)+maxRoutingFeeMsat > selectedChannel.OutboundCapacityMsat {
+		return nil, fmt.Errorf("first-hop channel %s has insufficient spendable capacity", firstHopChannelID)
+	}
+
+	paymentStart := time.Now()
+	ldkEventSubscription := ls.ldkEventBroadcaster.Subscribe()
+	defer ls.ldkEventBroadcaster.CancelSubscription(ldkEventSubscription)
+
+	routeParameters := &ldk_node.RouteParametersConfig{
+		MaxTotalRoutingFeeMsat:          &maxRoutingFeeMsat,
+		MaxChannelSaturationPowerOfHalf: ls.cfg.GetEnv().LDKMaxChannelSaturationPowerOfHalf,
+		MaxPathCount:                    ls.cfg.GetEnv().LDKMaxPathCount,
+		MaxTotalCltvExpiryDelta:         1008,
+	}
+	invoiceObj, err := ldk_node.Bolt11InvoiceFromStr(invoice)
+	if err != nil {
+		return nil, fmt.Errorf("ldk failed to parse pinned payment invoice: %w", err)
+	}
+	paymentHash, err := ls.node.Bolt11Payment().SendWithFirstHop(
+		invoiceObj,
+		firstHopChannelID,
+		routeParameters,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("pinned payment failed to start: %w", err)
+	}
+
+	for {
+		select {
+		case <-ls.ctx.Done():
+			return nil, ls.ctx.Err()
+		case ev := <-ldkEventSubscription:
+			switch event := (*ev).(type) {
+			case ldk_node.EventPaymentSuccessful:
+				if event.PaymentHash != paymentHash {
+					continue
+				}
+				if event.PaymentPreimage == nil {
+					return nil, errors.New("pinned payment succeeded without a payment preimage")
+				}
+				feeMsat := uint64(0)
+				if event.FeePaidMsat != nil {
+					feeMsat = *event.FeePaidMsat
+				}
+				if feeMsat > maxRoutingFeeMsat {
+					return nil, fmt.Errorf("pinned payment routing fee %d exceeded limit %d", feeMsat, maxRoutingFeeMsat)
+				}
+				logger.Logger.WithFields(logrus.Fields{
+					"duration":             time.Since(paymentStart).Milliseconds(),
+					"fee_msat":             feeMsat,
+					"payment_hash":         event.PaymentHash,
+					"first_hop_channel_id": firstHopChannelID,
+				}).Info("Successful pinned first-hop payment")
+				return &lnclient.PayInvoiceResponse{Preimage: *event.PaymentPreimage, FeeMsat: feeMsat}, nil
+			case ldk_node.EventPaymentFailed:
+				if event.PaymentHash == nil || *event.PaymentHash != paymentHash {
+					continue
+				}
+				return nil, fmt.Errorf("pinned payment failed: %s", ls.getPaymentFailReason(&event))
+			}
+		}
+	}
+}
+
+// QuoteCircularRoute asks LDK to construct a candidate circular route with exact local first- and
+// last-hop channels. The underlying method is pathfinding-only: it does not create an invoice,
+// send a probe or HTLC, or write to the payment store.
+func (ls *LDKService) QuoteCircularRoute(amountMsat uint64, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.CircularRouteQuote, error) {
+	if amountMsat == 0 {
+		return nil, errors.New("circular route quote amount must be positive")
+	}
+	if firstHopChannelID == "" || lastHopChannelID == "" {
+		return nil, errors.New("circular route quote requires exact first- and last-hop channel IDs")
+	}
+	if firstHopChannelID == lastHopChannelID {
+		return nil, errors.New("circular route quote requires two distinct channels")
+	}
+
+	routeParameters := &ldk_node.RouteParametersConfig{
+		MaxTotalRoutingFeeMsat:          &maxRoutingFeeMsat,
+		MaxChannelSaturationPowerOfHalf: ls.cfg.GetEnv().LDKMaxChannelSaturationPowerOfHalf,
+		MaxPathCount:                    ls.cfg.GetEnv().LDKMaxPathCount,
+		MaxTotalCltvExpiryDelta:         1008,
+	}
+	quote, err := ls.node.Bolt11Payment().QuoteCircularRoute(
+		amountMsat,
+		firstHopChannelID,
+		lastHopChannelID,
+		routeParameters,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("LDK could not construct the exact circular route: %w", err)
+	}
+
+	paths := make([]lnclient.CircularRoutePath, 0, len(quote.Paths))
+	for _, path := range quote.Paths {
+		hops := make([]lnclient.CircularRouteHop, 0, len(path.Hops))
+		for _, hop := range path.Hops {
+			hops = append(hops, lnclient.CircularRouteHop{
+				NodeId:          hop.NodeId,
+				ShortChannelId:  hop.ShortChannelId,
+				FeeMsat:         hop.FeeMsat,
+				CltvExpiryDelta: hop.CltvExpiryDelta,
+			})
+		}
+		paths = append(paths, lnclient.CircularRoutePath{
+			Hops:       hops,
+			AmountMsat: path.AmountMsat,
+			FeeMsat:    path.FeeMsat,
+		})
+	}
+
+	return &lnclient.CircularRouteQuote{
+		AmountMsat:             quote.AmountMsat,
+		TotalRoutingFeeMsat:    quote.TotalRoutingFeeMsat,
+		FirstHopChannelId:      quote.FirstHopUserChannelId,
+		FirstHopShortChannelId: quote.FirstHopShortChannelId,
+		LastHopChannelId:       quote.LastHopUserChannelId,
+		LastHopShortChannelId:  quote.LastHopShortChannelId,
+		Paths:                  paths,
+		RouteBytes:             append([]byte(nil), quote.RouteBytes...),
+	}, nil
+}
+
+// PrepareCircularPayment durably registers the inbound leg without sending a payment. Retrying
+// the same exact operation recovers the existing preparation; changed parameters fail closed.
+func (ls *LDKService) PrepareCircularPayment(amountMsat uint64, expirySeconds uint32, operationID string, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*lnclient.PreparedCircularPayment, error) {
+	if len(operationID) != 64 {
+		return nil, errors.New("circular payment operation ID must be 32 bytes")
+	}
+	if _, err := hex.DecodeString(operationID); err != nil {
+		return nil, errors.New("circular payment operation ID must be hexadecimal")
+	}
+	description := ldk_node.Bolt11InvoiceDescriptionDirect{
+		Description: "Alby Hub exact-channel circular rebalance",
+	}
+	prepared, err := ls.node.Bolt11Payment().PrepareCircularPayment(
+		amountMsat,
+		description,
+		expirySeconds,
+		operationID,
+		firstHopChannelID,
+		lastHopChannelID,
+		maxRoutingFeeMsat,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("LDK could not prepare the exact circular payment: %w", err)
+	}
+	return &lnclient.PreparedCircularPayment{
+		PaymentHash:            prepared.PaymentHash,
+		OperationID:            prepared.OperationId,
+		OutboundPaymentID:      prepared.OutboundPaymentId,
+		AmountMsat:             prepared.AmountMsat,
+		MaxRoutingFeeMsat:      prepared.MaxRoutingFeeMsat,
+		FirstHopChannelID:      prepared.FirstHopUserChannelId,
+		FirstHopShortChannelID: prepared.FirstHopShortChannelId,
+		LastHopChannelID:       prepared.LastHopUserChannelId,
+		LastHopShortChannelID:  prepared.LastHopShortChannelId,
+	}, nil
+}
+
+// SendPreparedCircularPayment submits only the complete route bytes and exact path summary that
+// were previously reviewed and persisted. LDK performs the final route and channel cross-checks.
+func (ls *LDKService) SendPreparedCircularPayment(operationID string, quote *lnclient.CircularRouteQuote) (string, error) {
+	if quote == nil {
+		return "", errors.New("circular route quote is required")
+	}
+	paths := make([]ldk_node.CircularRoutePath, 0, len(quote.Paths))
+	for _, path := range quote.Paths {
+		hops := make([]ldk_node.CircularRouteHop, 0, len(path.Hops))
+		for _, hop := range path.Hops {
+			hops = append(hops, ldk_node.CircularRouteHop{
+				NodeId:          hop.NodeId,
+				ShortChannelId:  hop.ShortChannelId,
+				FeeMsat:         hop.FeeMsat,
+				CltvExpiryDelta: hop.CltvExpiryDelta,
+			})
+		}
+		paths = append(paths, ldk_node.CircularRoutePath{
+			Hops:       hops,
+			AmountMsat: path.AmountMsat,
+			FeeMsat:    path.FeeMsat,
+		})
+	}
+	outboundPaymentID, err := ls.node.Bolt11Payment().SendPreparedCircularPayment(
+		operationID,
+		ldk_node.CircularRouteQuote{
+			AmountMsat:             quote.AmountMsat,
+			TotalRoutingFeeMsat:    quote.TotalRoutingFeeMsat,
+			FirstHopUserChannelId:  quote.FirstHopChannelId,
+			FirstHopShortChannelId: quote.FirstHopShortChannelId,
+			LastHopUserChannelId:   quote.LastHopChannelId,
+			LastHopShortChannelId:  quote.LastHopShortChannelId,
+			Paths:                  paths,
+			RouteBytes:             append([]byte(nil), quote.RouteBytes...),
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("LDK could not submit the exact prepared circular payment: %w", err)
+	}
+	return outboundPaymentID, nil
+}
+
+func ldkPaymentStatusName(status ldk_node.PaymentStatus) (string, error) {
+	switch status {
+	case ldk_node.PaymentStatusPending:
+		return lnclient.CircularPaymentStatePending, nil
+	case ldk_node.PaymentStatusSucceeded:
+		return lnclient.CircularPaymentStateSucceeded, nil
+	case ldk_node.PaymentStatusFailed:
+		return lnclient.CircularPaymentStateFailed, nil
+	default:
+		return "", errors.New("circular payment record has an unknown status")
+	}
+}
+
+func circularPaymentFailureCode(reason *ldk_node.CircularPaymentFailureReason) (string, error) {
+	if reason == nil {
+		return "", nil
+	}
+	switch *reason {
+	case ldk_node.CircularPaymentFailureReasonPaymentNotPending:
+		return "payment_not_pending", nil
+	case ldk_node.CircularPaymentFailureReasonCircularMetadataMismatch:
+		return "circular_metadata_mismatch", nil
+	case ldk_node.CircularPaymentFailureReasonAmountMismatch:
+		return "amount_mismatch", nil
+	case ldk_node.CircularPaymentFailureReasonMissingPreimage:
+		return "missing_preimage", nil
+	case ldk_node.CircularPaymentFailureReasonMissingReceivingChannelIdentity:
+		return "missing_receiving_channel_identity", nil
+	case ldk_node.CircularPaymentFailureReasonReceivingChannelMismatch:
+		return "receiving_channel_mismatch", nil
+	default:
+		return "", errors.New("circular payment record has an unknown local failure reason")
+	}
+}
+
+func reconcileCircularPaymentRecords(
+	inbound *ldk_node.PaymentDetails,
+	outbound *ldk_node.PaymentDetails,
+	operationID string,
+	paymentHash string,
+	outboundPaymentID string,
+	amountMsat uint64,
+	expectedRoutingFeeMsat uint64,
+	maxRoutingFeeMsat uint64,
+	firstHopChannelID string,
+	lastHopChannelID string,
+) (*lnclient.CircularPaymentReconciliation, error) {
+	decodedOperationID, err := hex.DecodeString(operationID)
+	if err != nil || len(decodedOperationID) != sha256.Size {
+		return nil, errors.New("prepared circular operation ID is invalid")
+	}
+	decodedOutboundPaymentID, err := hex.DecodeString(outboundPaymentID)
+	if err != nil || len(decodedOutboundPaymentID) != sha256.Size {
+		return nil, errors.New("prepared circular outbound payment ID is invalid")
+	}
+	outboundIDMaterial := append([]byte("ldk-node circular outbound payment id v1"), decodedOperationID...)
+	expectedOutboundPaymentID := sha256.Sum256(outboundIDMaterial)
+	if !slices.Equal(expectedOutboundPaymentID[:], decodedOutboundPaymentID) {
+		return nil, errors.New("prepared circular outbound payment ID is not derived from its operation")
+	}
+	if inbound == nil {
+		return nil, errors.New("prepared circular inbound payment record is missing")
+	}
+	inboundKind, ok := inbound.Kind.(ldk_node.PaymentKindBolt11)
+	if !ok || inbound.Id != paymentHash || inbound.Direction != ldk_node.PaymentDirectionInbound || inbound.AmountMsat == nil || *inbound.AmountMsat != amountMsat || inbound.FeePaidMsat != nil {
+		return nil, errors.New("prepared circular inbound payment record does not match the operation")
+	}
+	if inboundKind.Hash != paymentHash || inboundKind.Preimage == nil || inboundKind.Secret == nil || inboundKind.Bolt11Invoice == nil || inboundKind.RequiredSendingChannelId == nil || *inboundKind.RequiredSendingChannelId != firstHopChannelID || inboundKind.RequiredReceivingChannelId == nil || *inboundKind.RequiredReceivingChannelId != lastHopChannelID || inboundKind.CircularOperationId == nil || *inboundKind.CircularOperationId != operationID || inboundKind.CircularOutboundPaymentId == nil || *inboundKind.CircularOutboundPaymentId != outboundPaymentID || inboundKind.CircularMaxRoutingFeeMsat == nil || *inboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat {
+		return nil, errors.New("prepared circular inbound payment binding is invalid")
+	}
+	decodedHash, err := hex.DecodeString(paymentHash)
+	if err != nil || len(decodedHash) != sha256.Size {
+		return nil, errors.New("prepared circular payment hash is invalid")
+	}
+	decodedPreimage, err := hex.DecodeString(*inboundKind.Preimage)
+	if err != nil || len(decodedPreimage) != sha256.Size {
+		return nil, errors.New("prepared circular payment preimage is invalid")
+	}
+	preimageHash := sha256.Sum256(decodedPreimage)
+	if !slices.Equal(preimageHash[:], decodedHash) {
+		return nil, errors.New("prepared circular payment preimage does not match its hash")
+	}
+	inboundStatus, err := ldkPaymentStatusName(inbound.Status)
+	if err != nil {
+		return nil, err
+	}
+	failureCode, err := circularPaymentFailureCode(inbound.CircularFailureReason)
+	if err != nil {
+		return nil, err
+	}
+	observedReceivingChannelIDs := append([]string(nil), inbound.CircularObservedReceivingChannelIds...)
+	if inbound.Status != ldk_node.PaymentStatusFailed && (failureCode != "" || len(observedReceivingChannelIDs) != 0 || inbound.CircularUnidentifiedReceivingChannelCount != 0) {
+		return nil, errors.New("non-failed circular inbound payment has rejection diagnostics")
+	}
+
+	result := &lnclient.CircularPaymentReconciliation{
+		State:                             lnclient.CircularPaymentStatePending,
+		OperationID:                       operationID,
+		PaymentHash:                       paymentHash,
+		OutboundPaymentID:                 outboundPaymentID,
+		AmountMsat:                        amountMsat,
+		InboundPaymentStatus:              inboundStatus,
+		OutboundPaymentStatus:             "missing",
+		LatestUpdateTimestamp:             inbound.LatestUpdateTimestamp,
+		FailureCode:                       failureCode,
+		ObservedReceivingChannelIDs:       observedReceivingChannelIDs,
+		UnidentifiedReceivingChannelCount: inbound.CircularUnidentifiedReceivingChannelCount,
+	}
+	if outbound == nil {
+		if inbound.Status != ldk_node.PaymentStatusPending {
+			return nil, errors.New("terminal circular inbound payment has no outbound record")
+		}
+		return result, nil
+	}
+
+	outboundKind, ok := outbound.Kind.(ldk_node.PaymentKindBolt11)
+	if !ok || outbound.Id != outboundPaymentID || outbound.Direction != ldk_node.PaymentDirectionOutbound || outbound.AmountMsat == nil || *outbound.AmountMsat != amountMsat {
+		return nil, errors.New("prepared circular outbound payment record does not match the operation")
+	}
+	if outboundKind.Hash != paymentHash || outboundKind.Secret == nil {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	if *outboundKind.Secret != *inboundKind.Secret {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	if outboundKind.Bolt11Invoice == nil || *outboundKind.Bolt11Invoice != *inboundKind.Bolt11Invoice || outboundKind.RequiredSendingChannelId == nil || *outboundKind.RequiredSendingChannelId != firstHopChannelID || outboundKind.RequiredReceivingChannelId == nil || *outboundKind.RequiredReceivingChannelId != lastHopChannelID || outboundKind.CircularOperationId == nil || *outboundKind.CircularOperationId != operationID || outboundKind.CircularOutboundPaymentId == nil || *outboundKind.CircularOutboundPaymentId != outboundPaymentID || outboundKind.CircularMaxRoutingFeeMsat == nil || *outboundKind.CircularMaxRoutingFeeMsat != maxRoutingFeeMsat || (outboundKind.Preimage != nil && *outboundKind.Preimage != *inboundKind.Preimage) {
+		return nil, errors.New("prepared circular outbound payment binding is invalid")
+	}
+	outboundStatus, err := ldkPaymentStatusName(outbound.Status)
+	if err != nil {
+		return nil, err
+	}
+	if outbound.CircularFailureReason != nil || len(outbound.CircularObservedReceivingChannelIds) != 0 || outbound.CircularUnidentifiedReceivingChannelCount != 0 {
+		return nil, errors.New("circular outbound payment unexpectedly has receiving-channel diagnostics")
+	}
+	result.OutboundPaymentStatus = outboundStatus
+	if outbound.LatestUpdateTimestamp > result.LatestUpdateTimestamp {
+		result.LatestUpdateTimestamp = outbound.LatestUpdateTimestamp
+	}
+
+	switch {
+	case inbound.Status == ldk_node.PaymentStatusSucceeded && outbound.Status == ldk_node.PaymentStatusSucceeded:
+		if outboundKind.Preimage == nil || outbound.FeePaidMsat == nil || *outbound.FeePaidMsat != expectedRoutingFeeMsat || *outbound.FeePaidMsat > maxRoutingFeeMsat || result.LatestUpdateTimestamp == 0 {
+			return nil, errors.New("successful circular payment is missing exact terminal fee or timestamp evidence")
+		}
+		fee := *outbound.FeePaidMsat
+		result.State = lnclient.CircularPaymentStateSucceeded
+		result.ActualRoutingFeeMsat = &fee
+		return result, nil
+	case inbound.Status == ldk_node.PaymentStatusFailed && outbound.Status == ldk_node.PaymentStatusFailed:
+		if outbound.FeePaidMsat != nil || result.LatestUpdateTimestamp == 0 {
+			return nil, errors.New("failed circular payment has contradictory terminal evidence")
+		}
+		result.State = lnclient.CircularPaymentStateFailed
+		return result, nil
+	case (inbound.Status == ldk_node.PaymentStatusSucceeded && outbound.Status == ldk_node.PaymentStatusFailed) || (inbound.Status == ldk_node.PaymentStatusFailed && outbound.Status == ldk_node.PaymentStatusSucceeded):
+		return nil, errors.New("circular payment legs have contradictory terminal outcomes")
+	default:
+		if outbound.Status != ldk_node.PaymentStatusSucceeded && outbound.FeePaidMsat != nil {
+			return nil, errors.New("unsettled circular outbound payment unexpectedly has a fee")
+		}
+		return result, nil
+	}
+}
+
+// ReconcilePreparedCircularPayment reloads both exact durable payment records. User-facing events
+// are intentionally not used as terminal authority because their delivery may be replayed after a
+// restart. Only two matching terminal records can produce a terminal result.
+func (ls *LDKService) ReconcilePreparedCircularPayment(operationID string, paymentHash string, outboundPaymentID string, amountMsat uint64, expectedRoutingFeeMsat uint64, maxRoutingFeeMsat uint64, firstHopChannelID string, lastHopChannelID string) (*lnclient.CircularPaymentReconciliation, error) {
+	for name, value := range map[string]string{
+		"operation ID":        operationID,
+		"payment hash":        paymentHash,
+		"outbound payment ID": outboundPaymentID,
+	} {
+		decoded, err := hex.DecodeString(value)
+		if err != nil || len(decoded) != sha256.Size {
+			return nil, fmt.Errorf("circular payment %s must be 32 bytes", name)
+		}
+	}
+	inbound := ls.node.Payment(paymentHash)
+	outbound := ls.node.Payment(outboundPaymentID)
+	return reconcileCircularPaymentRecords(
+		inbound,
+		outbound,
+		operationID,
+		paymentHash,
+		outboundPaymentID,
+		amountMsat,
+		expectedRoutingFeeMsat,
+		maxRoutingFeeMsat,
+		firstHopChannelID,
+		lastHopChannelID,
+	)
 }
 
 func (ls *LDKService) SendKeysend(amountMsat uint64, destination string, custom_records []lnclient.TLVRecord, preimage string) (*lnclient.PayKeysendResponse, error) {
@@ -1472,7 +1915,7 @@ func (ls *LDKService) RedeemOnchainFunds(ctx context.Context, toAddress string, 
 
 		return txId, nil
 	}
-	return "", errors.New("ran out of attempts to fetch broadcasted transaction")
+	return "", lnclient.ErrOnchainBroadcastUnverified
 }
 
 func (ls *LDKService) ResetRouter(key string) error {
@@ -1922,6 +2365,7 @@ func (ls *LDKService) handleLdkEvent(event *ldk_node.Event) {
 			"claimable_amount_msats": eventType.ClaimableAmountMsat,
 			"payment_hash":           eventType.PaymentHash,
 			"claim_deadline":         *eventType.ClaimDeadline,
+			"receiving_channels":     eventType.ReceivingChannels,
 		}).Info("LDK Payment Claimable")
 
 		payment := ls.node.Payment(eventType.PaymentId)
@@ -1936,6 +2380,13 @@ func (ls *LDKService) handleLdkEvent(event *ldk_node.Event) {
 			return
 		}
 		transaction.SettleDeadline = eventType.ClaimDeadline
+		transaction.ReceivingChannels = make([]lnclient.ReceivingChannel, 0, len(eventType.ReceivingChannels))
+		for _, receivingChannel := range eventType.ReceivingChannels {
+			transaction.ReceivingChannels = append(transaction.ReceivingChannels, lnclient.ReceivingChannel{
+				ChannelId:     receivingChannel.ChannelId,
+				UserChannelId: receivingChannel.UserChannelId,
+			})
+		}
 		ls.eventPublisher.Publish(&events.Event{
 			Event:      "nwc_lnclient_hold_invoice_accepted",
 			Properties: transaction,
@@ -1955,21 +2406,25 @@ func (ls *LDKService) backupChannels() {
 			fundingTxVout = ldkChannel.FundingTxo.Vout
 		}
 
-		var peer *ldk_node.PeerDetails
+		// The channel is backed up even if the peer address is unknown: its
+		// monitor is in the backup and the peer can still be found by its ID.
+		var peerSocketAddress string
 		for _, matchingPeer := range ldkPeers {
 			if matchingPeer.NodeId == ldkChannel.CounterpartyNodeId {
-				peer = &matchingPeer
+				peerSocketAddress = matchingPeer.Address
 			}
 		}
-		if peer == nil {
-			logger.Logger.WithField("peer_id", ldkChannel.CounterpartyNodeId).Error("failed to find peer for channel")
-			continue
+		if peerSocketAddress == "" {
+			logger.Logger.WithFields(logrus.Fields{
+				"peer_id":    ldkChannel.CounterpartyNodeId,
+				"channel_id": ldkChannel.ChannelId,
+			}).Warn("failed to find peer address for channel, backing up channel without peer address")
 		}
 
 		channels = append(channels, events.ChannelBackup{
 			ChannelID:         ldkChannel.ChannelId,
 			PeerID:            ldkChannel.CounterpartyNodeId,
-			PeerSocketAddress: peer.Address,
+			PeerSocketAddress: peerSocketAddress,
 			ChannelSize:       ldkChannel.ChannelValueSats,
 			FundingTxID:       fundingTxId,
 			FundingTxVout:     fundingTxVout,
@@ -2004,8 +2459,77 @@ func (ls *LDKService) backupChannels() {
 	})
 }
 
+func staticChannelBackupDir(workdir string) string {
+	return filepath.Join(workdir, "static_channel_backups")
+}
+
+// needsChannelBackup returns true if the latest static channel backup saved to
+// disk does not contain all channels (e.g. the hub was migrated before
+// migration files included the backups).
+func (ls *LDKService) needsChannelBackup() bool {
+	channelIds := []string{}
+	for _, channel := range ls.node.ListChannels() {
+		channelIds = append(channelIds, channel.ChannelId)
+	}
+	return latestChannelBackupIsMissingChannels(staticChannelBackupDir(ls.workdir), channelIds)
+}
+
+// latestChannelBackupIsMissingChannels returns true if the latest static
+// channel backup in the backup directory does not contain all of the given
+// channels.
+func latestChannelBackupIsMissingChannels(backupDirectory string, channelIds []string) bool {
+	if len(channelIds) == 0 {
+		return false
+	}
+	entries, err := os.ReadDir(backupDirectory)
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if err != nil {
+		logger.Logger.WithError(err).Error("Failed to list static channel backups")
+		return false
+	}
+
+	// entries are sorted by filename, which is the backup timestamp
+	var latestBackupFile string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			latestBackupFile = entry.Name()
+		}
+	}
+	if latestBackupFile == "" {
+		return true
+	}
+
+	backupBytes, err := os.ReadFile(filepath.Join(backupDirectory, latestBackupFile))
+	if err != nil {
+		logger.Logger.WithError(err).WithField("file", latestBackupFile).Error("Failed to read latest static channel backup")
+		return true
+	}
+	var backup events.StaticChannelsBackupEvent
+	if err := json.Unmarshal(backupBytes, &backup); err != nil {
+		logger.Logger.WithError(err).WithField("file", latestBackupFile).Error("Failed to parse latest static channel backup")
+		return true
+	}
+
+	backedUpChannelIds := make(map[string]bool, len(backup.Channels))
+	for _, channel := range backup.Channels {
+		backedUpChannelIds[channel.ChannelID] = true
+	}
+	for _, channelId := range channelIds {
+		if !backedUpChannelIds[channelId] {
+			logger.Logger.WithFields(logrus.Fields{
+				"channel_id": channelId,
+				"file":       latestBackupFile,
+			}).Info("Channel is missing from the latest static channel backup")
+			return true
+		}
+	}
+	return false
+}
+
 func (ls *LDKService) saveStaticChannelBackupToDisk(event *events.StaticChannelsBackupEvent) {
-	backupDirectory := filepath.Join(ls.workdir, "static_channel_backups")
+	backupDirectory := staticChannelBackupDir(ls.workdir)
 	err := os.MkdirAll(backupDirectory, os.ModePerm)
 	if err != nil {
 		logger.Logger.WithError(err).Error("Failed to make static channel backup directory")
@@ -2300,7 +2824,10 @@ func (ls *LDKService) PayOfferSync(ctx context.Context, offer string, amount uin
 	paymentHash := ""
 
 	for start := time.Now(); time.Since(start) < time.Second*60; {
-		event := <-ldkEventSubscription
+		event, ok := <-ldkEventSubscription
+		if !ok {
+			return nil, errors.New("LDK event subscription closed (node shutting down)")
+		}
 
 		eventPaymentSuccessful, isEventPaymentSuccessfulEvent := (*event).(ldk_node.EventPaymentSuccessful)
 		eventPaymentFailed, isEventPaymentFailedEvent := (*event).(ldk_node.EventPaymentFailed)
@@ -2695,22 +3222,13 @@ func (ls *LDKService) GetLiquiditySourceLsps2() string {
 	return fmt.Sprintf("%s@%s", ls.lsps2Pubkey, ls.lsps2Address)
 }
 
-func (ls *LDKService) GetLiquiditySourceLsps2MinPaymentSizeMsat() *uint64 {
+func (ls *LDKService) GetLiquiditySourceLsps2PaymentSizeRangeMsat() (*uint64, *uint64) {
 	ls.fetchLsps2OpeningFeeParams(lsps2InfoCacheTTL)
 
 	ls.lsps2InfoMu.Lock()
 	defer ls.lsps2InfoMu.Unlock()
 
-	return ls.lsps2MinPaymentSizeMsat
-}
-
-func (ls *LDKService) GetLiquiditySourceLsps2MaxPaymentSizeMsat() *uint64 {
-	ls.fetchLsps2OpeningFeeParams(lsps2InfoCacheTTL)
-
-	ls.lsps2InfoMu.Lock()
-	defer ls.lsps2InfoMu.Unlock()
-
-	return ls.lsps2MaxPaymentSizeMsat
+	return ls.lsps2MinPaymentSizeMsat, ls.lsps2MaxPaymentSizeMsat
 }
 
 // getLsps2MaxTotalOpeningFeeMsat returns the maximum opening fee to accept
@@ -2726,26 +3244,61 @@ func (ls *LDKService) getLsps2MaxTotalOpeningFeeMsat(paymentSizeMsat uint64) uin
 }
 
 func (ls *LDKService) fetchLsps2OpeningFeeParams(maxCacheAge time.Duration) {
+	ls.fetchLsps2OpeningFeeParamsWith(maxCacheAge, func() ([]ldk_node.Lsps2OpeningFeeParams, error) {
+		response, err := ls.node.Lsps2Liquidity().RequestOpeningFeeParams()
+		if err != nil {
+			return nil, err
+		}
+		return response.OpeningFeeParamsMenu, nil
+	})
+}
+
+func (ls *LDKService) fetchLsps2OpeningFeeParamsWith(maxCacheAge time.Duration, request func() ([]ldk_node.Lsps2OpeningFeeParams, error)) {
 	if ls.lsps2Pubkey == "" || ls.lsps2Address == "" {
 		return
 	}
 
 	ls.lsps2InfoMu.Lock()
-	defer ls.lsps2InfoMu.Unlock()
-
-	if !ls.lsps2InfoFetchedAt.IsZero() && time.Since(ls.lsps2InfoFetchedAt) < maxCacheAge {
+	now := time.Now()
+	if !ls.lsps2InfoFetchedAt.IsZero() && now.Sub(ls.lsps2InfoFetchedAt) < maxCacheAge {
+		ls.lsps2InfoMu.Unlock()
 		return
 	}
+	if fetchDone := ls.lsps2InfoFetchDone; fetchDone != nil {
+		// another caller is already fetching - wait for its result rather than
+		// returning a possibly empty cache
+		ls.lsps2InfoMu.Unlock()
+		<-fetchDone
+		return
+	}
+	if !ls.lsps2InfoLastAttemptedAt.IsZero() && now.Sub(ls.lsps2InfoLastAttemptedAt) < lsps2InfoRetryBackoff {
+		ls.lsps2InfoMu.Unlock()
+		return
+	}
+	fetchDone := make(chan struct{})
+	ls.lsps2InfoFetchDone = fetchDone
+	ls.lsps2InfoLastAttemptedAt = now
+	ls.lsps2InfoMu.Unlock()
 
-	response, err := ls.node.Lsps2Liquidity().RequestOpeningFeeParams()
+	defer func() {
+		ls.lsps2InfoMu.Lock()
+		ls.lsps2InfoFetchDone = nil
+		ls.lsps2InfoMu.Unlock()
+		close(fetchDone)
+	}()
+
+	menu, err := request()
 	if err != nil {
 		logger.Logger.WithError(err).Warn("Failed to fetch LSPS2 opening fee params")
+		ls.lsps2InfoMu.Lock()
+		ls.lsps2InfoLastAttemptedAt = time.Now()
+		ls.lsps2InfoMu.Unlock()
 		return
 	}
 
 	var minPaymentSizeMsat *uint64
 	var maxPaymentSizeMsat *uint64
-	for _, params := range response.OpeningFeeParamsMenu {
+	for _, params := range menu {
 		effectiveMinPaymentSizeMsat, ok := computeLsps2MinPaymentSizeMsat(params)
 		if !ok {
 			continue
@@ -2760,10 +3313,12 @@ func (ls *LDKService) fetchLsps2OpeningFeeParams(maxCacheAge time.Duration) {
 		}
 	}
 
+	ls.lsps2InfoMu.Lock()
 	ls.lsps2MinPaymentSizeMsat = minPaymentSizeMsat
 	ls.lsps2MaxPaymentSizeMsat = maxPaymentSizeMsat
-	ls.lsps2OpeningFeeParamsMenu = response.OpeningFeeParamsMenu
+	ls.lsps2OpeningFeeParamsMenu = menu
 	ls.lsps2InfoFetchedAt = time.Now()
+	ls.lsps2InfoMu.Unlock()
 }
 
 // computeLsps2MaxTotalOpeningFeeMsat returns the maximum LSPS2 opening fee to

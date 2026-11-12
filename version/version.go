@@ -1,3 +1,7 @@
 package version
 
-var Tag string = ""
+var (
+	Tag              string
+	SourceCommit     string
+	LDKLibrarySHA256 string
+)

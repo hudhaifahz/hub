@@ -2,6 +2,7 @@ import { ChevronLeftIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { AlbyHubLogo } from "src/components/icons/AlbyHubLogo";
+import { GrynvaultForkNotice } from "src/components/GrynvaultForkNotice";
 import { Button } from "src/components/ui/button.tsx";
 import { useInfo } from "src/hooks/useInfo";
 
@@ -100,23 +101,26 @@ export default function TwoColumnFullScreenLayout() {
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-center py-12 text-foreground relative">
-        {pathname.startsWith("/setup") &&
-          !pathname.startsWith("/setup/finish") && (
-            // show the back button on setup pages, except the setup finish page
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                navigate(-1);
-              }}
-              className="top-4 left-4 md:top-10 md:left-10 absolute mr-4"
-            >
-              <ChevronLeftIcon />
-              Back
-            </Button>
-          )}
-        <Outlet />
+      <div className="flex min-h-screen flex-col text-foreground lg:min-h-0">
+        <GrynvaultForkNotice />
+        <div className="relative flex flex-1 items-center justify-center py-12">
+          {pathname.startsWith("/setup") &&
+            !pathname.startsWith("/setup/finish") && (
+              // show the back button on setup pages, except the setup finish page
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  navigate(-1);
+                }}
+                className="top-4 left-4 md:top-10 md:left-10 absolute mr-4"
+              >
+                <ChevronLeftIcon />
+                Back
+              </Button>
+            )}
+          <Outlet />
+        </div>
       </div>
     </div>
   );

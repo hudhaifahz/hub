@@ -18,6 +18,7 @@ import coracle from "src/assets/suggested-apps/coracle.png";
 import damus from "src/assets/suggested-apps/damus.png";
 import fountain from "src/assets/suggested-apps/fountain.png";
 import hablanews from "src/assets/suggested-apps/habla-news.png";
+import hopp from "src/assets/suggested-apps/hopp.png";
 import iris from "src/assets/suggested-apps/iris.png";
 import jumble from "src/assets/suggested-apps/jumble.png";
 import lightningMessageboard from "src/assets/suggested-apps/lightning-messageboard.png";
@@ -30,6 +31,7 @@ import nostrcheckserver from "src/assets/suggested-apps/nostrcheck-server.png";
 import nostrudel from "src/assets/suggested-apps/nostrudel.png";
 import nostter from "src/assets/suggested-apps/nostter.png";
 import nostur from "src/assets/suggested-apps/nostur.png";
+import openreceive from "src/assets/suggested-apps/openreceive.png";
 import payperq from "src/assets/suggested-apps/payperq.png";
 import primal from "src/assets/suggested-apps/primal.png";
 import pullthatupjamie from "src/assets/suggested-apps/pullthatupjamie.png";
@@ -259,14 +261,14 @@ export const appStoreApps: AppStoreApp[] = (
       categories: ["payment-tools"],
       extendedDescription:
         "No-KYC virtual prepaid Mastercard. Anonymous payments, Instant lightning top-ups, Apple & Google Pay ready, Load amounts from $10 to $10,000,  All cards support 3D Secure (3DS), Global usage - pay anywhere Mastercard is accepted.",
-      webLink: "http://2fiat.com/getalby",
+      webLink: "https://2fiat.com/getalby",
       installGuide: (
         <>
           <div>
             <ul className="list-inside list-decimal text-muted-foreground">
               <li>
                 <ExternalLink
-                  to="http://2fiat.com/getalby"
+                  to="https://2fiat.com/getalby"
                   className="underline"
                 >
                   Sign up
@@ -1264,6 +1266,39 @@ export const appStoreApps: AppStoreApp[] = (
       categories: ["audio"],
     },
     {
+      id: "hopp",
+      title: "Hopp",
+      description: "Honest open podcast player with Value4Value",
+      webLink: "https://hopp.sovereigncast.space",
+      zapStoreLink: "https://zapstore.dev/apps/space.sovereigncast.hopp",
+      logo: hopp,
+      extendedDescription:
+        "Hopp is an open-source Podcasting 2.0 player for Android. No account, no tracking: connect your own wallet to boost shows and stream sats while you listen — Hopp never holds your sats and takes no cut.",
+      installGuide: (
+        <>
+          <p className="text-muted-foreground">
+            Download and open{" "}
+            <span className="font-medium text-foreground">Hopp</span> on your
+            Android device
+          </p>
+        </>
+      ),
+      finalizeGuide: (
+        <>
+          <div>
+            <h3 className="font-medium">In Hopp</h3>
+            <ul className="list-inside list-decimal text-muted-foreground">
+              <li>Go to Settings {"->"} Wallet & payments</li>
+              <li>Scan or paste the connection secret from Alby Hub</li>
+              <li>Tap Connect</li>
+            </ul>
+          </div>
+        </>
+      ),
+      categories: ["audio"],
+      addedDate: "2026-10-30",
+    },
+    {
       id: "wavespace",
       title: "wavecard® by wave.space",
       description:
@@ -1857,6 +1892,51 @@ export const appStoreApps: AppStoreApp[] = (
               </li>
               <li>
                 10. Start accepting payments directly to your Alby Hub wallet!
+              </li>
+            </ul>
+          </div>
+        </>
+      ),
+      categories: ["merchant-tools"],
+    },
+    {
+      id: "openreceive",
+      readonly: true,
+      title: "OpenReceive",
+      description:
+        "Self-hosted Bitcoin and stablecoin checkout for your own app",
+      webLink: "https://openreceive.org",
+      logo: openreceive,
+      extendedDescription:
+        "Open-source checkout libraries and store plugins that run on your own server and connect to your Hub with a receive-only connection. Customers pay Lightning invoices straight to your Hub. Optional swaps let them pay with USDT, USDC, SOL or ETH, and you still receive BTC over Lightning.",
+      installGuide: (
+        <>
+          <p className="text-muted-foreground">
+            Add OpenReceive to your app or store with one of the{" "}
+            <ExternalLink
+              to="https://openreceive.org/guides"
+              className="font-medium text-foreground underline"
+            >
+              OpenReceive guides
+            </ExternalLink>
+            . It is MIT-licensed software you run yourself: no account, no API
+            key, and it never holds your funds.
+          </p>
+        </>
+      ),
+      finalizeGuide: (
+        <>
+          <div>
+            <h3 className="font-medium">On your server</h3>
+            <ul className="list-inside list-decimal text-muted-foreground">
+              <li>
+                Paste the connection secret (nostr+walletconnect://....) where
+                your OpenReceive guide asks for it: the{" "}
+                <span className="font-medium text-foreground">NWC_URI</span>{" "}
+                environment variable, or your store plugin's settings
+              </li>
+              <li>
+                Keep it on the server only, never in browser or mobile app code
               </li>
             </ul>
           </div>

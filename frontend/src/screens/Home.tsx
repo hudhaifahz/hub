@@ -22,7 +22,6 @@ import { NodeStatusWidget } from "src/components/home/widgets/NodeStatusWidget";
 import { OnchainFeesWidget } from "src/components/home/widgets/OnchainFeesWidget";
 import { StoriesWidget } from "src/components/home/widgets/StoriesWidget";
 import { SupportAlbyWidget } from "src/components/home/widgets/SupportAlbyWidget";
-import { WhatsNewWidget } from "src/components/home/widgets/WhatsNewWidget";
 import { SearchInput } from "src/components/ui/search-input";
 
 function Home() {
@@ -43,12 +42,13 @@ function Home() {
       <div className="columns-1 lg:columns-2 gap-3 *:mb-3 *:break-inside-avoid">
         <OnboardingChecklist />
         <StoriesWidget />
-        <WhatsNewWidget />
         <LatestUsedAppsWidget />
         <NewArrivalsWidget />
         <AppOfTheDayWidget />
         <SupportAlbyWidget />
-        <LightningMessageboardWidget />
+        {import.meta.env.VITE_LIGHTNING_MESSAGEBOARD_NWC_URL && (
+          <LightningMessageboardWidget />
+        )}
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">

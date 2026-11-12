@@ -1,0 +1,14 @@
+Grynvault Rebalance
+
+This distribution is an experimental, independently maintained derivative of
+Alby Hub. It is not an official Alby release and is not endorsed by Alby.
+
+Alby Hub is Copyright its contributors and licensed under the Apache License,
+Version 2.0. The complete upstream license is preserved in LICENSE. Source
+modifications, build provenance, and dependency commits are documented in this
+repository and in the release manifest.
+
+The Grynvault name, application identity, packaging, release documentation, and
+brand assets identify this independent distribution only. The application icon
+is the existing Grynvault brand asset whose source and digest are recorded in
+docs/grynvault-release/PROVENANCE.md.

@@ -1,0 +1,18 @@
+Grynvault Rebalance signed manifest fields
+
+release_tag=<immutable tag>
+source_commit=<40-hex Grynvault source commit>
+upstream_hub_base=5d5e696dfe7d430a365d48939c394376e078a56b
+ldk_node_commit=70965f2e58936c0893c48ee0cc1788b84164a4e2
+ldk_node_go_commit=7233136553b771738a304dfc8a52fa0d6842117b
+build_workflow=.github/workflows/wails.yml@<40-hex source commit>
+platform=macos-universal
+bundle_identifier=com.grynvault.rebalance
+distribution=unsigned-experimental
+apple_signing=absent
+apple_notarization=absent
+pgp_fingerprint=<full owner-approved fingerprint>
+
+For every artifact, append one tab-separated line:
+
+artifact<TAB>filename<TAB>byte_size<TAB>sha256

@@ -28,7 +28,7 @@ export function LDKForm() {
 
   return (
     <>
-      <title>Loading... · Alby Hub</title>
+      <title>Loading... · Grynvault Rebalance</title>
       <Loading />
     </>
   );

@@ -27,19 +27,25 @@ type NodeInfo struct {
 
 // TODO: use uint for fields that cannot be negative
 type Transaction struct {
-	Type            string
-	Invoice         string
-	Description     string
-	DescriptionHash string
-	Preimage        string
-	PaymentHash     string
-	AmountMsat      int64
-	FeesPaidMsat    int64
-	CreatedAt       int64
-	ExpiresAt       *int64
-	SettledAt       *int64
-	Metadata        Metadata
-	SettleDeadline  *uint32 // block number for accepted hold invoices
+	Type              string
+	Invoice           string
+	Description       string
+	DescriptionHash   string
+	Preimage          string
+	PaymentHash       string
+	AmountMsat        int64
+	FeesPaidMsat      int64
+	CreatedAt         int64
+	ExpiresAt         *int64
+	SettledAt         *int64
+	Metadata          Metadata
+	SettleDeadline    *uint32 // block number for accepted hold invoices
+	ReceivingChannels []ReceivingChannel
+}
+
+type ReceivingChannel struct {
+	ChannelId     string
+	UserChannelId *string
 }
 
 type OnchainTransaction struct {
@@ -93,6 +99,85 @@ type LNClient interface {
 	GetSupportedNIP47NotificationTypes() []string
 	GetCustomNodeCommandDefinitions() []CustomNodeCommandDef
 	ExecuteCustomNodeCommand(ctx context.Context, command *CustomNodeCommandRequest) (*CustomNodeCommandResponse, error)
+}
+
+// PinnedPaymentClient is implemented only by backends that can fail closed when an exact local
+// first-hop channel is requested. Callers must not fall back to LNClient.SendPaymentSync when this
+// capability is unavailable.
+type PinnedPaymentClient interface {
+	SendPaymentSyncWithFirstHop(payReq string, firstHopChannelID string, maxRoutingFeeMsat uint64) (*PayInvoiceResponse, error)
+}
+
+// CircularRouteQuoter is implemented only by backends that can construct and validate a route
+// pinned to exact local first- and last-hop channels without sending a probe, HTLC, or payment.
+type CircularRouteQuoter interface {
+	QuoteCircularRoute(amountMsat uint64, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*CircularRouteQuote, error)
+}
+
+// PreparedCircularPaymentClient is implemented only by backends that can durably prepare and
+// submit a circular payment using an exact caller-reviewed route. Both methods must be idempotent
+// for the same operation ID and must fail closed on any changed parameter or route.
+type PreparedCircularPaymentClient interface {
+	PrepareCircularPayment(amountMsat uint64, expirySeconds uint32, operationID string, firstHopChannelID string, lastHopChannelID string, maxRoutingFeeMsat uint64) (*PreparedCircularPayment, error)
+	SendPreparedCircularPayment(operationID string, quote *CircularRouteQuote) (string, error)
+	ReconcilePreparedCircularPayment(operationID string, paymentHash string, outboundPaymentID string, amountMsat uint64, expectedRoutingFeeMsat uint64, maxRoutingFeeMsat uint64, firstHopChannelID string, lastHopChannelID string) (*CircularPaymentReconciliation, error)
+}
+
+type PreparedCircularPayment struct {
+	PaymentHash            string
+	OperationID            string
+	OutboundPaymentID      string
+	AmountMsat             uint64
+	MaxRoutingFeeMsat      uint64
+	FirstHopChannelID      string
+	FirstHopShortChannelID uint64
+	LastHopChannelID       string
+	LastHopShortChannelID  uint64
+}
+
+const (
+	CircularPaymentStatePending   = "pending"
+	CircularPaymentStateSucceeded = "succeeded"
+	CircularPaymentStateFailed    = "failed"
+)
+
+type CircularPaymentReconciliation struct {
+	State                             string
+	OperationID                       string
+	PaymentHash                       string
+	OutboundPaymentID                 string
+	AmountMsat                        uint64
+	ActualRoutingFeeMsat              *uint64
+	LatestUpdateTimestamp             uint64
+	InboundPaymentStatus              string
+	OutboundPaymentStatus             string
+	FailureCode                       string
+	ObservedReceivingChannelIDs       []string
+	UnidentifiedReceivingChannelCount uint32
+}
+
+type CircularRouteHop struct {
+	NodeId          string
+	ShortChannelId  uint64
+	FeeMsat         uint64
+	CltvExpiryDelta uint32
+}
+
+type CircularRoutePath struct {
+	Hops       []CircularRouteHop
+	AmountMsat uint64
+	FeeMsat    uint64
+}
+
+type CircularRouteQuote struct {
+	AmountMsat             uint64
+	TotalRoutingFeeMsat    uint64
+	FirstHopChannelId      string
+	FirstHopShortChannelId uint64
+	LastHopChannelId       string
+	LastHopShortChannelId  uint64
+	Paths                  []CircularRoutePath
+	RouteBytes             []byte
 }
 
 type Channel struct {
@@ -248,6 +333,11 @@ func NewCustomNodeCommandResponseEmpty() *CustomNodeCommandResponse {
 }
 
 var ErrUnknownCustomNodeCommand = errors.New("unknown custom node command")
+
+// ErrOnchainBroadcastUnverified is returned when an on-chain transaction was
+// handed to the backend for broadcast but could not be verified afterwards, so
+// the funds may still have been sent.
+var ErrOnchainBroadcastUnverified = errors.New("ran out of attempts to fetch broadcasted transaction")
 
 // default invoice expiry in seconds (1 day)
 const DEFAULT_INVOICE_EXPIRY = 86400

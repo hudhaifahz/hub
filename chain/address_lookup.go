@@ -2,15 +2,20 @@ package chain
 
 import (
 	"context"
+	"encoding/hex"
+
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 
 	"github.com/getAlby/hub/config"
 )
 
-// AddressLookup checks onchain address usage against the configured chain source.
+// AddressLookup queries onchain data from the configured chain source.
 type AddressLookup interface {
 	// AddressHasTransactions returns true if the address has any confirmed or
 	// unconfirmed transaction history.
 	AddressHasTransactions(ctx context.Context, address string) (bool, error)
+	// GetTransactionHex returns the raw hex of a confirmed or unconfirmed transaction.
+	GetTransactionHex(ctx context.Context, txId string) (string, error)
 	Close()
 }
 
@@ -23,4 +28,12 @@ func NewAddressLookup(ctx context.Context, cfg config.Config) (AddressLookup, er
 		return newEsploraLookup(env.LDKEsploraServer), nil
 	}
 	return newElectrumLookup(ctx, env.LDKElectrumServer, cfg.GetNetwork())
+}
+
+func validTransactionID(txID string) bool {
+	if len(txID) != chainhash.MaxHashStringSize {
+		return false
+	}
+	_, err := hex.DecodeString(txID)
+	return err == nil
 }
