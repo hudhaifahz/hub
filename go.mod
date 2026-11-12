@@ -273,6 +273,6 @@ require (
 replace google.golang.org/protobuf => github.com/lightninglabs/protobuf-go-hex-display v1.33.0-hex-display
 
 // The Grynvault binding provides the exact-channel circular-payment APIs and
-// the reviewed universal macOS library built from LDK d8c68f5534e5.
-// The binding commit 1551acb4e724 is available through the public Go proxy.
-replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261106012124-1551acb4e724
+// the reviewed universal macOS library built from LDK e270baac5f6f.
+// The binding commit fb5c2a997bb4 is available through the public Go proxy.
+replace github.com/getAlby/ldk-node-go => github.com/hudhaifahz/ldk-node-go v0.0.0-20261112212738-fb5c2a997bb4

@@ -83,6 +83,8 @@ jobs:
           npm install --global yarn@1.22.22
           go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
           go mod download
+          rustup toolchain install 1.89.0 --profile minimal --component llvm-tools-preview
+          rustup override set 1.89.0
 
       - name: Install pinned SBOM tool
         if: inputs.distribution_mode == 'unsigned-experimental'
@@ -97,9 +99,14 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/release/check-source-boundaries.sh
-          go test ./service ./wails
-          go vet ./...
-          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose ./...
+          mkdir -p frontend/dist
+          touch frontend/dist/tmp
+          ./scripts/release/with-bark-native.sh wails generate module -tags wails -nocolour
+          yarn --cwd frontend install --frozen-lockfile
+          yarn --cwd frontend build:http
+          ./scripts/release/with-bark-native.sh go test ./service ./wails
+          ./scripts/release/with-bark-native.sh go vet ./...
+          ./scripts/release/with-bark-native.sh go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -show verbose ./...
           go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir . --no-banner --redact=100
 
       - name: Build unsigned candidate from the tag

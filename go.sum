@@ -261,6 +261,8 @@ github.com/hudhaifahz/ldk-node-go v0.0.0-20261021161128-ea7860a85589 h1:OjpkVT4f
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261021161128-ea7860a85589/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261106012124-1551acb4e724 h1:orT2l6DJJuCxT+NqALn6njuxn0AB4ESQzIsqC3oE7kU=
 github.com/hudhaifahz/ldk-node-go v0.0.0-20261106012124-1551acb4e724/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
+github.com/hudhaifahz/ldk-node-go v0.0.0-20261112212738-fb5c2a997bb4 h1:cPtivGDNz9hr1Wbm6y9kvUG8zp5ENOyrmjcwn9A+0n0=
+github.com/hudhaifahz/ldk-node-go v0.0.0-20261112212738-fb5c2a997bb4/go.mod h1:8BRjtKcz8E0RyYTPEbMS8VIdgredcGSLne8vHDtcRLg=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438 h1:Dj0L5fhJ9F82ZJyVOmBx6msDp/kfd1t9GRfny/mfJA0=
 github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438/go.mod h1:a/s9Lp5W7n/DD0VrVoyJ00FbP2ytTPDVOivvn2bMlds=

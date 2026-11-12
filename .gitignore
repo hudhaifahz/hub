@@ -38,3 +38,6 @@ albyhub-data
 # local copies of Caddyfile.example and generated secrets
 scripts/caddy-*/Caddyfile
 scripts/caddy-basicauth/gate.env
+
+# Reproducible native dependency staging; never a wallet directory.
+.release-native/

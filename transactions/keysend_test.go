@@ -19,7 +19,7 @@ import (
 	"github.com/getAlby/hub/tests"
 )
 
-const keysendDestination = "038a73de75fdc3c7ec951a5e0b0fa95c5cd353bd7ca72df2086aa228c1f92819a5"
+const keysendDestination = "038a73de75fdc3c7ec951a5e0b0fa95c5cd353bd7ca72df2086aa228c1f92819a5" // gitleaks:allow -- public secp256k1 fixture, not a secret
 
 func TestSendKeysend(t *testing.T) {
 	svc, err := tests.CreateTestService(t)

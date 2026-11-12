@@ -1,33 +1,37 @@
 # Grynvault Rebalance release notes
 
-Status: **GUIDED MIGRATION SYNTHETIC ACCEPTANCE PASSED — OWNER ACCEPTANCE
-PENDING — NOT TAGGED — NOT SIGNED — NOT PUBLISHED**
+## v0.1.0-rc.8 — Lightning reconnection and security updates
 
-Grynvault Rebalance adds a fail-closed exact-channel circular rebalance flow to
-Alby Hub. The owner chooses the exact channel sats must leave through and the
-exact channel through which they must return. Route discovery is non-paying;
-execution requires a fresh fingerprint-bound quote and exact typed
-confirmation.
+This macOS release integrates the locally verified Tor reliability repair with
+Alby Hub updates through `5a7f1d661f248a48659d19f9a4b3299ee282187e`, including
+Wails 2.17.1 and the current patched Go and Rust dependencies.
 
-Seamless guided migration from an existing Alby Hub embedded-LDK wallet is a
-core release requirement. The successor importer implements custom-`WORK_DIR`
-discovery, fail-closed competing-copy detection, source quiescence, byte-exact
-recovery and staging, deterministic crash recovery, and a persistent network
-quarantine before an imported node can contact peers.
+- Opt-in native SOCKS transport waits for Tor to connect before starting the
+  Lightning handshake. The existing default direct connection path is preserved.
+- Reconnection attempts run independently per peer, use bounded elapsed-time
+  delays, and clear pending state when interrupted. Successful connections reset
+  the delay. With the existing polling interval, retries occur within about five
+  minutes after a completed failure rather than waiting hours.
+- An optional outbound-only Tor setup helper is included in the DMG. It starts
+  after login and restarts on exit. No personal routes or wallet data are included.
+- The build uses Go 1.27.4 without disabling its native-library security checks.
+  Bark v0.26.1's embedded LLVM IR is removed from verified build copies; retained
+  native code, data, relocations and symbols are independently checked unchanged.
 
-A disposable regtest acceptance creates a real LDK wallet with two channels
-and inbound/outbound payment history. It passes migration from both the normal
-macOS container and a custom path with spaces and Unicode, proves the copied
-node remains network-dark before activation, verifies identity and continuity,
-then activates and reconnects. An intentionally stale matching clone is blocked
-before process or network checks. No production wallet or funds are used.
+This is an unsigned experimental universal macOS 15.4+ release with a PGP-signed
+artifact manifest. It is not Apple-notarized. The patch adds no wallet database
+migration. Existing upstream migrations still apply when updating older versions;
+follow `MIGRATION.md` for imports and keep normal backups. No release validation
+uses a production wallet or sends a payment.
 
-Publication remains blocked on owner-supervised non-paying acceptance and the
-remaining gates in `docs/grynvault-release/GUIDED_MIGRATION_PLAN.md`.
+Peer availability is not a guarantee of payment success: remote outages, routes,
+liquidity and invoice conditions still matter. A sleeping or shut-down laptop
+cannot maintain Lightning service.
 
-This candidate is replayed onto Alby Hub `v1.24.3`. It also makes long route
-identifiers and balance evidence readable at constrained widths and continues
-polling a submitted operation after a transient status-refresh failure.
+Grynvault's existing exact-channel rebalance and guided migration features remain
+part of this release. Exact-channel execution requires a fresh bound quote and
+explicit confirmation. The earlier migration development records below remain
+historical evidence rather than the release status of RC.8.
 
 ## Why this exists
 

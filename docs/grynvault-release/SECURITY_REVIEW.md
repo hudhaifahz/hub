@@ -328,3 +328,32 @@ marker, and path, revalidate the sidecar, and repeat both denial proofs before
 service construction. Process inspection must separately prove zero
 canonical-wallet file opens and no non-loopback socket. Normal desktop launches
 and public release bundles do not enter this acceptance-only path.
+
+## RC.8 network repair review (2026-11-12)
+
+The native transport patch is based on the TLS/Tokio-patched LDK source and
+preserves the public UDL/API. All 57 native library tests pass. Optional peer
+routes accept only loopback SOCKS proxies and onion-shaped destinations, while
+Lightning continues authenticating the expected public key. No personal routes
+or wallet data are distributed. Pending connection state is cleared on normal
+completion and cancellation; reconnect tasks are tracked individually.
+
+Go 1.27.4 is required. Bark's pinned macOS archives contain embedded LLVM IR
+rejected by the patched compiler. Build copies have only those IR/command
+sections removed. Original and transformed SHA-256 hashes are pinned, and every
+retained native section, symbol, resolved relocation and linker hint is compared.
+An intentional executable-byte alteration was rejected. No compiler security
+check is disabled, and the upstream module cache remains unchanged.
+
+The current Go advisory scan still reports GO-2026-6872 and GO-2026-6875 at the
+whole Echo v4 module level. The application uses a single constant key for its
+unlock rate limiter (covered by `TestUnlock_RateLimitNotBypassedBySpoofedIP`),
+and does not configure Echo Proxy/ProxyWithConfig middleware. Those affected
+configurations are absent. The raw scan is not described as clean; this is an
+applicability assessment, which must be revisited if those configurations change.
+The scan also reports non-called dependency findings in moby/sys/user, x/net and
+x/crypto. No suppression is added to the vulnerability scanner or CI gate.
+
+The source secret scan's only initial finding was an upstream public secp256k1
+key in `transactions/keysend_test.go`. That exact fixture line is marked as public;
+no credential, private key or broader path is excluded by the annotation.

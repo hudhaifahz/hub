@@ -21,7 +21,7 @@ if [[ -n "$(git status --porcelain=v1)" ]]; then
 fi
 
 source_commit="$(git rev-parse HEAD)"
-ldk_library_sha256="19f9cbea84af10665fe10370a7c1d6e586a2cf8f9cd23a0458ab7e069e411d3f"
+ldk_library_sha256="2c1ebe99232a306053c586f8a089a9d6546d034b91a77c0d83248c7333cbe5f2"
 tag_ref="refs/tags/${release_tag}"
 tag_commit="$(git rev-parse --verify "${tag_ref}^{commit}" 2>/dev/null || true)"
 if [[ -z "$tag_commit" || "$tag_commit" != "$source_commit" ]]; then
@@ -40,6 +40,11 @@ fi
 
 source_url="https://github.com/hudhaifahz/hub/commit/${source_commit}"
 export VITE_GRYNVAULT_SOURCE_URL="$source_url"
+
+# Stage the pinned Ark native archives through the verified IR-removal recipe.
+if [[ "${GOWORK:-}" != "$repo_root/.release-native/go.work" ]]; then
+  exec ./scripts/release/with-bark-native.sh /bin/bash "$0" "$@"
+fi
 
 # Bark's shipped macOS static libraries declare a 15.4 deployment target. Keep
 # the application and all CGO compilation/linking at that same conservative

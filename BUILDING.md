@@ -165,3 +165,19 @@ PGP signature, owner approval, and fresh-download verification of every URL.
 Do not disable Gatekeeper globally. A user who verifies the manifest and elects
 to accept unsigned software may use macOS's per-application Open/Open Anyway
 flow. Building from the immutable tag is the safer option.
+
+
+## Ark native archives with Go 1.27.4
+
+For macOS checks, use `scripts/release/with-bark-native.sh go test ./...`.
+The macOS build scripts invoke this preparation automatically. Install Rust
+1.89.0 with `llvm-tools-preview` (or set `LLVM_OBJCOPY` to that tool). The wrapper
+stages Bark v0.26.1 in the ignored `.release-native` directory and uses a temporary
+Go workspace. It verifies both upstream archive hashes, removes only embedded LLVM
+IR/command sections, verifies the resulting hashes, and independently compares
+all retained native sections, symbols and resolved relocations. The module cache
+and committed Go dependency graph remain unchanged. No Go security check is
+turned off. This corrects archive packaging; it does not upgrade Ark behavior.
+
+The optional outbound Tor helper is documented in `scripts/network/README.md`.
+It is copied into the DMG for explicit opt-in use, not launched by installation.

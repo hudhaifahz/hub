@@ -62,12 +62,16 @@ codesign --force --sign - --entitlements build/darwin/entitlements.plist "$app_p
 ./scripts/release/inspect-macos.sh "$app_path" "$release_tag" "$expected_source_commit" --require-adhoc
 
 cp -R "$app_path" "$staging_directory/"
+cp -R scripts/network "$staging_directory/Optional Tor Setup"
 cat >"$staging_directory/README-UNSIGNED.txt" <<EOF
 GRYNVAULT REBALANCE — UNSIGNED EXPERIMENTAL macOS BUILD
 
 This application is intentionally NOT signed with an Apple Developer ID and is
 NOT notarized by Apple. macOS Gatekeeper is expected to warn or block it. An
 ad-hoc signature checks bundle integrity only; it does not identify a publisher.
+
+The Optional Tor Setup folder contains an opt-in, separate outbound Tor service.
+Read its README before running it. No peer routes or wallet data are included.
 
 Release tag: ${release_tag}
 Source commit: ${expected_source_commit}

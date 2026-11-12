@@ -33,10 +33,15 @@ if ! command -v wails >/dev/null 2>&1 || [[ "$(wails version | head -n 1)" != "v
   exit 1
 fi
 
-ldk_library_sha256="19f9cbea84af10665fe10370a7c1d6e586a2cf8f9cd23a0458ab7e069e411d3f"
+ldk_library_sha256="2c1ebe99232a306053c586f8a089a9d6546d034b91a77c0d83248c7333cbe5f2"
 version_label="owner-acceptance-${source_commit:0:12}"
 source_url="https://github.com/hudhaifahz/hub/commit/${source_commit}"
 export VITE_GRYNVAULT_SOURCE_URL="$source_url"
+
+# Stage the pinned Ark native archives through the verified IR-removal recipe.
+if [[ "${GOWORK:-}" != "$repo_root/.release-native/go.work" ]]; then
+  exec ./scripts/release/with-bark-native.sh /bin/bash "$0" "$@"
+fi
 
 export MACOSX_DEPLOYMENT_TARGET=15.4
 export CGO_CFLAGS="${CGO_CFLAGS:-} -mmacosx-version-min=15.4"

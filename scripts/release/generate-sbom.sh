@@ -39,6 +39,7 @@ XDG_CACHE_HOME="$syft_cache" SYFT_CHECK_FOR_APP_UPDATE=false syft scan dir:. \
   --override-default-catalogers go-module-file-cataloger,javascript-lock-cataloger \
   --exclude './.git/**' \
   --exclude './build/**' \
+  --exclude './.release-native/**' \
   --exclude './frontend/node_modules/**' \
   --output "cyclonedx-json=${temporary_output}"
 
