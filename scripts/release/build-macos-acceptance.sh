@@ -28,8 +28,8 @@ if [[ "$(node --version)" != v22.* ]]; then
   echo "Node.js 22.x is required for an acceptance build" >&2
   exit 1
 fi
-if ! command -v wails >/dev/null 2>&1 || [[ "$(wails version | head -n 1)" != "v2.17.0" ]]; then
-  echo "Wails CLI v2.17.0 is required for an acceptance build" >&2
+if ! command -v wails >/dev/null 2>&1 || [[ "$(wails version | head -n 1)" != "v2.17.1" ]]; then
+  echo "Wails CLI v2.17.1 is required for an acceptance build" >&2
   exit 1
 fi
 
